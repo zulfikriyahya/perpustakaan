@@ -11,12 +11,15 @@ class LevelBadgeFactory extends Factory
      */
     public function definition(): array
     {
+        // TODO: GAP-SPEC - min_point dijamin < max_point (asumsi logis; sebelumnya di-random independen dan bisa terbalik)
+        $min = fake()->numberBetween(0, 5000);
+
         return [
             'nama_badge' => fake()->word(),
-            'min_point' => fake()->numberBetween(-10000, 10000),
-            'max_point' => fake()->numberBetween(-10000, 10000),
+            'min_point' => $min,
+            'max_point' => $min + fake()->numberBetween(100, 5000),
             'icon' => fake()->word(),
-            'urutan' => fake()->numberBetween(-10000, 10000),
+            'urutan' => fake()->numberBetween(0, 10),
         ];
     }
 }

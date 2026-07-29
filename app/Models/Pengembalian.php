@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\KondisiBuku;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,11 +13,6 @@ class Pengembalian extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'peminjaman_id',
         'tanggal_kembali',
@@ -25,15 +21,11 @@ class Pengembalian extends Model
         'diproses_oleh',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'tanggal_kembali' => 'date',
+            'kondisi' => KondisiBuku::class,
             'diproses_oleh' => 'integer',
         ];
     }
@@ -45,6 +37,6 @@ class Pengembalian extends Model
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'diproses_oleh');
     }
 }

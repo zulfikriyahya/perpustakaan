@@ -14,11 +14,6 @@ class Buku extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'judul',
         'cover',
@@ -32,11 +27,6 @@ class Buku extends Model
         'deskripsi',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -54,7 +44,7 @@ class Buku extends Model
         return $this->belongsToMany(Kategori::class);
     }
 
-    public function peminjamen(): HasMany
+    public function peminjamans(): HasMany
     {
         return $this->hasMany(Peminjaman::class);
     }

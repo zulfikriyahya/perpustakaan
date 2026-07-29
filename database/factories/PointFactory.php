@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Ref;
+use App\Enums\EventTypePoint;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -15,10 +15,10 @@ class PointFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'event_type' => fake()->randomElement(["kunjungan","peminjaman","pengembalian","kerusakan","kehilangan"]),
-            'nilai' => fake()->numberBetween(-10000, 10000),
-            'ref_type' => fake()->word(),
-            'ref_id' => Ref::factory(),
+            'event_type' => fake()->randomElement(EventTypePoint::cases()),
+            'nilai' => fake()->numberBetween(-100, 100),
+            'ref_type' => fake()->randomElement(['peminjaman', 'pengembalian', 'kunjungan']),
+            'ref_id' => fake()->uuid(),
             'keterangan' => fake()->word(),
         ];
     }

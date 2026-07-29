@@ -2,8 +2,10 @@
 
 namespace Database\Factories;
 
+use App\Enums\RoleUser;
 use App\Models\LevelBadge;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\Hash;
 
 class UserFactory extends Factory
 {
@@ -14,13 +16,15 @@ class UserFactory extends Factory
     {
         return [
             'avatar' => fake()->word(),
-            'role' => fake()->randomElement(["siswa","pegawai","pustakawan","admin"]),
-            'nis' => fake()->word(),
-            'nip' => fake()->word(),
+            'nama' => fake()->name(),
+            'role' => fake()->randomElement(RoleUser::cases()),
+            'nis' => fake()->unique()->numerify('NIS######'),
+            'nip' => fake()->unique()->numerify('NIP##########'),
             'kelas' => fake()->word(),
             'jabatan' => fake()->word(),
-            'no_telepon' => fake()->word(),
-            'no_kartu_rfid' => fake()->word(),
+            'no_telepon' => fake()->unique()->numerify('628##########'),
+            'no_kartu_rfid' => fake()->unique()->numerify('RFID########'),
+            'password' => Hash::make('password'),
             'status_suspend' => fake()->boolean(),
             'akumulasi_point' => fake()->numberBetween(-10000, 10000),
             'level_badge_id' => LevelBadge::factory(),

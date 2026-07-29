@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\StatusPeminjaman;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,11 +15,6 @@ class Peminjaman extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'transaksi_id',
         'user_id',
@@ -29,17 +25,13 @@ class Peminjaman extends Model
         'diproses_oleh',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
             'tanggal_pinjam' => 'date',
             'tanggal_jatuh_tempo' => 'date',
+            'status' => StatusPeminjaman::class,
             'diproses_oleh' => 'integer',
         ];
     }
@@ -61,7 +53,7 @@ class Peminjaman extends Model
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'diproses_oleh');
     }
 
     public function pengembalian(): HasOne

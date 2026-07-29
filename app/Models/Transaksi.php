@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\JenisTransaksi;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,11 +14,6 @@ class Transaksi extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'user_id',
         'jenis',
@@ -26,15 +22,11 @@ class Transaksi extends Model
         'keterangan',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
+            'jenis' => JenisTransaksi::class,
             'diproses_oleh' => 'integer',
             'tanggal' => 'datetime',
         ];
@@ -47,10 +39,10 @@ class Transaksi extends Model
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'diproses_oleh');
     }
 
-    public function peminjamen(): HasMany
+    public function peminjamans(): HasMany
     {
         return $this->hasMany(Peminjaman::class);
     }

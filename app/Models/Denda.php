@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\TipeDenda;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,11 +13,6 @@ class Denda extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'peminjaman_id',
         'user_id',
@@ -27,15 +23,11 @@ class Denda extends Model
         'keterangan',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
+            'tipe' => TipeDenda::class,
             'nominal' => 'decimal:2',
             'status_lunas' => 'boolean',
             'tanggal_lunas' => 'datetime',

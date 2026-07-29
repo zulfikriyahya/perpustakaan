@@ -6,18 +6,13 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('dendas', function (Blueprint $table) {
-            $table->uuid('id');
-            $table->foreignUuid('peminjaman_id')->constrained();
-            $table->foreignId('user_id')->constrained('');
-            $table->enum('tipe', ["keterlambatan","kerusakan","kehilangan"]);
+            $table->uuid('id')->primary();
+            $table->foreignUuid('peminjaman_id')->constrained('peminjamans');
+            $table->foreignId('user_id')->constrained('users');
+            $table->enum('tipe', ['keterlambatan', 'kerusakan', 'kehilangan']);
             $table->decimal('nominal', 10, 2);
             $table->boolean('status_lunas')->default(false);
             $table->dateTime('tanggal_lunas')->nullable();
@@ -25,13 +20,8 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('dendas');

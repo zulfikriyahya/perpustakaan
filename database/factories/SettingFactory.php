@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\GroupSetting;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class SettingFactory extends Factory
@@ -12,10 +13,11 @@ class SettingFactory extends Factory
     public function definition(): array
     {
         return [
-            'key' => fake()->word(),
+            'key' => fake()->unique()->slug(2),
             'value' => fake()->text(),
-            'group' => fake()->randomElement(["peminjaman","point","notifikasi","denda","device","whatsapp"]),
+            'group' => fake()->randomElement(GroupSetting::cases()),
             'keterangan' => fake()->word(),
         ];
     }
 }
+

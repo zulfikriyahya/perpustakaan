@@ -13,15 +13,15 @@ class BukuFactory extends Factory
     public function definition(): array
     {
         return [
-            'judul' => fake()->word(),
+            'judul' => fake()->sentence(3),
             'cover' => fake()->word(),
-            'penulis' => fake()->word(),
-            'penerbit' => fake()->word(),
-            'isbn' => fake()->word(),
-            'barcode' => fake()->word(),
+            'penulis' => fake()->name(),
+            'penerbit' => fake()->company(),
+            'isbn' => fake()->unique()->isbn13(),
+            'barcode' => fake()->unique()->ean13(),
             'rak_id' => Rak::factory(),
-            'harga_ganti' => fake()->randomFloat(2, 0, 99999999.99),
-            'stok' => fake()->numberBetween(-10000, 10000),
+            'harga_ganti' => fake()->randomFloat(2, 0, 500000),
+            'stok' => fake()->numberBetween(0, 20),
             'deskripsi' => fake()->text(),
         ];
     }

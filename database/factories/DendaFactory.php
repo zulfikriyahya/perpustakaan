@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\TipeDenda;
 use App\Models\Peminjaman;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -13,13 +14,15 @@ class DendaFactory extends Factory
      */
     public function definition(): array
     {
+        $statusLunas = fake()->boolean();
+
         return [
             'peminjaman_id' => Peminjaman::factory(),
             'user_id' => User::factory(),
-            'tipe' => fake()->randomElement(["keterlambatan","kerusakan","kehilangan"]),
-            'nominal' => fake()->randomFloat(2, 0, 99999999.99),
-            'status_lunas' => fake()->boolean(),
-            'tanggal_lunas' => fake()->dateTime(),
+            'tipe' => fake()->randomElement(TipeDenda::cases()),
+            'nominal' => fake()->randomFloat(2, 5000, 500000),
+            'status_lunas' => $statusLunas,
+            'tanggal_lunas' => $statusLunas ? fake()->dateTime() : null,
             'keterangan' => fake()->text(),
         ];
     }

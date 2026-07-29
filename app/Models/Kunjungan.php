@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SourceKunjungan;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,11 +13,6 @@ class Kunjungan extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'user_id',
         'tanggal',
@@ -24,16 +20,12 @@ class Kunjungan extends Model
         'source',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
             'tanggal' => 'date',
+            'source' => SourceKunjungan::class,
         ];
     }
 

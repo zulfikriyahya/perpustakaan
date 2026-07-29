@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\StatusPeminjaman;
 use App\Models\Buku;
 use App\Models\Transaksi;
 use App\Models\User;
@@ -20,8 +21,8 @@ class PeminjamanFactory extends Factory
             'buku_id' => Buku::factory(),
             'tanggal_pinjam' => fake()->date(),
             'tanggal_jatuh_tempo' => fake()->date(),
-            'status' => fake()->randomElement(["aktif","terlambat","selesai","hilang"]),
-            'diproses_oleh' => User::factory()->create()->diproses_oleh,
+            'status' => fake()->randomElement(StatusPeminjaman::cases()),
+            'diproses_oleh' => User::factory(),
         ];
     }
 }

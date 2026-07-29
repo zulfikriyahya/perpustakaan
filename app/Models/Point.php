@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EventTypePoint;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,11 +13,6 @@ class Point extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'user_id',
         'event_type',
@@ -26,15 +22,11 @@ class Point extends Model
         'keterangan',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
+            'event_type' => EventTypePoint::class,
         ];
     }
 
@@ -43,8 +35,5 @@ class Point extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function ref(): BelongsTo
-    {
-        return $this->belongsTo(Ref::class);
-    }
+    // ref_type/ref_id: polymorphic manual, bukan Eloquent relation - lihat PointService.
 }

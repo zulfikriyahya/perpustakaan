@@ -2,9 +2,10 @@
 
 namespace App\Enums;
 
-enum KondisiBuku: string
+enum StatusPeminjaman: string
 {
-    case Baik = 'baik';
-    case Rusak = 'rusak';
+    case Aktif = 'aktif';
+    case Terlambat = 'terlambat';
+    case Selesai = 'selesai';
     case Hilang = 'hilang';
 }

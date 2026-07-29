@@ -99,7 +99,7 @@ Ketentuan:
 ---
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
-- ...
+- finalkan pondasi-pondasi, logic aplikasi, logic integrasi alat penghitung kunjungan, whatsapp gateway, dll. sebelum ke resource/FE
 
 ---
 

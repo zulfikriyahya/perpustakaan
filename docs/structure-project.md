@@ -1,11 +1,33 @@
 .
 ├── app
+│   ├── Console
+│   │   └── Commands
+│   │       └── ProsesCronHarianPerpustakaan.php
+│   ├── Enums
+│   │   ├── EventTypePoint.php
+│   │   ├── GroupSetting.php
+│   │   ├── JenisTransaksi.php
+│   │   ├── KondisiBuku.php
+│   │   ├── RoleUser.php
+│   │   ├── SourceKunjungan.php
+│   │   ├── StatusPeminjaman.php
+│   │   └── TipeDenda.php
+│   ├── Exceptions
+│   │   └── WhatsappGatewayException.php
 │   ├── Http
-│   │   └── Controllers
-│   │       └── Controller.php
+│   │   ├── Controllers
+│   │   │   ├── Api
+│   │   │   │   └── PerpustakaanDeviceController.php
+│   │   │   └── Controller.php
+│   │   └── Middleware
+│   │       └── AuthenticateDeviceApiKey.php
+│   ├── Jobs
+│   │   └── KirimNotifikasiWhatsapp.php
 │   ├── Models
 │   │   ├── Buku.php
 │   │   ├── Denda.php
+│   │   ├── DeviceLog.php
+│   │   ├── FirmwareRelease.php
 │   │   ├── Kategori.php
 │   │   ├── Kunjungan.php
 │   │   ├── LevelBadge.php
@@ -20,8 +42,18 @@
 │   │   ├── Setting.php
 │   │   ├── Transaksi.php
 │   │   └── User.php
-│   └── Providers
-│       └── AppServiceProvider.php
+│   ├── Observers
+│   │   ├── DendaObserver.php
+│   │   └── UserObserver.php
+│   ├── Providers
+│   │   ├── Filament
+│   │   │   └── DashboardPanelProvider.php
+│   │   └── AppServiceProvider.php
+│   └── Services
+│       ├── PeminjamanService.php
+│       ├── PointService.php
+│       ├── RfidResolverService.php
+│       └── WhatsappService.php
 ├── bootstrap
 │   ├── cache
 │   │   ├── .gitignore
@@ -59,7 +91,6 @@
 │   │   ├── TransaksiFactory.php
 │   │   └── UserFactory.php
 │   ├── migrations
-│   │   ├── 0001_01_01_000000_create_users_table.php
 │   │   ├── 0001_01_01_000001_create_cache_table.php
 │   │   ├── 0001_01_01_000002_create_jobs_table.php
 │   │   ├── 2026_07_29_180455_create_users_table.php
@@ -67,7 +98,7 @@
 │   │   ├── 2026_07_29_180457_create_raks_table.php
 │   │   ├── 2026_07_29_180458_create_bukus_table.php
 │   │   ├── 2026_07_29_180459_create_transaksis_table.php
-│   │   ├── 2026_07_29_180500_create_peminjamen_table.php
+│   │   ├── 2026_07_29_180500_create_peminjamans_table.php
 │   │   ├── 2026_07_29_180501_create_pengembalians_table.php
 │   │   ├── 2026_07_29_180502_create_dendas_table.php
 │   │   ├── 2026_07_29_180503_create_points_table.php
@@ -79,9 +110,16 @@
 │   │   ├── 2026_07_29_180509_create_kunjungans_table.php
 │   │   ├── 2026_07_29_180510_create_settings_table.php
 │   │   ├── 2026_07_29_180511_create_buku_kategori_table.php
-│   │   └── 2026_07_29_180512_create_kategori_rak_table.php
+│   │   ├── 2026_07_29_180512_create_kategori_rak_table.php
+│   │   ├── 2026_07_29_181943_add_level_badge_fk_to_users_table.php
+│   │   ├── 2026_07_30_000001_add_unique_user_tanggal_to_kunjungans_table.php
+│   │   ├── 2026_07_30_000002_fix_unique_kunjungan_softdelete_aware.php
+│   │   ├── 2026_07_30_000003_rename_nis_to_nisn_in_users_table.php
+│   │   ├── 2026_07_30_000004_create_device_logs_table.php
+│   │   └── 2026_07_30_000005_create_firmware_releases_table.php
 │   ├── seeders
-│   │   └── DatabaseSeeder.php
+│   │   ├── DatabaseSeeder.php
+│   │   └── SettingSeeder.php
 │   ├── database.sqlite
 │   └── .gitignore
 ├── resources
@@ -92,8 +130,12 @@
 │   └── views
 │       └── welcome.blade.php
 ├── routes
+│   ├── api.php
 │   ├── console.php
 │   └── web.php
+├── tests
+│   └── Unit
+│       └── PeminjamanServiceHariTelatTest.php
 ├── artisan
 ├── .blueprint
 ├── composer.json
@@ -111,4 +153,4 @@
 ├── README.md
 └── vite.config.js
 
-18 directories, 94 files
+30 directories, 124 files

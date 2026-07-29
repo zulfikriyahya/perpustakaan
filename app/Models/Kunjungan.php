@@ -33,4 +33,10 @@ class Kunjungan extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    // Unik per hari per user hanya untuk baris AKTIF (deleted_at IS NULL) - dijaga
+    // oleh generated column `unik_aktif` + unique index di DB (lihat migration
+    // fix_unique_kunjungan_softdelete_aware). Kolom `unik_aktif` sengaja TIDAK
+    // dimasukkan ke $fillable/casts karena murni computed oleh DB, jangan pernah
+    // diisi manual dari Filament/kode aplikasi.
 }

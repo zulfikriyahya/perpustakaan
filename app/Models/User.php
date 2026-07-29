@@ -17,7 +17,7 @@ class User extends Authenticatable implements AuthenticatableContract
         'avatar',
         'nama',
         'role',
-        'nis',
+        'nisn',
         'nip',
         'kelas',
         'jabatan',
@@ -48,8 +48,8 @@ class User extends Authenticatable implements AuthenticatableContract
         return $this->belongsTo(LevelBadge::class);
     }
 
-    // TODO: GAP-SPEC - resolusi login multi-identifier (nis/nip ATAU no_telepon) belum
+    // TODO: GAP-SPEC - resolusi login multi-identifier (nisn/nip ATAU no_telepon) belum
     // diimplementasikan. Filament default hanya support satu kolom username tetap.
     // Butuh custom Login Page yang query:
-    //   User::where('nis', $login)->orWhere('nip', $login)->orWhere('no_telepon', $login)->first()
+    //   User::where('nisn', $login)->orWhere('nip', $login)->orWhere('no_telepon', $login)->first()
 }

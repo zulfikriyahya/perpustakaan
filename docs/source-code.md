@@ -1,5 +1,493 @@
 # SOURCE CODE - perpustakaan
 
+## app/Console/Commands/ProsesCronHarianPerpustakaan.php
+```php
+<?php
+
+namespace App\Console\Commands;
+
+use App\Services\PeminjamanService;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Wrapper Artisan command untuk PeminjamanService::prosesCronHarian().
+ * Logic perhitungan/transisi status TIDAK diduplikasi di sini - lihat
+ * Aturan poin 3 (Prinsip DRY), seluruh logic tetap di PeminjamanService.
+ */
+class ProsesCronHarianPerpustakaan extends Command
+{
+    protected $signature = 'perpustakaan:cron-harian';
+
+    protected $description = 'Jalankan cron harian Peminjaman: reminder H-3/H-1 dan transisi status Terlambat.';
+
+    public function handle(PeminjamanService $peminjamanService): int
+    {
+        $mulai = now();
+
+        $stat = $peminjamanService->prosesCronHarian();
+
+        $durasiMs = now()->diffInMilliseconds($mulai);
+
+        $this->info(sprintf(
+            'Cron harian selesai: reminder_h3=%d, reminder_h1=%d, jadi_terlambat=%d (%d ms)',
+            $stat['reminder_h3'],
+            $stat['reminder_h1'],
+            $stat['jadi_terlambat'],
+            $durasiMs,
+        ));
+
+        Log::info('ProsesCronHarianPerpustakaan selesai.', [
+            'reminder_h3' => $stat['reminder_h3'],
+            'reminder_h1' => $stat['reminder_h1'],
+            'jadi_terlambat' => $stat['jadi_terlambat'],
+            'durasi_ms' => $durasiMs,
+        ]);
+
+        return self::SUCCESS;
+    }
+}
+
+```
+---
+
+## app/Enums/EventTypePoint.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum EventTypePoint: string
+{
+    case Kunjungan = 'kunjungan';
+    case Peminjaman = 'peminjaman';
+    case Pengembalian = 'pengembalian';
+    case Kerusakan = 'kerusakan';
+    case Kehilangan = 'kehilangan';
+}
+
+```
+---
+
+## app/Enums/GroupSetting.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum GroupSetting: string
+{
+    case Peminjaman = 'peminjaman';
+    case Point = 'point';
+    case Notifikasi = 'notifikasi';
+    case Denda = 'denda';
+    case Device = 'device';
+    case Whatsapp = 'whatsapp';
+}
+
+```
+---
+
+## app/Enums/JenisTransaksi.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum JenisTransaksi: string
+{
+    case Peminjaman = 'peminjaman';
+    case Kunjungan = 'kunjungan';
+    case PembayaranDenda = 'pembayaran_denda';
+}
+
+```
+---
+
+## app/Enums/KondisiBuku.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum KondisiBuku: string
+{
+    case Baik = 'baik';
+    case Rusak = 'rusak';
+    case Hilang = 'hilang';
+}
+
+```
+---
+
+## app/Enums/RoleUser.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum RoleUser: string
+{
+    case Siswa = 'siswa';
+    case Pegawai = 'pegawai';
+    case Pustakawan = 'pustakawan';
+    case Admin = 'admin';
+}
+
+```
+---
+
+## app/Enums/SourceKunjungan.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum SourceKunjungan: string
+{
+    case Rfid = 'rfid';
+    case Manual = 'manual';
+}
+
+```
+---
+
+## app/Enums/StatusPeminjaman.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum StatusPeminjaman: string
+{
+    case Aktif = 'aktif';
+    case Terlambat = 'terlambat';
+    case Selesai = 'selesai';
+    case Hilang = 'hilang';
+}
+
+```
+---
+
+## app/Enums/TipeDenda.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum TipeDenda: string
+{
+    case Keterlambatan = 'keterlambatan';
+    case Kerusakan = 'kerusakan';
+    case Kehilangan = 'kehilangan';
+}
+
+```
+---
+
+## app/Exceptions/WhatsappGatewayException.php
+```php
+<?php
+
+namespace App\Exceptions;
+
+use Exception;
+
+class WhatsappGatewayException extends Exception
+{
+    public function __construct(
+        public readonly int $statusCode,
+        string $pesanError,
+    ) {
+        parent::__construct("Gateway WhatsApp mengembalikan status {$statusCode}: {$pesanError}");
+    }
+}
+
+```
+---
+
+## app/Http/Controllers/Api/PerpustakaanDeviceController.php
+```php
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Enums\EventTypePoint;
+use App\Enums\SourceKunjungan;
+use App\Http\Controllers\Controller;
+use App\Models\DeviceLog;
+use App\Models\FirmwareRelease;
+use App\Models\Kunjungan;
+use App\Models\Setting;
+use App\Services\PointService;
+use App\Services\RfidResolverService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/**
+ * Endpoint untuk Attendance Machine (ESP32-C3) - kontrak persis mengikuti
+ * firmware v2.3.1 (lihat internal/... referensi firmware). SETIAP perubahan
+ * response shape di sini WAJIB dicek ulang terhadap parsing firmware
+ * (mis. downloadRfidDb() parsing baris per baris plain text, BUKAN JSON).
+ */
+class PerpustakaanDeviceController extends Controller
+{
+    public function __construct(
+        protected RfidResolverService $rfidResolver,
+        protected PointService $pointService,
+    ) {}
+
+    public function ping(): JsonResponse
+    {
+        return response()->json(['status' => 'ok'], 200);
+    }
+
+    /**
+     * Firmware: checkRfidDbVersion() - JSON { "ver": int }
+     */
+    public function rfidListVersion(): JsonResponse
+    {
+        return response()->json(['ver' => (int) Setting::get('rfid_db_ver', 0)]);
+    }
+
+    /**
+     * Firmware: downloadRfidDb() - PLAIN TEXT, bukan JSON.
+     * Baris pertama: "ver:<n>". Baris berikutnya: satu kartu 10-digit per baris.
+     * Firmware menolak baris yang bukan persis 10 digit angka (lihat parsing
+     * di downloadRfidDb: isdigit check, len == 10).
+     *
+     * TODO: GAP-SPEC - hanya user dengan no_kartu_rfid berformat 10 digit
+     * numeric yang akan ikut ter-generate ke daftar ini; kartu format lain
+     * (mis. seeder lama 'RFID58354503') otomatis TIDAK akan muncul di device
+     * karena tidak lolos filter regex di bawah - bukan bug, tapi konsekuensi
+     * kontrak firmware. Data lama wajib diperbaiki ke format 10 digit.
+     */
+    public function rfidList(): \Illuminate\Http\Response
+    {
+        $ver = (int) Setting::get('rfid_db_ver', 0);
+
+        $kartuList = \App\Models\User::query()
+            ->whereNotNull('no_kartu_rfid')
+            ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
+            ->pluck('no_kartu_rfid');
+
+        $body = "ver:{$ver}\n" . $kartuList->implode("\n");
+
+        return response($body, 200)->header('Content-Type', 'text/plain');
+    }
+
+    /**
+     * Firmware: nvsSyncToServer() / syncQueueFile() - POST batch.
+     * Request: { "data": [ { rfid, timestamp, device_id, sync_mode: true } ] }
+     * Response WAJIB: { "data": [ { rfid, timestamp, status: "ok"|"error", message? } ] }
+     * karena firmware membaca field "status" per item untuk logging kegagalan
+     * (appendFailedLogToSD) - status HTTP selalu 200 selama body valid JSON,
+     * kegagalan per-record dilaporkan lewat "status" per item, bukan HTTP code.
+     */
+    public function syncBulk(Request $request): JsonResponse
+    {
+        $items = $request->input('data', []);
+        $hasil = [];
+
+        foreach ($items as $item) {
+            $rfid = (string) ($item['rfid'] ?? '');
+            $timestamp = (string) ($item['timestamp'] ?? '');
+            $deviceId = (string) ($item['device_id'] ?? '');
+
+            $hasil[] = $this->prosesSatuTap($rfid, $timestamp, $deviceId);
+        }
+
+        return response()->json(['data' => $hasil]);
+    }
+
+    /**
+     * Firmware: kirimLangsung() - kirim 1 tap real-time (SD tidak tersedia).
+     * Firmware membaca HTTP STATUS CODE, bukan body, untuk menentukan pesan:
+     * 200 = OK, 400 = duplikat ("CUKUP SEKALI!"), 404 = kartu nonaktif.
+     * (403 hari libur SENGAJA tidak diimplementasikan - device sudah
+     * mengunci diri sendiri di luar jam operasional per keputusan produk.)
+     */
+    public function kirimLangsung(Request $request): JsonResponse
+    {
+        $rfid = (string) $request->input('rfid', '');
+        $timestamp = (string) $request->input('timestamp', '');
+        $deviceId = (string) $request->input('device_id', '');
+
+        $user = $this->rfidResolver->findByKartu($rfid);
+
+        if (! $user) {
+            return response()->json(['error' => 'kartu tidak terdaftar'], 404);
+        }
+
+        $tanggal = $this->parseTanggalDariTimestamp($timestamp);
+
+        $duplikat = Kunjungan::query()
+            ->where('user_id', $user->id)
+            ->where('tanggal', $tanggal)
+            ->exists();
+
+        if ($duplikat) {
+            return response()->json(['error' => 'sudah tercatat hari ini'], 400);
+        }
+
+        try {
+            $kunjungan = Kunjungan::create([
+                'user_id' => $user->id,
+                'tanggal' => $tanggal,
+                'jam_tap' => $this->parseJamDariTimestamp($timestamp),
+                'source' => SourceKunjungan::Rfid,
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Race condition dengan unique index kunjungans_unik_aktif_unique.
+            return response()->json(['error' => 'sudah tercatat hari ini'], 400);
+        }
+
+        $this->pointService->catatEvent(
+            $user,
+            EventTypePoint::Kunjungan,
+            'kunjungan',
+            $kunjungan->id,
+        );
+
+        return response()->json(['status' => 'ok'], 200);
+    }
+
+    public function heartbeat(Request $request): JsonResponse
+    {
+        DeviceLog::query()->updateOrCreate(
+            ['device_id' => (string) $request->input('device_id')],
+            [
+                'device_name' => $request->input('device_name'),
+                'firmware_version' => $request->input('firmware'),
+                'uptime_sec' => (int) $request->input('uptime_sec', 0),
+                'heap_free' => (int) $request->input('heap_free', 0),
+                'pending_records' => (int) $request->input('pending_records', 0),
+                'scan_today' => (int) $request->input('scan_today', 0),
+                'rssi' => (int) $request->input('rssi', 0),
+                'sd_ok' => (bool) $request->input('sd_ok', false),
+                'rfid_db_entries' => (int) $request->input('rfid_db_entries', 0),
+                'online' => (bool) $request->input('online', false),
+                'last_seen_at' => now(),
+            ]
+        );
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * Firmware: fetchRemoteConfig() - hanya field yang dikirim yang akan
+     * dipakai firmware (containsKey check per field), field lain diabaikan.
+     */
+    public function config(Request $request): JsonResponse
+    {
+        return response()->json([
+            'sleep_start' => (int) Setting::get('device_sleep_start_hour', 18),
+            'sleep_end' => (int) Setting::get('device_sleep_end_hour', 5),
+            'oled_dim_start' => (int) Setting::get('device_oled_dim_start_hour', 8),
+            'oled_dim_end' => (int) Setting::get('device_oled_dim_end_hour', 12),
+            'sync_interval_ms' => (int) Setting::get('device_sync_interval_ms', 300000),
+            'ota_check_interval_ms' => (int) Setting::get('device_ota_check_interval_ms', 30000),
+        ]);
+    }
+
+    /**
+     * Firmware: checkOtaUpdate() - membandingkan versi via
+     * compareFirmwareVersion() (semver x.y.z). Field "update" harus true
+     * HANYA jika versi rilis aktif LEBIH BARU dari yang dikirim device.
+     */
+    public function firmwareCheck(Request $request): JsonResponse
+    {
+        $versiDevice = (string) $request->input('version', '0.0.0');
+
+        $rilisTerbaru = FirmwareRelease::query()
+            ->where('aktif', true)
+            ->get()
+            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
+            ->first();
+
+        if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {
+            return response()->json(['update' => false]);
+        }
+
+        return response()->json([
+            'update' => true,
+            'version' => $rilisTerbaru->version,
+            'url' => $rilisTerbaru->url,
+            'md5' => $rilisTerbaru->md5,
+        ]);
+    }
+
+    protected function prosesSatuTap(string $rfid, string $timestamp, string $deviceId): array
+    {
+        $user = $this->rfidResolver->findByKartu($rfid);
+
+        if (! $user) {
+            return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'kartu tidak terdaftar'];
+        }
+
+        $tanggal = $this->parseTanggalDariTimestamp($timestamp);
+
+        $duplikat = Kunjungan::query()
+            ->where('user_id', $user->id)
+            ->where('tanggal', $tanggal)
+            ->exists();
+
+        if ($duplikat) {
+            // Bukan error sesungguhnya (device sudah kirim data valid, hanya
+            // duplikat) - tetap dilaporkan "error" karena firmware hanya
+            // mengenal dua status ("ok"/lainnya) untuk keputusan logging lokal.
+            return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'duplikat'];
+        }
+
+        try {
+            $kunjungan = Kunjungan::create([
+                'user_id' => $user->id,
+                'tanggal' => $tanggal,
+                'jam_tap' => $this->parseJamDariTimestamp($timestamp),
+                'source' => SourceKunjungan::Rfid,
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Race condition dengan unique index kunjungans_unik_aktif_unique.
+            return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'duplikat'];
+        }
+
+        $this->pointService->catatEvent(
+            $user,
+            EventTypePoint::Kunjungan,
+            'kunjungan',
+            $kunjungan->id,
+        );
+
+        return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'ok'];
+    }
+
+    protected function parseTanggalDariTimestamp(string $timestamp): string
+    {
+        // Firmware format: "Y-m-d H:i:s"
+        return substr($timestamp, 0, 10) ?: now()->toDateString();
+    }
+
+    protected function parseJamDariTimestamp(string $timestamp): string
+    {
+        return substr($timestamp, 11) ?: now()->toTimeString();
+    }
+
+    protected function normalisasiVersi(string $v): int
+    {
+        sscanf($v, '%d.%d.%d', $maj, $min, $pat);
+
+        return ((int) $maj * 1000000) + ((int) $min * 1000) + (int) $pat;
+    }
+
+    protected function bandingkanVersi(string $a, string $b): int
+    {
+        return $this->normalisasiVersi($a) <=> $this->normalisasiVersi($b);
+    }
+}
+
+```
+---
+
 ## app/Http/Controllers/Controller.php
 ```php
 <?php
@@ -9,6 +497,131 @@ namespace App\Http\Controllers;
 abstract class Controller
 {
     //
+}
+
+```
+---
+
+## app/Http/Middleware/AuthenticateDeviceApiKey.php
+```php
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Autentikasi sederhana untuk endpoint device ESP32 (bukan HMAC seperti WA
+ * Gateway) - firmware mengirim header X-API-KEY statis yang sama untuk
+ * seluruh device (lihat kirimLangsung/nvsSyncToServer/dst. di firmware).
+ *
+ * Perubahan pada key ini WAJIB dikomunikasikan ke seluruh device di lapangan
+ * (harus di-reconfigure via provisioning mode) - lihat Aturan poin 17.
+ */
+class AuthenticateDeviceApiKey
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+        $key = $request->header('X-API-KEY');
+        $expected = (string) config('services.device_gateway.api_key');
+
+        if (! $expected || ! $key || ! hash_equals($expected, $key)) {
+            return response()->json(['error' => 'API key tidak valid'], 401);
+        }
+
+        return $next($request);
+    }
+}
+
+```
+---
+
+## app/Jobs/KirimNotifikasiWhatsapp.php
+```php
+<?php
+
+namespace App\Jobs;
+
+use App\Exceptions\WhatsappGatewayException;
+use App\Services\WhatsappService;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Job pengirim notifikasi WhatsApp - dijalankan di queue 'whatsapp' terpisah
+ * agar pengiriman WA tidak blocking proses utama (Peminjaman/Denda/Point).
+ * Lihat Logic Module §11 checklist dan Aturan poin 3 (Prinsip DRY).
+ *
+ * Job ini menerima template_code yang SUDAH di-resolve dari Setting (lihat
+ * WhatsappService::kirimEvent()) - lookup Setting tetap dilakukan sinkron
+ * di pemanggil supaya job tidak perlu query Setting berulang dan supaya
+ * kegagalan "template belum dikonfigurasi" tetap terdeteksi segera (bukan
+ * baru diketahui setelah job diproses worker).
+ */
+class KirimNotifikasiWhatsapp implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    /**
+     * Konsisten dengan --tries=3 pada supervisor worker queue 'whatsapp'
+     * (lihat conf.d/*.conf, program *-whatsapp).
+     */
+    public int $tries = 3;
+
+    /**
+     * Konsisten dengan --timeout=30 pada supervisor worker queue 'whatsapp'.
+     * Job tidak boleh berjalan lebih lama dari timeout worker.
+     */
+    public int $timeout = 25;
+
+    /**
+     * Backoff singkat karena kegagalan WA umumnya transient (rate limit,
+     * sesi belum ready) - lihat dok kontrak API §9 Guard Rail.
+     */
+    public array $backoff = [5, 15, 30];
+
+    public function __construct(
+        protected string $templateCode,
+        protected string $nomorTujuan,
+        protected array $variables,
+        protected ?string $referenceId,
+    ) {}
+
+    public function handle(WhatsappService $whatsappService): void
+    {
+        try {
+            $whatsappService->kirimPesan(
+                templateCode: $this->templateCode,
+                recipient: $this->nomorTujuan,
+                variables: $this->variables,
+                referenceId: $this->referenceId,
+            );
+        } catch (WhatsappGatewayException $e) {
+            Log::error("KirimNotifikasiWhatsapp: gagal mengirim template '{$this->templateCode}' ke {$this->nomorTujuan}: {$e->getMessage()}");
+
+            // TODO: GAP-SPEC - dilempar ulang supaya queue worker melakukan
+            // retry sesuai $tries/$backoff. Jika error bersifat permanen
+            // (mis. template_code tidak terhubung ke API key, lihat kontrak
+            // API §2.2 kode 403), retry tidak akan membantu dan job akan
+            // berakhir di failed_jobs setelah 3 percobaan - belum ada
+            // pembedaan error permanen vs transient di level job ini.
+            throw $e;
+        }
+    }
+
+    /**
+     * Dipanggil otomatis oleh queue setelah seluruh percobaan ($tries) habis.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error("KirimNotifikasiWhatsapp: job gagal permanen setelah {$this->tries} percobaan. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$exception->getMessage()}");
+    }
 }
 
 ```
@@ -32,11 +645,6 @@ class Buku extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'judul',
         'cover',
@@ -50,11 +658,6 @@ class Buku extends Model
         'deskripsi',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -72,7 +675,7 @@ class Buku extends Model
         return $this->belongsToMany(Kategori::class);
     }
 
-    public function peminjamen(): HasMany
+    public function peminjamans(): HasMany
     {
         return $this->hasMany(Peminjaman::class);
     }
@@ -87,6 +690,7 @@ class Buku extends Model
 
 namespace App\Models;
 
+use App\Enums\TipeDenda;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -97,11 +701,6 @@ class Denda extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'peminjaman_id',
         'user_id',
@@ -112,15 +711,11 @@ class Denda extends Model
         'keterangan',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
+            'tipe' => TipeDenda::class,
             'nominal' => 'decimal:2',
             'status_lunas' => 'boolean',
             'tanggal_lunas' => 'datetime',
@@ -135,6 +730,79 @@ class Denda extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+}
+
+```
+---
+
+## app/Models/DeviceLog.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
+
+class DeviceLog extends Model
+{
+    use HasUuids;
+
+    protected $fillable = [
+        'device_id',
+        'device_name',
+        'firmware_version',
+        'uptime_sec',
+        'heap_free',
+        'pending_records',
+        'scan_today',
+        'rssi',
+        'sd_ok',
+        'rfid_db_entries',
+        'online',
+        'last_seen_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'sd_ok' => 'boolean',
+            'online' => 'boolean',
+            'last_seen_at' => 'datetime',
+        ];
+    }
+}
+
+```
+---
+
+## app/Models/FirmwareRelease.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
+
+class FirmwareRelease extends Model
+{
+    use HasUuids;
+
+    protected $fillable = [
+        'version',
+        'url',
+        'md5',
+        'aktif',
+        'catatan',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'aktif' => 'boolean',
+        ];
     }
 }
 
@@ -187,6 +855,7 @@ class Kategori extends Model
 
 namespace App\Models;
 
+use App\Enums\SourceKunjungan;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -197,11 +866,6 @@ class Kunjungan extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'user_id',
         'tanggal',
@@ -209,16 +873,12 @@ class Kunjungan extends Model
         'source',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
             'tanggal' => 'date',
+            'source' => SourceKunjungan::class,
         ];
     }
 
@@ -226,6 +886,12 @@ class Kunjungan extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    // Unik per hari per user hanya untuk baris AKTIF (deleted_at IS NULL) - dijaga
+    // oleh generated column `unik_aktif` + unique index di DB (lihat migration
+    // fix_unique_kunjungan_softdelete_aware). Kolom `unik_aktif` sengaja TIDAK
+    // dimasukkan ke $fillable/casts karena murni computed oleh DB, jangan pernah
+    // diisi manual dari Filament/kode aplikasi.
 }
 
 ```
@@ -275,6 +941,7 @@ class LevelBadge extends Model
 
 namespace App\Models;
 
+use App\Enums\StatusPeminjaman;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -287,11 +954,6 @@ class Peminjaman extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'transaksi_id',
         'user_id',
@@ -302,17 +964,13 @@ class Peminjaman extends Model
         'diproses_oleh',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
             'tanggal_pinjam' => 'date',
             'tanggal_jatuh_tempo' => 'date',
+            'status' => StatusPeminjaman::class,
             'diproses_oleh' => 'integer',
         ];
     }
@@ -334,7 +992,7 @@ class Peminjaman extends Model
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'diproses_oleh');
     }
 
     public function pengembalian(): HasOne
@@ -357,6 +1015,7 @@ class Peminjaman extends Model
 
 namespace App\Models;
 
+use App\Enums\KondisiBuku;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -367,11 +1026,6 @@ class Pengembalian extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'peminjaman_id',
         'tanggal_kembali',
@@ -380,15 +1034,11 @@ class Pengembalian extends Model
         'diproses_oleh',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'tanggal_kembali' => 'date',
+            'kondisi' => KondisiBuku::class,
             'diproses_oleh' => 'integer',
         ];
     }
@@ -400,7 +1050,7 @@ class Pengembalian extends Model
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'diproses_oleh');
     }
 }
 
@@ -413,6 +1063,7 @@ class Pengembalian extends Model
 
 namespace App\Models;
 
+use App\Enums\EventTypePoint;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -423,11 +1074,6 @@ class Point extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'user_id',
         'event_type',
@@ -437,15 +1083,11 @@ class Point extends Model
         'keterangan',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
+            'event_type' => EventTypePoint::class,
         ];
     }
 
@@ -454,10 +1096,7 @@ class Point extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function ref(): BelongsTo
-    {
-        return $this->belongsTo(Ref::class);
-    }
+    // ref_type/ref_id: polymorphic manual, bukan Eloquent relation - lihat PointService.
 }
 
 ```
@@ -528,17 +1167,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Punishment extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'nama',
         'deskripsi',
@@ -547,16 +1182,16 @@ class Punishment extends Model
         'aktif',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'aktif' => 'boolean',
         ];
+    }
+
+    public function punishmentLogs(): HasMany
+    {
+        return $this->hasMany(PunishmentLog::class);
     }
 }
 
@@ -667,17 +1302,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Reward extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'nama',
         'deskripsi',
@@ -685,16 +1316,16 @@ class Reward extends Model
         'aktif',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'aktif' => 'boolean',
         ];
+    }
+
+    public function rewardLogs(): HasMany
+    {
+        return $this->hasMany(RewardLog::class);
     }
 }
 
@@ -707,25 +1338,42 @@ class Reward extends Model
 
 namespace App\Models;
 
+use App\Enums\GroupSetting;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class Setting extends Model
 {
     use HasFactory, HasUuids;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'key',
         'value',
         'group',
         'keterangan',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'group' => GroupSetting::class,
+        ];
+    }
+
+    /**
+     * Ambil nilai Setting berdasarkan key, dengan fallback default.
+     * Di-cache 5 menit agar tidak query berulang di proses batch (cron, dsb).
+     */
+    public static function get(string $key, mixed $default = null): mixed
+    {
+        return Cache::remember("setting:{$key}", 300, function () use ($key, $default) {
+            $setting = static::where('key', $key)->first();
+
+            return $setting?->value ?? $default;
+        });
+    }
 }
 
 ```
@@ -737,6 +1385,7 @@ class Setting extends Model
 
 namespace App\Models;
 
+use App\Enums\JenisTransaksi;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -748,11 +1397,6 @@ class Transaksi extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'user_id',
         'jenis',
@@ -761,15 +1405,11 @@ class Transaksi extends Model
         'keterangan',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'user_id' => 'integer',
+            'jenis' => JenisTransaksi::class,
             'diproses_oleh' => 'integer',
             'tanggal' => 'datetime',
         ];
@@ -782,10 +1422,10 @@ class Transaksi extends Model
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'diproses_oleh');
     }
 
-    public function peminjamen(): HasMany
+    public function peminjamans(): HasMany
     {
         return $this->hasMany(Peminjaman::class);
     }
@@ -800,50 +1440,193 @@ class Transaksi extends Model
 
 namespace App\Models;
 
+use App\Enums\RoleUser;
+use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 
-class User extends Model
+class User extends Authenticatable implements AuthenticatableContract
 {
     use HasFactory, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'avatar',
+        'nama',
         'role',
-        'nis',
+        'nisn',
         'nip',
         'kelas',
         'jabatan',
         'no_telepon',
         'no_kartu_rfid',
+        'password',
         'status_suspend',
         'akumulasi_point',
         'level_badge_id',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    protected $hidden = [
+        'password',
+    ];
+
     protected function casts(): array
     {
         return [
             'id' => 'integer',
+            'role' => RoleUser::class,
             'status_suspend' => 'boolean',
+            'password' => 'hashed',
         ];
     }
 
     public function levelBadge(): BelongsTo
     {
         return $this->belongsTo(LevelBadge::class);
+    }
+
+    // TODO: GAP-SPEC - resolusi login multi-identifier (nisn/nip ATAU no_telepon) belum
+    // diimplementasikan. Filament default hanya support satu kolom username tetap.
+    // Butuh custom Login Page yang query:
+    //   User::where('nisn', $login)->orWhere('nip', $login)->orWhere('no_telepon', $login)->first()
+}
+
+```
+---
+
+## app/Observers/DendaObserver.php
+```php
+<?php
+
+namespace App\Observers;
+
+use App\Models\Denda;
+use App\Models\PunishmentLog;
+use App\Services\WhatsappService;
+
+class DendaObserver
+{
+    public function __construct(
+        protected WhatsappService $whatsappService,
+    ) {}
+
+    /**
+     * Setiap Denda baru dibuat -> user otomatis suspend (belum lunas apapun tipenya).
+     */
+    public function created(Denda $denda): void
+    {
+        $denda->user()->update(['status_suspend' => true]);
+    }
+
+    /**
+     * Saat status_lunas berubah -> cek apakah SEMUA Denda user sudah lunas
+     * DAN tidak ada PunishmentLog aktif, baru unsuspend.
+     *
+     * TODO: GAP-SPEC - status_suspend dipakai bersama oleh Denda dan Punishment.
+     * Unsuspend hanya terjadi jika kedua syarat terpenuhi, supaya user yang masih
+     * dalam masa punishment tidak ke-unsuspend keliru saat Denda-nya lunas.
+     */
+    public function updated(Denda $denda): void
+    {
+        if (! $denda->wasChanged('status_lunas') || ! $denda->status_lunas) {
+            return;
+        }
+
+        $masihAdaDendaBelumLunas = Denda::query()
+            ->where('user_id', $denda->user_id)
+            ->where('status_lunas', false)
+            ->exists();
+
+        $masihAdaPunishmentAktif = PunishmentLog::query()
+            ->where('user_id', $denda->user_id)
+            ->where(function ($q) {
+                $q->whereNull('tanggal_berakhir')
+                    ->orWhere('tanggal_berakhir', '>', now());
+            })
+            ->exists();
+
+        if (! $masihAdaDendaBelumLunas && ! $masihAdaPunishmentAktif) {
+            $denda->user()->update(['status_suspend' => false]);
+
+            // eventCode 'denda_lunas' - TODO: ASUMSI, samakan dengan Setting
+            // wa_template_denda_lunas.
+            $this->whatsappService->kirimEvent(
+                eventCode: 'denda_lunas',
+                nomorTujuan: $denda->user->no_telepon,
+                variables: ['nama' => $denda->user->nama],
+                referenceId: "denda-lunas-{$denda->id}",
+            );
+        }
+    }
+}
+
+```
+---
+
+## app/Observers/UserObserver.php
+```php
+<?php
+
+namespace App\Observers;
+
+use App\Models\Setting;
+use App\Models\User;
+use Illuminate\Support\Facades\Cache;
+
+/**
+ * Menaikkan Setting 'rfid_db_ver' setiap kali kartu RFID user berubah, supaya
+ * device (ESP32 Attendance Machine) bisa mendeteksi versi baru lewat
+ * GET /api/perpustakaan/rfid-list/version dan mengunduh ulang daftar kartu.
+ *
+ * TODO: GAP-SPEC - "perubahan" didefinisikan sebagai: no_kartu_rfid diisi/diubah,
+ * ATAU user dengan kartu terisi di-soft-delete/dipulihkan/dihapus permanen
+ * (kartu tersebut harus hilang dari daftar aktif di device). Perubahan pada
+ * kolom lain (nama, kelas, dst) TIDAK memicu bump versi.
+ */
+class UserObserver
+{
+    public function created(User $user): void
+    {
+        if ($user->no_kartu_rfid) {
+            $this->bumpVersion();
+        }
+    }
+
+    public function updated(User $user): void
+    {
+        if ($user->wasChanged('no_kartu_rfid')) {
+            $this->bumpVersion();
+        }
+    }
+
+    public function deleted(User $user): void
+    {
+        if ($user->no_kartu_rfid) {
+            $this->bumpVersion();
+        }
+    }
+
+    public function restored(User $user): void
+    {
+        if ($user->no_kartu_rfid) {
+            $this->bumpVersion();
+        }
+    }
+
+    protected function bumpVersion(): void
+    {
+        $current = (int) Setting::get('rfid_db_ver', 0);
+        $next = $current + 1;
+
+        Setting::query()->updateOrCreate(
+            ['key' => 'rfid_db_ver'],
+            ['value' => (string) $next, 'group' => \App\Enums\GroupSetting::Device]
+        );
+
+        // Setting::get() di-cache 5 menit (lihat Setting model) - hapus cache
+        // supaya device langsung melihat versi baru, bukan menunggu TTL habis.
+        Cache::forget('setting:rfid_db_ver');
     }
 }
 
@@ -856,26 +1639,846 @@ class User extends Model
 
 namespace App\Providers;
 
+use App\Models\Denda;
+use App\Models\User;
+use App\Observers\DendaObserver;
+use App\Observers\UserObserver;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
-        //
+        Denda::observe(DendaObserver::class);
+        User::observe(UserObserver::class);
     }
 }
+
+```
+---
+
+## app/Providers/Filament/DashboardPanelProvider.php
+```php
+<?php
+
+namespace App\Providers\Filament;
+
+use Filament\Http\Middleware\Authenticate;
+use Filament\Http\Middleware\AuthenticateSession;
+use Filament\Http\Middleware\DisableBladeIconComponents;
+use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Pages\Dashboard;
+use Filament\Panel;
+use Filament\PanelProvider;
+use Filament\Support\Colors\Color;
+use Filament\Widgets\AccountWidget;
+use Filament\Widgets\FilamentInfoWidget;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\Middleware\StartSession;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
+
+class DashboardPanelProvider extends PanelProvider
+{
+    public function panel(Panel $panel): Panel
+    {
+        return $panel
+            ->default()
+            ->id('dashboard')
+            ->path('dashboard')
+            ->login()
+            ->colors([
+                'primary' => Color::Amber,
+            ])
+            ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
+            ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
+            ->pages([
+                Dashboard::class,
+            ])
+            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
+            ->widgets([
+                AccountWidget::class,
+                FilamentInfoWidget::class,
+            ])
+            ->middleware([
+                EncryptCookies::class,
+                AddQueuedCookiesToResponse::class,
+                StartSession::class,
+                AuthenticateSession::class,
+                ShareErrorsFromSession::class,
+                PreventRequestForgery::class,
+                SubstituteBindings::class,
+                DisableBladeIconComponents::class,
+                DispatchServingFilamentEvent::class,
+            ])
+            ->authMiddleware([
+                Authenticate::class,
+            ]);
+    }
+}
+
+```
+---
+
+## app/Services/PeminjamanService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Enums\EventTypePoint;
+use App\Enums\JenisTransaksi;
+use App\Enums\KondisiBuku;
+use App\Enums\StatusPeminjaman;
+use App\Enums\TipeDenda;
+use App\Models\Buku;
+use App\Models\Denda;
+use App\Models\Peminjaman;
+use App\Models\Pengembalian;
+use App\Models\Setting;
+use App\Models\Transaksi;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
+
+class PeminjamanService
+{
+    public function __construct(
+        protected PointService $pointService,
+        protected WhatsappService $whatsappService,
+    ) {}
+
+    public function bisaMeminjam(User $user): bool
+    {
+        if ($user->status_suspend) {
+            return false;
+        }
+
+        $jumlahAktif = Peminjaman::query()
+            ->where('user_id', $user->id)
+            ->where('status', StatusPeminjaman::Aktif)
+            ->count();
+
+        $maxAktif = (int) Setting::get('max_peminjaman_aktif', 3);
+
+        return $jumlahAktif < $maxAktif;
+    }
+
+    /**
+     * @param  array<int, string>  $bukuIds
+     */
+    public function pinjamBuku(User $user, array $bukuIds, ?User $diprosesOleh = null): Transaksi
+    {
+        if (! $this->bisaMeminjam($user)) {
+            throw new RuntimeException('User tidak dapat meminjam: suspend aktif atau limit peminjaman aktif tercapai.');
+        }
+
+        $lamaPeminjamanHari = (int) Setting::get('lama_peminjaman_hari', 7);
+
+        $transaksi = DB::transaction(function () use ($user, $bukuIds, $diprosesOleh, $lamaPeminjamanHari) {
+            $transaksi = Transaksi::create([
+                'user_id' => $user->id,
+                'jenis' => JenisTransaksi::Peminjaman,
+                'diproses_oleh' => $diprosesOleh?->id,
+                'tanggal' => now(),
+            ]);
+
+            foreach ($bukuIds as $bukuId) {
+                $buku = Buku::query()->lockForUpdate()->findOrFail($bukuId);
+
+                if ($buku->stok < 1) {
+                    throw new RuntimeException("Stok buku '{$buku->judul}' habis.");
+                }
+
+                $buku->decrement('stok');
+
+                $peminjaman = Peminjaman::create([
+                    'transaksi_id' => $transaksi->id,
+                    'user_id' => $user->id,
+                    'buku_id' => $buku->id,
+                    'tanggal_pinjam' => now()->toDateString(),
+                    'tanggal_jatuh_tempo' => now()->addDays($lamaPeminjamanHari)->toDateString(),
+                    'status' => StatusPeminjaman::Aktif,
+                    'diproses_oleh' => $diprosesOleh?->id,
+                ]);
+
+                $this->pointService->catatEvent(
+                    $user,
+                    EventTypePoint::Peminjaman,
+                    'peminjaman',
+                    $peminjaman->id,
+                );
+            }
+
+            return $transaksi->fresh('peminjamans.buku');
+        });
+
+        $daftarBuku = $transaksi->peminjamans->pluck('buku.judul')->implode(', ');
+        $jatuhTempo = $transaksi->peminjamans->first()?->tanggal_jatuh_tempo;
+
+        $this->whatsappService->kirimEvent(
+            eventCode: 'peminjaman_aktif',
+            nomorTujuan: $user->no_telepon,
+            variables: ['nama' => $user->nama, 'daftar_buku' => $daftarBuku, 'jatuh_tempo' => (string) $jatuhTempo],
+            referenceId: "peminjaman-{$transaksi->id}",
+        );
+
+        return $transaksi;
+    }
+
+    public function prosesPengembalian(
+        Peminjaman $peminjaman,
+        KondisiBuku $kondisi,
+        ?string $catatan = null,
+        ?User $diprosesOleh = null,
+    ): Pengembalian {
+        if (! in_array($peminjaman->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true)) {
+            throw new RuntimeException('Peminjaman ini sudah tidak aktif/terlambat, tidak bisa diproses pengembaliannya.');
+        }
+
+        $pengembalian = DB::transaction(function () use ($peminjaman, $kondisi, $catatan, $diprosesOleh) {
+            $pengembalian = Pengembalian::create([
+                'peminjaman_id' => $peminjaman->id,
+                'tanggal_kembali' => now()->toDateString(),
+                'kondisi' => $kondisi,
+                'catatan' => $catatan,
+                'diproses_oleh' => $diprosesOleh?->id,
+            ]);
+
+            if ($kondisi === KondisiBuku::Hilang) {
+                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->buku));
+                $peminjaman->update(['status' => StatusPeminjaman::Hilang]);
+
+                $this->pointService->catatEvent(
+                    $peminjaman->user,
+                    EventTypePoint::Kehilangan,
+                    'peminjaman',
+                    $peminjaman->id,
+                );
+
+                return $pengembalian;
+            }
+
+            $hariTelat = $this->hitungHariTelat($peminjaman);
+            if ($hariTelat > 0) {
+                $this->tandaiDenda($peminjaman, TipeDenda::Keterlambatan, $this->hitungDendaKeterlambatan($hariTelat));
+            }
+
+            if ($kondisi === KondisiBuku::Rusak) {
+                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->buku));
+
+                $this->pointService->catatEvent(
+                    $peminjaman->user,
+                    EventTypePoint::Kerusakan,
+                    'peminjaman',
+                    $peminjaman->id,
+                );
+            }
+
+            $peminjaman->buku()->increment('stok');
+            $peminjaman->update(['status' => StatusPeminjaman::Selesai]);
+
+            $this->pointService->catatEvent(
+                $peminjaman->user,
+                EventTypePoint::Pengembalian,
+                'peminjaman',
+                $peminjaman->id,
+            );
+
+            return $pengembalian;
+        });
+
+        $peminjaman->refresh();
+        $this->whatsappService->kirimEvent(
+            eventCode: 'pengembalian_diproses',
+            nomorTujuan: $peminjaman->user->no_telepon,
+            variables: ['nama' => $peminjaman->user->nama, 'kondisi' => $kondisi->value],
+            referenceId: "pengembalian-{$pengembalian->id}",
+        );
+
+        return $pengembalian;
+    }
+
+    public function laporkanHilang(Peminjaman $peminjaman): Denda
+    {
+        if (! in_array($peminjaman->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true)) {
+            throw new RuntimeException('Peminjaman ini sudah tidak aktif/terlambat, tidak bisa dilaporkan hilang.');
+        }
+
+        $denda = DB::transaction(function () use ($peminjaman) {
+            $denda = $this->tandaiDenda(
+                $peminjaman,
+                TipeDenda::Kehilangan,
+                $this->hitungDendaKehilangan($peminjaman->buku),
+            );
+
+            $peminjaman->update(['status' => StatusPeminjaman::Hilang]);
+
+            $this->pointService->catatEvent(
+                $peminjaman->user,
+                EventTypePoint::Kehilangan,
+                'peminjaman',
+                $peminjaman->id,
+            );
+
+            return $denda;
+        });
+
+        $this->whatsappService->kirimEvent(
+            eventCode: 'denda_dibuat',
+            nomorTujuan: $peminjaman->user->no_telepon,
+            variables: ['nama' => $peminjaman->user->nama, 'tipe' => 'kehilangan', 'nominal' => (string) $denda->nominal],
+            referenceId: "denda-{$denda->id}",
+        );
+
+        return $denda;
+    }
+
+    /**
+     * @return array{reminder_h3: int, reminder_h1: int, jadi_terlambat: int}
+     */
+    public function prosesCronHarian(): array
+    {
+        $today = Carbon::today();
+        $stat = ['reminder_h3' => 0, 'reminder_h1' => 0, 'jadi_terlambat' => 0];
+
+        Peminjaman::query()
+            ->where('status', StatusPeminjaman::Aktif)
+            ->with('user', 'buku')
+            ->chunkById(200, function ($peminjamans) use ($today, &$stat) {
+                foreach ($peminjamans as $peminjaman) {
+                    $jatuhTempo = Carbon::parse($peminjaman->tanggal_jatuh_tempo);
+
+                    if ($jatuhTempo->isSameDay($today->copy()->addDays(3))) {
+                        $this->whatsappService->kirimEvent(
+                            eventCode: 'reminder_h3',
+                            nomorTujuan: $peminjaman->user->no_telepon,
+                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
+                            referenceId: "reminder-h3-{$peminjaman->id}-{$today->toDateString()}",
+                        );
+                        $stat['reminder_h3']++;
+                    } elseif ($jatuhTempo->isSameDay($today->copy()->addDay())) {
+                        $this->whatsappService->kirimEvent(
+                            eventCode: 'reminder_h1',
+                            nomorTujuan: $peminjaman->user->no_telepon,
+                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
+                            referenceId: "reminder-h1-{$peminjaman->id}-{$today->toDateString()}",
+                        );
+                        $stat['reminder_h1']++;
+                    } elseif ($jatuhTempo->lt($today)) {
+                        $peminjaman->update(['status' => StatusPeminjaman::Terlambat]);
+
+                        $this->whatsappService->kirimEvent(
+                            eventCode: 'jadi_terlambat',
+                            nomorTujuan: $peminjaman->user->no_telepon,
+                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->buku->judul],
+                            referenceId: "terlambat-{$peminjaman->id}-{$today->toDateString()}",
+                        );
+                        $stat['jadi_terlambat']++;
+                    }
+                }
+            });
+
+        return $stat;
+    }
+
+    /**
+     * Hari telat = 0 jika belum/tepat jatuh tempo. Sengaja ditulis tanpa
+     * bergantung pada konvensi tanda diffInDays($other, false) - meski sudah
+     * diverifikasi arahnya benar, bentuk ini rawan salah baca/salah refactor
+     * di masa depan karena tanda hasilnya tidak eksplisit di tempat pemanggilan.
+     */
+    protected function hitungHariTelat(Peminjaman $peminjaman): int
+    {
+        $jatuhTempo = Carbon::parse($peminjaman->tanggal_jatuh_tempo)->startOfDay();
+        $hariIni = Carbon::today();
+
+        if ($hariIni->lessThanOrEqualTo($jatuhTempo)) {
+            return 0;
+        }
+
+        return $jatuhTempo->diffInDays($hariIni);
+    }
+
+    protected function hitungDendaKeterlambatan(int $hariTelat): float
+    {
+        $tarifPerHari = (float) Setting::get('tarif_denda_per_hari', 500);
+
+        return $hariTelat * $tarifPerHari;
+    }
+
+    protected function hitungDendaKerusakan(Buku $buku): float
+    {
+        $persentase = (float) Setting::get('persentase_denda_kerusakan', 100);
+
+        return round(((float) $buku->harga_ganti) * ($persentase / 100), 2);
+    }
+
+    protected function hitungDendaKehilangan(Buku $buku): float
+    {
+        return (float) $buku->harga_ganti;
+    }
+
+    protected function tandaiDenda(Peminjaman $peminjaman, TipeDenda $tipe, float $nominal): Denda
+    {
+        $denda = Denda::create([
+            'peminjaman_id' => $peminjaman->id,
+            'user_id' => $peminjaman->user_id,
+            'tipe' => $tipe,
+            'nominal' => $nominal,
+            'status_lunas' => false,
+        ]);
+
+        $this->whatsappService->kirimEvent(
+            eventCode: 'denda_dibuat',
+            nomorTujuan: $peminjaman->user->no_telepon,
+            variables: ['nama' => $peminjaman->user->nama, 'tipe' => $tipe->value, 'nominal' => (string) $nominal],
+            referenceId: "denda-{$denda->id}",
+        );
+
+        return $denda;
+    }
+}
+
+```
+---
+
+## app/Services/PointService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Enums\EventTypePoint;
+use App\Models\LevelBadge;
+use App\Models\Point;
+use App\Models\Punishment;
+use App\Models\PunishmentLog;
+use App\Models\Reward;
+use App\Models\RewardLog;
+use App\Models\Setting;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+
+class PointService
+{
+    public function __construct(
+        protected WhatsappService $whatsappService,
+    ) {}
+
+    /**
+     * Catat event Point untuk user, lalu jalankan seluruh alur otomatis:
+     * update akumulasi -> cek Badge -> cek Reward -> cek Punishment.
+     *
+     * $refType/$refId: polymorphic manual (bukan Eloquent morph), misal
+     * 'peminjaman' + $peminjaman->id.
+     */
+    public function catatEvent(
+        User $user,
+        EventTypePoint $eventType,
+        ?string $refType = null,
+        ?string $refId = null,
+        ?string $keterangan = null,
+    ): Point {
+        // TODO: ASUMSI - key Setting mengikuti pola 'point_{event_type}', mis.
+        // 'point_kunjungan', 'point_peminjaman', 'point_kerusakan' (boleh negatif).
+        // Spec tidak menyebutkan nama key pasti.
+        $nilai = (int) Setting::get("point_{$eventType->value}", 0);
+
+        return DB::transaction(function () use ($user, $eventType, $nilai, $refType, $refId, $keterangan) {
+            $point = Point::create([
+                'user_id' => $user->id,
+                'event_type' => $eventType,
+                'nilai' => $nilai,
+                'ref_type' => $refType,
+                'ref_id' => $refId,
+                'keterangan' => $keterangan,
+            ]);
+
+            $user->increment('akumulasi_point', $nilai);
+            $user->refresh();
+
+            $this->cekBadge($user);
+            $this->cekReward($user);
+            $this->cekPunishment($user);
+
+            return $point;
+        });
+    }
+
+    /**
+     * Update level_badge_id user jika akumulasi_point masuk rentang badge lain.
+     */
+    protected function cekBadge(User $user): void
+    {
+        $badge = LevelBadge::query()
+            ->where('min_point', '<=', $user->akumulasi_point)
+            ->where(function ($q) use ($user) {
+                $q->whereNull('max_point')
+                    ->orWhere('max_point', '>=', $user->akumulasi_point);
+            })
+            ->orderByDesc('urutan')
+            ->first();
+
+        if ($badge && $badge->id !== $user->level_badge_id) {
+            $user->update(['level_badge_id' => $badge->id]);
+
+            // eventCode 'badge_naik' - TODO: ASUMSI, samakan dengan Setting
+            // wa_template_badge_naik yang harus diisi Admin di panel WA Gateway.
+            $this->whatsappService->kirimEvent(
+                eventCode: 'badge_naik',
+                nomorTujuan: $user->no_telepon,
+                variables: ['nama' => $user->nama, 'badge' => $badge->nama_badge],
+                referenceId: "badge-{$user->id}-{$badge->id}",
+            );
+        }
+    }
+
+    /**
+     * Cek apakah user baru saja melewati threshold Reward yang belum pernah didapat.
+     */
+    protected function cekReward(User $user): void
+    {
+        $rewardTercapai = Reward::query()
+            ->where('aktif', true)
+            ->where('threshold_point', '<=', $user->akumulasi_point)
+            ->whereDoesntHave('rewardLogs', fn($q) => $q->where('user_id', $user->id))
+            ->get();
+
+        foreach ($rewardTercapai as $reward) {
+            $rewardLog = RewardLog::create([
+                'user_id' => $user->id,
+                'reward_id' => $reward->id,
+                'tanggal_didapat' => now(),
+            ]);
+
+            // eventCode 'reward_didapat' - TODO: ASUMSI, samakan dengan Setting
+            // wa_template_reward_didapat.
+            $this->whatsappService->kirimEvent(
+                eventCode: 'reward_didapat',
+                nomorTujuan: $user->no_telepon,
+                variables: ['nama' => $user->nama, 'reward' => $reward->nama],
+                referenceId: "reward-{$rewardLog->id}",
+            );
+        }
+    }
+
+    /**
+     * Cek apakah user baru saja melewati threshold Punishment (point minus).
+     * TODO: GAP-SPEC - overlap status_suspend dengan Denda. Suspend dari Punishment
+     * TIDAK ditandai lunas/tidak seperti Denda, melainkan berdasarkan tanggal_berakhir.
+     * DendaObserver sudah disesuaikan untuk ikut mengecek PunishmentLog aktif sebelum
+     * unsuspend user (lihat app/Observers/DendaObserver.php).
+     */
+    protected function cekPunishment(User $user): void
+    {
+        $punishmentTercapai = Punishment::query()
+            ->where('aktif', true)
+            ->where('threshold_point_minus', '>=', $user->akumulasi_point)
+            ->whereDoesntHave('punishmentLogs', function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->where(function ($q2) {
+                        $q2->whereNull('tanggal_berakhir')
+                            ->orWhere('tanggal_berakhir', '>', now());
+                    });
+            })
+            ->get();
+
+        foreach ($punishmentTercapai as $punishment) {
+            $punishmentLog = PunishmentLog::create([
+                'user_id' => $user->id,
+                'punishment_id' => $punishment->id,
+                'tanggal_diterapkan' => now(),
+                'tanggal_berakhir' => $punishment->durasi_suspend_hari
+                    ? now()->addDays($punishment->durasi_suspend_hari)
+                    : null,
+            ]);
+
+            $user->update(['status_suspend' => true]);
+
+            // eventCode 'punishment_diterapkan' - TODO: ASUMSI, samakan dengan
+            // Setting wa_template_punishment_diterapkan.
+            $this->whatsappService->kirimEvent(
+                eventCode: 'punishment_diterapkan',
+                nomorTujuan: $user->no_telepon,
+                variables: ['nama' => $user->nama, 'alasan' => $punishment->nama],
+                referenceId: "punishment-{$punishmentLog->id}",
+            );
+        }
+    }
+}
+
+```
+---
+
+## app/Services/RfidResolverService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+use RuntimeException;
+
+/**
+ * Resolusi User dari input reader RFID/keyboard-wedge (tersambung ke komputer)
+ * untuk konteks Peminjaman/Pengembalian, maupun dari kartu RFID yang dikirim
+ * device Attendance Machine (ESP32) untuk konteks Kunjungan. Satu sumber
+ * kebenaran untuk matching kartu-ke-user (Aturan poin 3) - jangan menulis ulang
+ * query 'no_kartu_rfid' di tempat lain.
+ */
+class RfidResolverService
+{
+    /**
+     * Cari user berdasarkan nomor kartu RFID saja (tanpa fallback NISN, tanpa
+     * throw). Dipakai konteks yang tidak boleh melempar exception, mis.
+     * endpoint device (respons 404/"error" per item, bukan 500).
+     */
+    public function findByKartu(string $kartu): ?User
+    {
+        return User::query()->where('no_kartu_rfid', $kartu)->first();
+    }
+
+    /**
+     * @throws RuntimeException jika user tidak ditemukan dari kartu maupun NISN
+     */
+    public function resolveUser(string $inputKartuAtauNisn): User
+    {
+        $user = $this->findByKartu($inputKartuAtauNisn);
+
+        if ($user) {
+            return $user;
+        }
+
+        $user = User::query()->where('nisn', $inputKartuAtauNisn)->first();
+
+        if ($user) {
+            return $user;
+        }
+
+        throw new RuntimeException(
+            "User tidak ditemukan untuk kartu/NISN '{$inputKartuAtauNisn}'. Pastikan kartu sudah didaftarkan atau gunakan NISN yang valid."
+        );
+    }
+}
+
+```
+---
+
+## app/Services/WhatsappService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Enums\GroupSetting;
+use App\Exceptions\WhatsappGatewayException;
+use App\Jobs\KirimNotifikasiWhatsapp;
+use App\Models\Setting;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+
+/**
+ * Wrapper untuk WhatsApp Gateway (whatsapp.zedlabs.id API v1, autentikasi HMAC-SHA256).
+ * Signature dihitung dari raw body bytes persis seperti yang dikirim - lihat
+ * dokumen kontrak API bagian 2.1. Jangan format ulang body setelah signing.
+ */
+class WhatsappService
+{
+    protected string $baseUrl;
+
+    protected string $apiKeyId;
+
+    protected string $secret;
+
+    protected int $timeout;
+
+    public function __construct()
+    {
+        $this->baseUrl = rtrim((string) config('services.whatsapp_gateway.base_url'), '/');
+        $this->apiKeyId = (string) config('services.whatsapp_gateway.api_key_id');
+        $this->secret = (string) config('services.whatsapp_gateway.secret');
+        $this->timeout = (int) config('services.whatsapp_gateway.timeout', 15);
+    }
+
+    /**
+     * Kirim pesan berbasis template terdaftar di panel gateway.
+     * Dipanggil SINKRON oleh KirimNotifikasiWhatsapp job (bukan langsung
+     * oleh Controller/Observer/Service lain) - lihat kirimEvent() di bawah.
+     *
+     * @param  array<string, mixed>  $variables
+     * @param  array<string, mixed>|null  $media  Lihat dokumen kontrak API bagian 2.2 (jenis: dokumen|gambar|video|link|kontak)
+     * @return array{job_id: string, status: string}
+     *
+     * @throws WhatsappGatewayException
+     */
+    public function kirimPesan(
+        string $templateCode,
+        string $recipient,
+        array $variables = [],
+        ?array $media = null,
+        ?string $referenceId = null,
+    ): array {
+        $body = [
+            'template_code' => $templateCode,
+            'recipient' => $recipient,
+            'variables' => $variables,
+            'media' => $media,
+        ];
+
+        if ($referenceId !== null) {
+            $body['reference_id'] = $referenceId;
+        }
+
+        // json_encode default PHP tanpa spasi tambahan - konsisten dengan body yang
+        // ditandatangani. JSON_UNESCAPED_SLASHES/UNICODE agar tidak ada karakter
+        // escape tak perlu yang mengubah representasi byte.
+        $bodyString = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        [$status, $payload] = $this->kirimRequest('POST', '/api/v1/messages', $bodyString);
+
+        if (! in_array($status, [200, 202], true)) {
+            throw new WhatsappGatewayException($status, $payload['error'] ?? 'unknown error');
+        }
+
+        return [
+            'job_id' => $payload['job_id'] ?? '',
+            'status' => $payload['status'] ?? '',
+        ];
+    }
+
+    /**
+     * Ambil status terkini satu job (queued|processing|sent|delivered|read|failed).
+     *
+     * @return array{job_id: string, status: string, waktu_antre: string, waktu_kirim: string, keterangan_gagal: string}
+     *
+     * @throws WhatsappGatewayException
+     */
+    public function ambilStatus(string $jobId): array
+    {
+        [$status, $payload] = $this->kirimRequest('GET', "/api/v1/messages/{$jobId}", '');
+
+        if ($status !== 200) {
+            throw new WhatsappGatewayException($status, $payload['error'] ?? 'unknown error');
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Titik masuk TUNGGAL untuk seluruh notifikasi WA di aplikasi (Aturan
+     * poin 3 - Prinsip DRY). Sejak iterasi ini, method ini TIDAK memanggil
+     * gateway secara langsung - hanya me-resolve template_code dari Setting
+     * (sinkron, cepat, sudah di-cache 5 menit oleh Setting::get) lalu
+     * men-dispatch KirimNotifikasiWhatsapp ke queue 'whatsapp', supaya
+     * Peminjaman/Denda/Point tidak menunggu request HTTP ke gateway selesai
+     * (Logic Module §11 checklist: "Job/Queue terpisah untuk notifikasi WA").
+     *
+     * Key pola: wa_template_{event_code}, mis. 'wa_template_peminjaman_aktif'.
+     *
+     * TODO: ASUMSI - nama key Setting per event belum ditentukan spec, memakai pola
+     * di atas. Admin wajib mengisi Setting ini + membuat/mengaitkan template_code
+     * yang sesuai di panel gateway (dok bagian 4.2) sebelum notifikasi terkirim.
+     *
+     * Jika template belum dikonfigurasi (Setting kosong), pengiriman di-skip dan
+     * dicatat sebagai warning - TIDAK di-dispatch ke queue sama sekali, supaya
+     * tidak menumpuk job yang pasti gagal karena template_code kosong.
+     */
+    public function kirimEvent(
+        string $eventCode,
+        string $nomorTujuan,
+        array $variables = [],
+        ?string $referenceId = null,
+    ): void {
+        $templateCode = Setting::get("wa_template_{$eventCode}");
+
+        if (! $templateCode) {
+            Log::warning("WhatsappService: template untuk event '{$eventCode}' belum dikonfigurasi di Setting, notifikasi di-skip.");
+
+            return;
+        }
+
+        KirimNotifikasiWhatsapp::dispatch(
+            $templateCode,
+            $nomorTujuan,
+            $variables,
+            $referenceId ?? (string) Str::uuid(),
+        )->onQueue('whatsapp');
+    }
+
+    /**
+     * @return array{0: int, 1: array<string, mixed>}
+     */
+    protected function kirimRequest(string $method, string $path, string $bodyString): array
+    {
+        $timestamp = (string) time();
+        $signature = hash_hmac('sha256', $bodyString, $this->secret);
+
+        $headers = [
+            'Content-Type' => 'application/json',
+            'X-API-Key' => $this->apiKeyId,
+            'X-Signature' => $signature,
+            'X-Timestamp' => $timestamp,
+        ];
+
+        $response = Http::withHeaders($headers)
+            ->timeout($this->timeout)
+            ->withBody($bodyString, 'application/json')
+            ->send($method, $this->baseUrl . $path);
+
+        return [$response->status(), $response->json() ?? []];
+    }
+}
+
+```
+---
+
+## routes/api.php
+```php
+<?php
+
+use App\Http\Controllers\Api\PerpustakaanDeviceController;
+use Illuminate\Support\Facades\Route;
+
+/*
+ * Endpoint Attendance Machine (ESP32-C3) - path WAJIB persis sama dengan
+ * apiBaseUrl + path yang dipanggil firmware (lihat firmware v2.3.1):
+ *   GET  /api/perpustakaan/ping
+ *   GET  /api/perpustakaan/rfid-list/version
+ *   GET  /api/perpustakaan/rfid-list
+ *   POST /api/perpustakaan/sync-bulk
+ *   POST /api/perpustakaan            (kirimLangsung - real-time, SD tidak tersedia)
+ *   POST /api/perpustakaan/heartbeat
+ *   GET  /api/perpustakaan/config
+ *   POST /api/perpustakaan/firmware/check
+ *
+ * Semua endpoint di bawah prefix ini wajib header X-API-KEY (lihat
+ * AuthenticateDeviceApiKey) - firmware mengirim header ini di SETIAP request
+ * termasuk GET. Perubahan path/method di sini WAJIB dicek ulang terhadap
+ * firmware yang sudah terpasang di lapangan (Aturan poin 17).
+ */
+
+Route::prefix('perpustakaan')
+    ->middleware('device.api.key')
+    ->group(function () {
+        Route::get('/ping', [PerpustakaanDeviceController::class, 'ping']);
+        Route::get('/rfid-list/version', [PerpustakaanDeviceController::class, 'rfidListVersion']);
+        Route::get('/rfid-list', [PerpustakaanDeviceController::class, 'rfidList']);
+        Route::post('/sync-bulk', [PerpustakaanDeviceController::class, 'syncBulk']);
+        Route::post('/', [PerpustakaanDeviceController::class, 'kirimLangsung']);
+        Route::post('/heartbeat', [PerpustakaanDeviceController::class, 'heartbeat']);
+        Route::get('/config', [PerpustakaanDeviceController::class, 'config']);
+        Route::post('/firmware/check', [PerpustakaanDeviceController::class, 'firmwareCheck']);
+    });
 
 ```
 ---
@@ -886,10 +2489,31 @@ class AppServiceProvider extends ServiceProvider
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+/*
+ * Cron harian Peminjaman (Logic Module §8): reminder H-3/H-1 dan transisi
+ * ke Terlambat. Dijadwalkan jam 06:00 - SEBELUM jam operasional device RFID
+ * default (Setting device_sleep_end_hour, default 05:00) supaya notifikasi
+ * WA dan perubahan status sudah selesai saat perpustakaan mulai beroperasi.
+ *
+ * TODO: GAP-SPEC - jam 06:00 dipilih sebagai baseline aman (asumsi logis,
+ * belum ada Setting khusus untuk jam eksekusi cron ini). Jika Admin butuh
+ * jam berbeda, sebaiknya dibuat Setting terpisah (mis. 'cron_harian_jam')
+ * daripada hardcode - belum diimplementasikan pada iterasi ini.
+ *
+ * withoutOverlapping(): mencegah eksekusi ganda jika scheduler:run tumpang
+ * tindih (mis. proses sebelumnya masih jalan karena data besar).
+ * onOneServer(): aman jika deployment multi-server di masa depan.
+ */
+Schedule::command('perpustakaan:cron-harian')
+    ->dailyAt('06:00')
+    ->withoutOverlapping()
+    ->onOneServer();
 
 ```
 ---
@@ -1983,24 +3607,12 @@ return [
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Third Party Services
-    |--------------------------------------------------------------------------
-    |
-    | This file is for storing the credentials for third party services such
-    | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
-    |
-    */
-
     'postmark' => [
-        'key' => env('POSTMARK_API_KEY'),
+        'token' => env('POSTMARK_TOKEN'),
     ],
 
     'resend' => [
-        'key' => env('RESEND_API_KEY'),
+        'key' => env('RESEND_KEY'),
     ],
 
     'ses' => [
@@ -2014,6 +3626,20 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    'whatsapp_gateway' => [
+        'base_url' => env('WHATSAPP_GATEWAY_BASE_URL', 'https://whatsapp.zedlabs.id'),
+        'api_key_id' => env('WHATSAPP_GATEWAY_API_KEY_ID'),
+        'secret' => env('WHATSAPP_GATEWAY_SECRET'),
+        'timeout' => env('WHATSAPP_GATEWAY_TIMEOUT', 15),
+    ],
+
+    'device_gateway' => [
+        // Satu key statis untuk seluruh Attendance Machine (ESP32) - lihat
+        // AuthenticateDeviceApiKey. Rotasi key wajib disertai reconfigure
+        // seluruh device via provisioning mode (poin 17 Aturan).
+        'api_key' => env('DEVICE_GATEWAY_API_KEY'),
     ],
 
 ];
@@ -2277,15 +3903,15 @@ class BukuFactory extends Factory
     public function definition(): array
     {
         return [
-            'judul' => fake()->word(),
+            'judul' => fake()->sentence(3),
             'cover' => fake()->word(),
-            'penulis' => fake()->word(),
-            'penerbit' => fake()->word(),
-            'isbn' => fake()->word(),
-            'barcode' => fake()->word(),
+            'penulis' => fake()->name(),
+            'penerbit' => fake()->company(),
+            'isbn' => fake()->unique()->isbn13(),
+            'barcode' => fake()->unique()->ean13(),
             'rak_id' => Rak::factory(),
-            'harga_ganti' => fake()->randomFloat(2, 0, 99999999.99),
-            'stok' => fake()->numberBetween(-10000, 10000),
+            'harga_ganti' => fake()->randomFloat(2, 0, 500000),
+            'stok' => fake()->numberBetween(0, 20),
             'deskripsi' => fake()->text(),
         ];
     }
@@ -2300,6 +3926,7 @@ class BukuFactory extends Factory
 
 namespace Database\Factories;
 
+use App\Enums\TipeDenda;
 use App\Models\Peminjaman;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -2311,13 +3938,15 @@ class DendaFactory extends Factory
      */
     public function definition(): array
     {
+        $statusLunas = fake()->boolean();
+
         return [
             'peminjaman_id' => Peminjaman::factory(),
             'user_id' => User::factory(),
-            'tipe' => fake()->randomElement(["keterlambatan","kerusakan","kehilangan"]),
-            'nominal' => fake()->randomFloat(2, 0, 99999999.99),
-            'status_lunas' => fake()->boolean(),
-            'tanggal_lunas' => fake()->dateTime(),
+            'tipe' => fake()->randomElement(TipeDenda::cases()),
+            'nominal' => fake()->randomFloat(2, 5000, 500000),
+            'status_lunas' => $statusLunas,
+            'tanggal_lunas' => $statusLunas ? fake()->dateTime() : null,
             'keterangan' => fake()->text(),
         ];
     }
@@ -2357,6 +3986,7 @@ class KategoriFactory extends Factory
 
 namespace Database\Factories;
 
+use App\Enums\SourceKunjungan;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -2371,7 +4001,7 @@ class KunjunganFactory extends Factory
             'user_id' => User::factory(),
             'tanggal' => fake()->date(),
             'jam_tap' => fake()->time(),
-            'source' => fake()->randomElement(["rfid","manual"]),
+            'source' => fake()->randomElement(SourceKunjungan::cases()),
         ];
     }
 }
@@ -2394,12 +4024,15 @@ class LevelBadgeFactory extends Factory
      */
     public function definition(): array
     {
+        // TODO: GAP-SPEC - min_point dijamin < max_point (asumsi logis; sebelumnya di-random independen dan bisa terbalik)
+        $min = fake()->numberBetween(0, 5000);
+
         return [
             'nama_badge' => fake()->word(),
-            'min_point' => fake()->numberBetween(-10000, 10000),
-            'max_point' => fake()->numberBetween(-10000, 10000),
+            'min_point' => $min,
+            'max_point' => $min + fake()->numberBetween(100, 5000),
             'icon' => fake()->word(),
-            'urutan' => fake()->numberBetween(-10000, 10000),
+            'urutan' => fake()->numberBetween(0, 10),
         ];
     }
 }
@@ -2413,6 +4046,7 @@ class LevelBadgeFactory extends Factory
 
 namespace Database\Factories;
 
+use App\Enums\StatusPeminjaman;
 use App\Models\Buku;
 use App\Models\Transaksi;
 use App\Models\User;
@@ -2431,8 +4065,8 @@ class PeminjamanFactory extends Factory
             'buku_id' => Buku::factory(),
             'tanggal_pinjam' => fake()->date(),
             'tanggal_jatuh_tempo' => fake()->date(),
-            'status' => fake()->randomElement(["aktif","terlambat","selesai","hilang"]),
-            'diproses_oleh' => User::factory()->create()->diproses_oleh,
+            'status' => fake()->randomElement(StatusPeminjaman::cases()),
+            'diproses_oleh' => User::factory(),
         ];
     }
 }
@@ -2446,6 +4080,7 @@ class PeminjamanFactory extends Factory
 
 namespace Database\Factories;
 
+use App\Enums\KondisiBuku;
 use App\Models\Peminjaman;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -2460,9 +4095,9 @@ class PengembalianFactory extends Factory
         return [
             'peminjaman_id' => Peminjaman::factory(),
             'tanggal_kembali' => fake()->date(),
-            'kondisi' => fake()->randomElement(["baik","rusak","hilang"]),
+            'kondisi' => fake()->randomElement(KondisiBuku::cases()),
             'catatan' => fake()->text(),
-            'diproses_oleh' => User::factory()->create()->diproses_oleh,
+            'diproses_oleh' => User::factory(),
         ];
     }
 }
@@ -2476,7 +4111,7 @@ class PengembalianFactory extends Factory
 
 namespace Database\Factories;
 
-use App\Models\Ref;
+use App\Enums\EventTypePoint;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -2489,10 +4124,10 @@ class PointFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'event_type' => fake()->randomElement(["kunjungan","peminjaman","pengembalian","kerusakan","kehilangan"]),
-            'nilai' => fake()->numberBetween(-10000, 10000),
-            'ref_type' => fake()->word(),
-            'ref_id' => Ref::factory(),
+            'event_type' => fake()->randomElement(EventTypePoint::cases()),
+            'nilai' => fake()->numberBetween(-100, 100),
+            'ref_type' => fake()->randomElement(['peminjaman', 'pengembalian', 'kunjungan']),
+            'ref_id' => fake()->uuid(),
             'keterangan' => fake()->word(),
         ];
     }
@@ -2550,7 +4185,8 @@ class PunishmentLogFactory extends Factory
             'user_id' => User::factory(),
             'punishment_id' => Punishment::factory(),
             'tanggal_diterapkan' => fake()->dateTime(),
-            'tanggal_berakhir' => fake()->dateTime(),
+            // TODO: GAP-SPEC - null jika punishment masih aktif/belum berakhir (asumsi logis)
+            'tanggal_berakhir' => fake()->boolean(70) ? fake()->dateTime() : null,
         ];
     }
 }
@@ -2644,6 +4280,7 @@ class RewardLogFactory extends Factory
 
 namespace Database\Factories;
 
+use App\Enums\GroupSetting;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class SettingFactory extends Factory
@@ -2654,9 +4291,9 @@ class SettingFactory extends Factory
     public function definition(): array
     {
         return [
-            'key' => fake()->word(),
+            'key' => fake()->unique()->slug(2),
             'value' => fake()->text(),
-            'group' => fake()->randomElement(["peminjaman","point","notifikasi","denda","device","whatsapp"]),
+            'group' => fake()->randomElement(GroupSetting::cases()),
             'keterangan' => fake()->word(),
         ];
     }
@@ -2671,6 +4308,7 @@ class SettingFactory extends Factory
 
 namespace Database\Factories;
 
+use App\Enums\JenisTransaksi;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -2683,8 +4321,8 @@ class TransaksiFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'jenis' => fake()->randomElement(["peminjaman","kunjungan","pembayaran_denda"]),
-            'diproses_oleh' => User::factory()->create()->diproses_oleh,
+            'jenis' => fake()->randomElement(JenisTransaksi::cases()),
+            'diproses_oleh' => User::factory(),
             'tanggal' => fake()->dateTime(),
             'keterangan' => fake()->text(),
         ];
@@ -2700,8 +4338,10 @@ class TransaksiFactory extends Factory
 
 namespace Database\Factories;
 
+use App\Enums\RoleUser;
 use App\Models\LevelBadge;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\Hash;
 
 class UserFactory extends Factory
 {
@@ -2712,74 +4352,21 @@ class UserFactory extends Factory
     {
         return [
             'avatar' => fake()->word(),
-            'role' => fake()->randomElement(["siswa","pegawai","pustakawan","admin"]),
-            'nis' => fake()->word(),
-            'nip' => fake()->word(),
+            'nama' => fake()->name(),
+            'role' => fake()->randomElement(RoleUser::cases()),
+            'nisn' => fake()->unique()->numerify('NISN######'),
+            'nip' => fake()->unique()->numerify('NIP##########'),
             'kelas' => fake()->word(),
             'jabatan' => fake()->word(),
-            'no_telepon' => fake()->word(),
-            'no_kartu_rfid' => fake()->word(),
+            'no_telepon' => fake()->unique()->numerify('628##########'),
+            'no_kartu_rfid' => fake()->unique()->numerify('########'),
+            'password' => Hash::make('password'),
             'status_suspend' => fake()->boolean(),
             'akumulasi_point' => fake()->numberBetween(-10000, 10000),
             'level_badge_id' => LevelBadge::factory(),
         ];
     }
 }
-
-```
----
-
-## database/migrations/0001_01_01_000000_create_users_table.php
-```php
-<?php
-
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
-
-return new class extends Migration
-{
-    /**
-     * Run the migrations.
-     */
-    public function up(): void
-    {
-        Schema::create('users', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
-            $table->timestamps();
-        });
-
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
-            $table->string('token');
-            $table->timestamp('created_at')->nullable();
-        });
-
-        Schema::create('sessions', function (Blueprint $table) {
-            $table->string('id')->primary();
-            $table->foreignId('user_id')->nullable()->index();
-            $table->string('ip_address', 45)->nullable();
-            $table->text('user_agent')->nullable();
-            $table->longText('payload');
-            $table->integer('last_activity')->index();
-        });
-    }
-
-    /**
-     * Reverse the migrations.
-     */
-    public function down(): void
-    {
-        Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
-        Schema::dropIfExists('sessions');
-    }
-};
 
 ```
 ---
@@ -2900,9 +4487,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::disableForeignKeyConstraints();
@@ -2910,16 +4494,21 @@ return new class extends Migration
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('avatar')->nullable();
-            $table->enum('role', ["siswa","pegawai","pustakawan","admin"])->default('siswa');
+            $table->string('nama');
+            $table->enum('role', ['siswa', 'pegawai', 'pustakawan', 'admin'])->default('siswa');
             $table->string('nis')->nullable()->unique();
             $table->string('nip')->nullable()->unique();
             $table->string('kelas')->nullable();
             $table->string('jabatan')->nullable();
-            $table->string('no_telepon');
+            $table->string('no_telepon')->unique();
             $table->string('no_kartu_rfid')->nullable()->unique();
+            // Nullable: user yang hanya pernah login via OTP WhatsApp tidak wajib punya password.
+            $table->string('password')->nullable();
             $table->boolean('status_suspend')->default(false);
             $table->integer('akumulasi_point')->default(0);
-            $table->foreignUuid('level_badge_id')->nullable()->constrained();
+            // FK ke level_badges ditambahkan di migration terpisah (lihat add_level_badge_fk_to_users_table)
+            // karena level_badges dibuat belakangan dalam urutan file.
+            $table->uuid('level_badge_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -2927,9 +4516,6 @@ return new class extends Migration
         Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('users');
@@ -2949,27 +4535,17 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('kategoris', function (Blueprint $table) {
-            $table->uuid('id');
+            $table->uuid('id')->primary();
             $table->string('nama');
             $table->text('deskripsi')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('kategoris');
@@ -2989,27 +4565,17 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('raks', function (Blueprint $table) {
-            $table->uuid('id');
+            $table->uuid('id')->primary();
             $table->string('nama');
             $table->string('lokasi')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('raks');
@@ -3029,35 +4595,25 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('bukus', function (Blueprint $table) {
-            $table->uuid('id');
+            $table->uuid('id')->primary();
             $table->string('judul');
             $table->string('cover')->nullable();
             $table->string('penulis')->nullable();
             $table->string('penerbit')->nullable();
             $table->string('isbn')->nullable()->unique();
             $table->string('barcode')->unique();
-            $table->foreignUuid('rak_id')->nullable()->constrained();
+            $table->foreignUuid('rak_id')->nullable()->constrained('raks');
             $table->decimal('harga_ganti', 10, 2)->default(0);
             $table->integer('stok')->default(1);
             $table->text('deskripsi')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('bukus');
@@ -3077,30 +4633,20 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('transaksis', function (Blueprint $table) {
-            $table->uuid('id');
-            $table->foreignId('user_id')->constrained();
-            $table->enum('jenis', ["peminjaman","kunjungan","pembayaran_denda"])->default('peminjaman');
-            $table->foreignId('diproses_oleh')->nullable()->constrained('users', 'oleh');
+            $table->uuid('id')->primary();
+            $table->foreignId('user_id')->constrained('users');
+            $table->enum('jenis', ['peminjaman', 'kunjungan', 'pembayaran_denda'])->default('peminjaman');
+            $table->foreignId('diproses_oleh')->nullable()->constrained('users');
             $table->dateTime('tanggal');
             $table->text('keterangan')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('transaksis');
@@ -3110,7 +4656,7 @@ return new class extends Migration
 ```
 ---
 
-## database/migrations/2026_07_29_180500_create_peminjamen_table.php
+## database/migrations/2026_07_29_180500_create_peminjamans_table.php
 ```php
 <?php
 
@@ -3120,22 +4666,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::disableForeignKeyConstraints();
 
-        Schema::create('peminjamen', function (Blueprint $table) {
-            $table->uuid('id');
-            $table->foreignUuid('transaksi_id')->constrained('transakses');
-            $table->foreignId('user_id')->constrained('');
-            $table->foreignUuid('buku_id')->constrained('bukuses');
+        Schema::create('peminjamans', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('transaksi_id')->constrained('transaksis');
+            $table->foreignId('user_id')->constrained('users');
+            $table->foreignUuid('buku_id')->constrained('bukus');
             $table->date('tanggal_pinjam');
             $table->date('tanggal_jatuh_tempo');
-            $table->enum('status', ["aktif","terlambat","selesai","hilang"])->default('aktif');
-            $table->foreignId('diproses_oleh')->nullable()->constrained('users', 'oleh');
+            $table->enum('status', ['aktif', 'terlambat', 'selesai', 'hilang'])->default('aktif');
+            $table->foreignId('diproses_oleh')->nullable()->constrained('users');
             $table->timestamps();
             $table->softDeletes();
         });
@@ -3143,12 +4686,9 @@ return new class extends Migration
         Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('peminjamen');
+        Schema::dropIfExists('peminjamans');
     }
 };
 
@@ -3165,30 +4705,20 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('pengembalians', function (Blueprint $table) {
-            $table->uuid('id');
-            $table->foreignUuid('peminjaman_id')->constrained();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('peminjaman_id')->constrained('peminjamans');
             $table->date('tanggal_kembali');
-            $table->enum('kondisi', ["baik","rusak","hilang"])->default('baik');
+            $table->enum('kondisi', ['baik', 'rusak', 'hilang'])->default('baik');
             $table->text('catatan')->nullable();
-            $table->foreignId('diproses_oleh')->nullable()->constrained('users', 'oleh');
+            $table->foreignId('diproses_oleh')->nullable()->constrained('users');
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('pengembalians');
@@ -3208,18 +4738,13 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('dendas', function (Blueprint $table) {
-            $table->uuid('id');
-            $table->foreignUuid('peminjaman_id')->constrained();
-            $table->foreignId('user_id')->constrained('');
-            $table->enum('tipe', ["keterlambatan","kerusakan","kehilangan"]);
+            $table->uuid('id')->primary();
+            $table->foreignUuid('peminjaman_id')->constrained('peminjamans');
+            $table->foreignId('user_id')->constrained('users');
+            $table->enum('tipe', ['keterlambatan', 'kerusakan', 'kehilangan']);
             $table->decimal('nominal', 10, 2);
             $table->boolean('status_lunas')->default(false);
             $table->dateTime('tanggal_lunas')->nullable();
@@ -3227,13 +4752,8 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('dendas');
@@ -3253,31 +4773,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('points', function (Blueprint $table) {
-            $table->uuid('id');
-            $table->foreignId('user_id')->constrained();
-            $table->enum('event_type', ["kunjungan","peminjaman","pengembalian","kerusakan","kehilangan"]);
+            $table->uuid('id')->primary();
+            $table->foreignId('user_id')->constrained('users');
+            $table->enum('event_type', ['kunjungan', 'peminjaman', 'pengembalian', 'kerusakan', 'kehilangan']);
             $table->integer('nilai');
+            // ref_type/ref_id: polymorphic manual, BUKAN Eloquent morph — lihat PointService
             $table->string('ref_type')->nullable();
             $table->uuid('ref_id')->nullable();
             $table->string('keterangan')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('points');
@@ -3297,15 +4808,10 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('level_badges', function (Blueprint $table) {
-            $table->uuid('id');
+            $table->uuid('id')->primary();
             $table->string('nama_badge');
             $table->integer('min_point');
             $table->integer('max_point')->nullable();
@@ -3314,13 +4820,8 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('level_badges');
@@ -3340,15 +4841,10 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('rewards', function (Blueprint $table) {
-            $table->uuid('id');
+            $table->uuid('id')->primary();
             $table->string('nama');
             $table->text('deskripsi')->nullable();
             $table->integer('threshold_point');
@@ -3356,13 +4852,8 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('rewards');
@@ -3382,28 +4873,18 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('reward_logs', function (Blueprint $table) {
-            $table->uuid('id');
-            $table->foreignId('user_id')->constrained();
-            $table->foreignUuid('reward_id')->constrained();
+            $table->uuid('id')->primary();
+            $table->foreignId('user_id')->constrained('users');
+            $table->foreignUuid('reward_id')->constrained('rewards');
             $table->dateTime('tanggal_didapat');
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('reward_logs');
@@ -3423,15 +4904,10 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('punishments', function (Blueprint $table) {
-            $table->uuid('id');
+            $table->uuid('id')->primary();
             $table->string('nama');
             $table->text('deskripsi')->nullable();
             $table->integer('threshold_point_minus');
@@ -3440,13 +4916,8 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('punishments');
@@ -3466,29 +4937,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('punishment_logs', function (Blueprint $table) {
-            $table->uuid('id');
-            $table->foreignId('user_id')->constrained();
-            $table->foreignUuid('punishment_id')->constrained();
+            $table->uuid('id')->primary();
+            $table->foreignId('user_id')->constrained('users');
+            $table->foreignUuid('punishment_id')->constrained('punishments');
             $table->dateTime('tanggal_diterapkan');
             $table->dateTime('tanggal_berakhir')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('punishment_logs');
@@ -3508,29 +4969,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('kunjungans', function (Blueprint $table) {
-            $table->uuid('id');
-            $table->foreignId('user_id')->constrained();
+            $table->uuid('id')->primary();
+            $table->foreignId('user_id')->constrained('users');
             $table->date('tanggal');
             $table->time('jam_tap');
-            $table->enum('source', ["rfid","manual"])->default('rfid');
+            $table->enum('source', ['rfid', 'manual'])->default('rfid');
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('kunjungans');
@@ -3550,28 +5001,18 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('settings', function (Blueprint $table) {
-            $table->uuid('id');
+            $table->uuid('id')->primary();
             $table->string('key')->unique();
             $table->text('value')->nullable();
-            $table->enum('group', ["peminjaman","point","notifikasi","denda","device","whatsapp"])->default('peminjaman');
+            $table->enum('group', ['peminjaman', 'point', 'notifikasi', 'denda', 'device', 'whatsapp'])->default('peminjaman');
             $table->string('keterangan')->nullable();
             $table->timestamps();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('settings');
@@ -3591,24 +5032,15 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('buku_kategori', function (Blueprint $table) {
-            $table->foreignUuid('buku_id');
-            $table->foreignUuid('kategori_id');
+            $table->foreignUuid('buku_id')->constrained('bukus')->cascadeOnDelete();
+            $table->foreignUuid('kategori_id')->constrained('kategoris')->cascadeOnDelete();
+            $table->primary(['buku_id', 'kategori_id']);
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('buku_kategori');
@@ -3628,27 +5060,242 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::create('kategori_rak', function (Blueprint $table) {
-            $table->foreignUuid('kategori_id');
-            $table->foreignUuid('rak_id');
+            $table->foreignUuid('kategori_id')->constrained('kategoris')->cascadeOnDelete();
+            $table->foreignUuid('rak_id')->constrained('raks')->cascadeOnDelete();
+            $table->primary(['kategori_id', 'rak_id']);
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('kategori_rak');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_29_181943_add_level_badge_fk_to_users_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->foreign('level_badge_id')->references('id')->on('level_badges');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropForeign(['level_badge_id']);
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_30_000001_add_unique_user_tanggal_to_kunjungans_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('kunjungans', function (Blueprint $table) {
+            // Lapisan kedua di DB selain validasi unik-per-hari di device (lihat Logic
+            // Module bagian 6). SoftDeletes tidak diikutsertakan di index ini secara
+            // sengaja - lihat TODO: GAP-SPEC di bawah.
+            $table->unique(['user_id', 'tanggal'], 'kunjungans_user_tanggal_unique');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('kunjungans', function (Blueprint $table) {
+            $table->dropUnique('kunjungans_user_tanggal_unique');
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_30_000002_fix_unique_kunjungan_softdelete_aware.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        // MariaDB mewajibkan index yang meng-cover kolom FK (user_id) selalu ada.
+        // Index unique lama adalah satu-satunya index yang mencakup user_id, jadi
+        // tambahkan index biasa dulu untuk user_id sebelum index lama di-drop,
+        // supaya FK constraint tetap punya index pendukung.
+        Schema::table('kunjungans', function ($table) {
+            $table->index('user_id', 'kunjungans_user_id_index');
+        });
+
+        Schema::table('kunjungans', function ($table) {
+            $table->dropUnique('kunjungans_user_tanggal_unique');
+        });
+
+        // Generated column: bernilai 'user_id-tanggal' HANYA jika baris aktif
+        // (deleted_at IS NULL), NULL jika sudah di-soft-delete. MariaDB
+        // memperbolehkan banyak NULL pada unique index, sehingga baris yang
+        // sudah di-soft-delete tidak lagi memblokir insert baru dengan
+        // kombinasi user_id+tanggal yang sama.
+        // Verified: MariaDB 11.8.6 mendukung generated column STORED + unique index.
+        DB::statement("
+            ALTER TABLE kunjungans
+            ADD COLUMN unik_aktif VARCHAR(300)
+                GENERATED ALWAYS AS (
+                    CASE WHEN deleted_at IS NULL
+                        THEN CONCAT(user_id, '-', tanggal)
+                        ELSE NULL
+                    END
+                ) STORED
+        ");
+
+        DB::statement("
+            ALTER TABLE kunjungans
+            ADD UNIQUE INDEX kunjungans_unik_aktif_unique (unik_aktif)
+        ");
+    }
+
+    public function down(): void
+    {
+        DB::statement('ALTER TABLE kunjungans DROP INDEX kunjungans_unik_aktif_unique');
+        DB::statement('ALTER TABLE kunjungans DROP COLUMN unik_aktif');
+
+        Schema::table('kunjungans', function ($table) {
+            $table->unique(['user_id', 'tanggal'], 'kunjungans_user_tanggal_unique');
+        });
+
+        Schema::table('kunjungans', function ($table) {
+            $table->dropIndex('kunjungans_user_id_index');
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_30_000003_rename_nis_to_nisn_in_users_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->renameColumn('nis', 'nisn');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->renameColumn('nisn', 'nis');
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_30_000004_create_device_logs_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('device_logs', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            // device_id dari firmware: MAC-based (ESP32_XXXX) atau nama custom jika diisi saat provisioning.
+            $table->string('device_id')->unique();
+            $table->string('device_name')->nullable();
+            $table->string('firmware_version')->nullable();
+            $table->unsignedBigInteger('uptime_sec')->default(0);
+            $table->unsignedBigInteger('heap_free')->default(0);
+            $table->unsignedInteger('pending_records')->default(0);
+            $table->unsignedInteger('scan_today')->default(0);
+            $table->integer('rssi')->default(0);
+            $table->boolean('sd_ok')->default(false);
+            $table->unsignedInteger('rfid_db_entries')->default(0);
+            $table->boolean('online')->default(false);
+            $table->timestamp('last_seen_at')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('device_logs');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_30_000005_create_firmware_releases_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('firmware_releases', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('version')->unique(); // format semver: x.y.z, dibandingkan dengan compareFirmwareVersion() di firmware
+            $table->string('url'); // URL binary .bin, wajib https, wajib bisa diverifikasi lewat X-API-KEY yang sama
+            $table->string('md5')->nullable();
+            $table->boolean('aktif')->default(true);
+            $table->text('catatan')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('firmware_releases');
     }
 };
 
@@ -3664,6 +5311,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -3674,12 +5322,84 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $this->call(SettingSeeder::class);
 
         User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+            'nama' => 'Admin Perpustakaan',
+            'role' => 'admin',
+            'no_telepon' => '628123456789',
+            'password' => Hash::make('password'),
         ]);
+    }
+}
+
+```
+---
+
+## database/seeders/SettingSeeder.php
+```php
+<?php
+
+namespace Database\Seeders;
+
+use App\Enums\GroupSetting;
+use App\Models\Setting;
+use Illuminate\Database\Seeder;
+
+/**
+ * Baseline Setting agar aplikasi tidak diam-diam berjalan dengan default
+ * hardcode di kode (Setting::get($key, $default)). Nilai berkategori
+ * "bisnis" (bukan teknis/device) ditandai TODO: ASUMSI - wajib direview
+ * Admin lewat panel sebelum dianggap final, terutama nilai Point yang
+ * menentukan kecepatan naik Badge dan pemicu Punishment.
+ *
+ * SENGAJA TIDAK menyeed wa_template_* - template_code terkait belum dibuat
+ * di panel WhatsApp Gateway (dok kontrak API §4.2). Sampai template dibuat
+ * manual dan key ini diisi, WhatsappService::kirimEvent() akan skip dengan
+ * Log::warning (by design), notifikasi WA tidak terkirim.
+ */
+class SettingSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $settings = [
+            // --- Kategori A: teknis/device - konsisten dengan default firmware ESP32 ---
+            ['key' => 'rfid_db_ver', 'value' => '0', 'group' => GroupSetting::Device, 'keterangan' => 'Versi daftar kartu RFID aktif, dinaikkan otomatis oleh UserObserver.'],
+            ['key' => 'device_sleep_start_hour', 'value' => '18', 'group' => GroupSetting::Device, 'keterangan' => 'Jam mulai device deep sleep (0-23).'],
+            ['key' => 'device_sleep_end_hour', 'value' => '5', 'group' => GroupSetting::Device, 'keterangan' => 'Jam device bangun dari deep sleep (0-23).'],
+            ['key' => 'device_oled_dim_start_hour', 'value' => '8', 'group' => GroupSetting::Device, 'keterangan' => 'Jam mulai OLED device dimatikan sementara (0-23).'],
+            ['key' => 'device_oled_dim_end_hour', 'value' => '12', 'group' => GroupSetting::Device, 'keterangan' => 'Jam OLED device kembali menyala (0-23).'],
+            ['key' => 'device_sync_interval_ms', 'value' => '300000', 'group' => GroupSetting::Device, 'keterangan' => 'Interval sinkronisasi data offline device ke server (ms).'],
+            ['key' => 'device_ota_check_interval_ms', 'value' => '30000', 'group' => GroupSetting::Device, 'keterangan' => 'Interval device mengecek update firmware (ms).'],
+
+            // --- Kategori B.1: aturan peminjaman & denda ---
+            // TODO: ASUMSI - baseline dari default fallback di PeminjamanService, wajib direview Admin.
+            ['key' => 'max_peminjaman_aktif', 'value' => '3', 'group' => GroupSetting::Peminjaman, 'keterangan' => 'TODO: ASUMSI - maksimal jumlah Peminjaman berstatus aktif per user.'],
+            ['key' => 'lama_peminjaman_hari', 'value' => '7', 'group' => GroupSetting::Peminjaman, 'keterangan' => 'TODO: ASUMSI - masa pinjam dalam hari sejak tanggal_pinjam.'],
+            ['key' => 'tarif_denda_per_hari', 'value' => '500', 'group' => GroupSetting::Denda, 'keterangan' => 'TODO: ASUMSI - tarif denda keterlambatan per hari (rupiah).'],
+            ['key' => 'persentase_denda_kerusakan', 'value' => '100', 'group' => GroupSetting::Denda, 'keterangan' => 'TODO: ASUMSI - persentase dari Buku.harga_ganti untuk denda kerusakan.'],
+
+            // --- Kategori B.2: nilai Point per event ---
+            // TODO: ASUMSI - angka belum ditentukan spec, dipilih sebagai baseline awal
+            // supaya sistem Badge/Reward/Punishment tidak mati total (default kode = 0).
+            // Kerusakan/Kehilangan sengaja negatif sesuai Logic Module §4.
+            ['key' => 'point_kunjungan', 'value' => '1', 'group' => GroupSetting::Point, 'keterangan' => 'TODO: ASUMSI - point per kunjungan (tap RFID).'],
+            ['key' => 'point_peminjaman', 'value' => '2', 'group' => GroupSetting::Point, 'keterangan' => 'TODO: ASUMSI - point per buku dipinjam.'],
+            ['key' => 'point_pengembalian', 'value' => '3', 'group' => GroupSetting::Point, 'keterangan' => 'TODO: ASUMSI - point per pengembalian kondisi baik/tepat waktu.'],
+            ['key' => 'point_kerusakan', 'value' => '-10', 'group' => GroupSetting::Point, 'keterangan' => 'TODO: ASUMSI - point (negatif) saat buku dikembalikan rusak.'],
+            ['key' => 'point_kehilangan', 'value' => '-20', 'group' => GroupSetting::Point, 'keterangan' => 'TODO: ASUMSI - point (negatif) saat buku dilaporkan/berstatus hilang.'],
+        ];
+
+        foreach ($settings as $setting) {
+            Setting::query()->updateOrCreate(
+                ['key' => $setting['key']],
+                [
+                    'value' => $setting['value'],
+                    'group' => $setting['group'],
+                    'keterangan' => $setting['keterangan'],
+                ]
+            );
+        }
     }
 }
 
@@ -3690,6 +5410,7 @@ class DatabaseSeeder extends Seeder
 ```php
 <?php
 
+use App\Http\Middleware\AuthenticateDeviceApiKey;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -3697,16 +5418,19 @@ use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__.'/../routes/web.php',
-        commands: __DIR__.'/../routes/console.php',
+        web: __DIR__ . '/../routes/web.php',
+        api: __DIR__ . '/../routes/api.php',
+        commands: __DIR__ . '/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'device.api.key' => AuthenticateDeviceApiKey::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn(Request $request) => $request->is('api/*'),
         );
     })->create();
 
@@ -3941,6 +5665,7 @@ return Application::configure(basePath: dirname(__DIR__))
     44 => 'Termwind\\Laravel\\TermwindServiceProvider',
     45 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
     46 => 'App\\Providers\\AppServiceProvider',
+    47 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
   'eager' => 
   array (
@@ -3975,6 +5700,7 @@ return Application::configure(basePath: dirname(__DIR__))
     28 => 'Termwind\\Laravel\\TermwindServiceProvider',
     29 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
     30 => 'App\\Providers\\AppServiceProvider',
+    31 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
   'deferred' => 
   array (
@@ -4205,10 +5931,9 @@ return Application::configure(basePath: dirname(__DIR__))
 ```php
 <?php
 
-use App\Providers\AppServiceProvider;
-
 return [
-    AppServiceProvider::class,
+    App\Providers\AppServiceProvider::class,
+    App\Providers\Filament\DashboardPanelProvider::class,
 ];
 
 ```

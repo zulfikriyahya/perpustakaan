@@ -1,0 +1,177 @@
+models:
+    User:
+        avatar: string nullable
+        role: enum:siswa,pegawai,pustakawan,admin default:siswa
+        nis: string nullable unique
+        nip: string nullable unique
+        kelas: string nullable
+        jabatan: string nullable
+        no_telepon: string
+        no_kartu_rfid: string nullable unique
+        status_suspend: boolean default:false
+        akumulasi_point: integer default:0
+        level_badge_id: uuid foreign:level_badges nullable
+        softDeletes: true
+
+    Kategori:
+        id: uuid
+        nama: string
+        deskripsi: text nullable
+        softDeletes: true
+        relationships:
+            belongsToMany: Buku, Rak
+
+    Rak:
+        id: uuid
+        nama: string
+        lokasi: string nullable
+        softDeletes: true
+        relationships:
+            belongsToMany: Kategori
+            hasMany: Buku
+
+    Buku:
+        id: uuid
+        judul: string
+        cover: string nullable
+        penulis: string nullable
+        penerbit: string nullable
+        isbn: string nullable unique
+        barcode: string unique
+        rak_id: uuid foreign:raks nullable
+        harga_ganti: decimal:10,2 default:0
+        stok: integer default:1
+        deskripsi: text nullable
+        softDeletes: true
+        relationships:
+            belongsTo: Rak
+            belongsToMany: Kategori
+            hasMany: Peminjaman
+
+    Transaksi:
+        id: uuid
+        user_id: foreign:users
+        jenis: enum:peminjaman,kunjungan,pembayaran_denda default:peminjaman
+        diproses_oleh: foreign:users nullable
+        tanggal: datetime
+        keterangan: text nullable
+        softDeletes: true
+        relationships:
+            belongsTo: User
+            hasMany: Peminjaman
+
+    Peminjaman:
+        id: uuid
+        transaksi_id: uuid foreign:transaksis
+        user_id: foreign:users
+        buku_id: uuid foreign:bukus
+        tanggal_pinjam: date
+        tanggal_jatuh_tempo: date
+        status: enum:aktif,terlambat,selesai,hilang default:aktif
+        diproses_oleh: foreign:users nullable
+        softDeletes: true
+        relationships:
+            belongsTo: Transaksi, User, Buku
+            hasOne: Pengembalian
+            hasMany: Denda
+
+    Pengembalian:
+        id: uuid
+        peminjaman_id: uuid foreign:peminjamans
+        tanggal_kembali: date
+        kondisi: enum:baik,rusak,hilang default:baik
+        catatan: text nullable
+        diproses_oleh: foreign:users nullable
+        softDeletes: true
+        relationships:
+            belongsTo: Peminjaman
+
+    Denda:
+        id: uuid
+        peminjaman_id: uuid foreign:peminjamans
+        user_id: foreign:users
+        tipe: enum:keterlambatan,kerusakan,kehilangan
+        nominal: decimal:10,2
+        status_lunas: boolean default:false
+        tanggal_lunas: datetime nullable
+        keterangan: text nullable
+        softDeletes: true
+        relationships:
+            belongsTo: Peminjaman, User
+
+    Point:
+        id: uuid
+        user_id: foreign:users
+        event_type: enum:kunjungan,peminjaman,pengembalian,kerusakan,kehilangan
+        nilai: integer
+        ref_type: string nullable
+        ref_id: uuid nullable
+        keterangan: string nullable
+        softDeletes: true
+        relationships:
+            belongsTo: User
+
+    LevelBadge:
+        id: uuid
+        nama_badge: string
+        min_point: integer
+        max_point: integer nullable
+        icon: string nullable
+        urutan: integer default:0
+        softDeletes: true
+        relationships:
+            hasMany: User
+
+    Reward:
+        id: uuid
+        nama: string
+        deskripsi: text nullable
+        threshold_point: integer
+        aktif: boolean default:true
+        softDeletes: true
+
+    RewardLog:
+        id: uuid
+        user_id: foreign:users
+        reward_id: uuid foreign:rewards
+        tanggal_didapat: datetime
+        softDeletes: true
+        relationships:
+            belongsTo: User, Reward
+
+    Punishment:
+        id: uuid
+        nama: string
+        deskripsi: text nullable
+        threshold_point_minus: integer
+        durasi_suspend_hari: integer nullable
+        aktif: boolean default:true
+        softDeletes: true
+
+    PunishmentLog:
+        id: uuid
+        user_id: foreign:users
+        punishment_id: uuid foreign:punishments
+        tanggal_diterapkan: datetime
+        tanggal_berakhir: datetime nullable
+        softDeletes: true
+        relationships:
+            belongsTo: User, Punishment
+
+    Kunjungan:
+        id: uuid
+        user_id: foreign:users
+        tanggal: date
+        jam_tap: time
+        source: enum:rfid,manual default:rfid
+        softDeletes: true
+        relationships:
+            belongsTo: User
+
+    Setting:
+        id: uuid
+        key: string unique
+        value: text nullable
+        group: enum:peminjaman,point,notifikasi,denda,device,whatsapp default:peminjaman
+        keterangan: string nullable
+        timestamps: true

@@ -99,12 +99,17 @@ class WhatsappService
 
     /**
      * Titik masuk TUNGGAL untuk seluruh notifikasi WA di aplikasi (Aturan
-     * poin 3 - Prinsip DRY). Sejak iterasi ini, method ini TIDAK memanggil
-     * gateway secara langsung - hanya me-resolve template_code dari Setting
-     * (sinkron, cepat, sudah di-cache 5 menit oleh Setting::get) lalu
-     * men-dispatch KirimNotifikasiWhatsapp ke queue 'whatsapp', supaya
-     * Peminjaman/Denda/Point tidak menunggu request HTTP ke gateway selesai
-     * (Logic Module §11 checklist: "Job/Queue terpisah untuk notifikasi WA").
+     * poin 3 - Prinsip DRY). Method ini hanya me-resolve template_code dari
+     * Setting lalu men-dispatch KirimNotifikasiWhatsapp ke queue 'whatsapp'.
+     *
+     * ->afterCommit(): pemanggil (PeminjamanService::tandaiDenda,
+     * PointService::catatEvent, dsb.) sering berada di dalam DB::transaction.
+     * Tanpa afterCommit(), worker queue 'redis' bisa memproses job sebelum
+     * transaksi commit (config/queue.php redis tidak set after_commit=true
+     * secara global) - kalau transaksi rollback, notifikasi WA sudah
+     * terlanjur terkirim untuk data yang batal tersimpan. Jika dipanggil di
+     * luar transaksi (tidak ada transaksi aktif), afterCommit() tidak
+     * memberi efek tambahan - job tetap dispatch langsung.
      *
      * Key pola: wa_template_{event_code}, mis. 'wa_template_peminjaman_aktif'.
      *
@@ -123,19 +128,16 @@ class WhatsappService
         ?string $referenceId = null,
     ): void {
         $templateCode = Setting::get("wa_template_{$eventCode}");
-
         if (! $templateCode) {
             Log::warning("WhatsappService: template untuk event '{$eventCode}' belum dikonfigurasi di Setting, notifikasi di-skip.");
-
             return;
         }
-
         KirimNotifikasiWhatsapp::dispatch(
             $templateCode,
             $nomorTujuan,
             $variables,
             $referenceId ?? (string) Str::uuid(),
-        )->onQueue('whatsapp');
+        )->onQueue('whatsapp')->afterCommit();
     }
 
     /**

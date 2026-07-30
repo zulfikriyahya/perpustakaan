@@ -13,6 +13,7 @@ use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
+
 class PointService
 {
     public function __construct(
@@ -88,44 +89,53 @@ class PointService
     }
 
     /**
-     * Cek apakah user baru saja melewati threshold Reward yang belum pernah didapat.
+     * Cek Reward yang tercapai. KEPUTUSAN FINAL (dikonfirmasi): hanya threshold
+     * TERTINGGI yang diproses per pemanggilan, bukan seluruh threshold yang
+     * terlampaui sekaligus. Reward dengan threshold_point lebih rendah yang
+     * belum pernah didapat TIDAK di-backfill jika user melompati beberapa
+     * threshold dalam satu event - hanya akan tercatat jika suatu saat menjadi
+     * satu-satunya/tertinggi yang eligible.
      */
     protected function cekReward(User $user): void
     {
-        $rewardTercapai = Reward::query()
+        $reward = Reward::query()
             ->where('aktif', true)
             ->where('threshold_point', '<=', $user->akumulasi_point)
             ->whereDoesntHave('rewardLogs', fn($q) => $q->where('user_id', $user->id))
-            ->get();
+            ->orderByDesc('threshold_point')
+            ->first();
 
-        foreach ($rewardTercapai as $reward) {
-            $rewardLog = RewardLog::create([
-                'user_id' => $user->id,
-                'reward_id' => $reward->id,
-                'tanggal_didapat' => now(),
-            ]);
-
-            // eventCode 'reward_didapat' - TODO: ASUMSI, samakan dengan Setting
-            // wa_template_reward_didapat.
-            $this->whatsappService->kirimEvent(
-                eventCode: 'reward_didapat',
-                nomorTujuan: $user->no_telepon,
-                variables: ['nama' => $user->nama, 'reward' => $reward->nama],
-                referenceId: "reward-{$rewardLog->id}",
-            );
+        if (! $reward) {
+            return;
         }
+
+        $rewardLog = RewardLog::create([
+            'user_id' => $user->id,
+            'reward_id' => $reward->id,
+            'tanggal_didapat' => now(),
+        ]);
+
+        // eventCode 'reward_didapat' - TODO: ASUMSI, samakan dengan Setting
+        // wa_template_reward_didapat.
+        $this->whatsappService->kirimEvent(
+            eventCode: 'reward_didapat',
+            nomorTujuan: $user->no_telepon,
+            variables: ['nama' => $user->nama, 'reward' => $reward->nama],
+            referenceId: "reward-{$rewardLog->id}",
+        );
     }
 
     /**
-     * Cek apakah user baru saja melewati threshold Punishment (point minus).
-     * TODO: GAP-SPEC - overlap status_suspend dengan Denda. Suspend dari Punishment
-     * TIDAK ditandai lunas/tidak seperti Denda, melainkan berdasarkan tanggal_berakhir.
-     * DendaObserver sudah disesuaikan untuk ikut mengecek PunishmentLog aktif sebelum
-     * unsuspend user (lihat app/Observers/DendaObserver.php).
+     * Cek Punishment yang tercapai. KEPUTUSAN FINAL (dikonfirmasi): hanya threshold
+     * TERTINGGI yang diproses per pemanggilan, bukan seluruh threshold yang
+     * terlampaui sekaligus. Punishment dengan threshold_point lebih rendah yang
+     * belum pernah didapat TIDAK di-backfill jika user melompati beberapa
+     * threshold dalam satu event - hanya akan tercatat jika suatu saat menjadi
+     * satu-satunya/tertinggi yang eligible.
      */
     protected function cekPunishment(User $user): void
     {
-        $punishmentTercapai = Punishment::query()
+        $punishment = Punishment::query()
             ->where('aktif', true)
             ->where('threshold_point_minus', '>=', $user->akumulasi_point)
             ->whereDoesntHave('punishmentLogs', function ($q) use ($user) {
@@ -135,28 +145,96 @@ class PointService
                             ->orWhere('tanggal_berakhir', '>', now());
                     });
             })
-            ->get();
+            ->orderBy('threshold_point_minus')
+            ->first();
 
-        foreach ($punishmentTercapai as $punishment) {
-            $punishmentLog = PunishmentLog::create([
-                'user_id' => $user->id,
-                'punishment_id' => $punishment->id,
-                'tanggal_diterapkan' => now(),
-                'tanggal_berakhir' => $punishment->durasi_suspend_hari
-                    ? now()->addDays($punishment->durasi_suspend_hari)
-                    : null,
+        if (! $punishment) {
+            return;
+        }
+
+        $punishmentLog = PunishmentLog::create([
+            'user_id' => $user->id,
+            'punishment_id' => $punishment->id,
+            'tanggal_diterapkan' => now(),
+            'tanggal_berakhir' => $punishment->durasi_suspend_hari
+                ? now()->addDays($punishment->durasi_suspend_hari)
+                : null,
+        ]);
+
+        $user->update(['status_suspend' => true]);
+
+        // eventCode 'punishment_diterapkan' - TODO: ASUMSI, samakan dengan
+        // Setting wa_template_punishment_diterapkan.
+        $this->whatsappService->kirimEvent(
+            eventCode: 'punishment_diterapkan',
+            nomorTujuan: $user->no_telepon,
+            variables: ['nama' => $user->nama, 'alasan' => $punishment->nama],
+            referenceId: "punishment-{$punishmentLog->id}",
+        );
+    }
+    /**
+     * Reverse SATU Point log (mis. saat koreksi kondisi Pengembalian
+     * membatalkan alasan event tersebut). Insert entry Point BARU dengan
+     * nilai negasi (bukan hapus log lama - riwayat harus auditable),
+     * turunkan akumulasi_point, lalu cek ulang Badge (bisa turun level).
+     *
+     * TODO: GAP-SPEC - Reward/Punishment yang SUDAH terlanjur didapat dari
+     * akumulasi sebelum reversal ini TIDAK ditarik kembali. Alasan: logic
+     * cekReward()/cekPunishment() hanya memproses "threshold tertinggi yang
+     * belum pernah didapat" (lihat komentar KEPUTUSAN FINAL di method
+     * tersebut) - tidak ada mekanisme "un-award" yang terdefinisi di spec,
+     * dan menariknya kembali (mis. reward yang sudah dikirim notifikasi WA
+     * atau bahkan sudah diklaim fisik) berisiko lebih besar daripada
+     * membiarkannya. Ini keputusan produk yang perlu dikonfirmasi terpisah
+     * jika ternyata reward/punishment WAJIB ikut di-reverse.
+     */
+    public function batalkanEvent(
+        Point $pointAsli,
+        ?string $keterangan = null,
+    ): Point {
+        return DB::transaction(function () use ($pointAsli, $keterangan) {
+            $pointBalik = Point::create([
+                'user_id' => $pointAsli->user_id,
+                'event_type' => $pointAsli->event_type,
+                'nilai' => -$pointAsli->nilai,
+                'ref_type' => $pointAsli->ref_type,
+                'ref_id' => $pointAsli->ref_id,
+                'keterangan' => $keterangan ?? "Pembatalan otomatis dari Point #{$pointAsli->id}",
             ]);
 
-            $user->update(['status_suspend' => true]);
+            $user = $pointAsli->user;
+            $user->increment('akumulasi_point', -$pointAsli->nilai);
+            $user->refresh();
 
-            // eventCode 'punishment_diterapkan' - TODO: ASUMSI, samakan dengan
-            // Setting wa_template_punishment_diterapkan.
-            $this->whatsappService->kirimEvent(
-                eventCode: 'punishment_diterapkan',
-                nomorTujuan: $user->no_telepon,
-                variables: ['nama' => $user->nama, 'alasan' => $punishment->nama],
-                referenceId: "punishment-{$punishmentLog->id}",
-            );
-        }
+            $this->cekBadge($user);
+            // Reward/Punishment sengaja tidak di-cek ulang di sini - lihat
+            // TODO: GAP-SPEC di docblock method ini.
+
+            return $pointBalik;
+        });
+    }
+
+    /**
+     * Cari Point log terakhir milik user untuk ref tertentu (dipakai
+     * PeminjamanService::batalkanDenda untuk tahu Point mana yang harus
+     * di-reverse saat koreksi kondisi). Dibatasi ke event_type spesifik
+     * supaya tidak salah mengambil Point dari event lain yang kebetulan
+     * punya ref_type/ref_id sama (mis. 'peminjaman'+id yang sama dipakai
+     * beberapa EventTypePoint berbeda: Peminjaman, Pengembalian, Kerusakan,
+     * Kehilangan).
+     */
+    public function cariPointTerakhir(
+        int $userId,
+        EventTypePoint $eventType,
+        string $refType,
+        string $refId,
+    ): ?Point {
+        return Point::query()
+            ->where('user_id', $userId)
+            ->where('event_type', $eventType)
+            ->where('ref_type', $refType)
+            ->where('ref_id', $refId)
+            ->latest()
+            ->first();
     }
 }

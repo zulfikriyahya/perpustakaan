@@ -739,3 +739,92 @@ Halo {{nama}}, mohon perhatikan aturan perpustakaan. Alasan: {{alasan}}.
 *Punishment Diterapkan*
 {{nama}}, akunmu dikenakan pembatasan sementara. Alasan: {{alasan}}.
 ```
+
+---
+
+# Template WhatsApp — Reset Password OTP
+
+## 11. Reset Password OTP
+
+**Kode Template:** `reset_password_otp`
+**Kategori:** `Akun`
+**Prioritas:** `High`
+**Variabel Wajib:** `nama,otp`
+
+```
+1.
+*Perpustakaan*
+
+*Kode Reset Password*
+Nama: {{nama}}
+Kode OTP: {{otp}}
+Berlaku 5 menit. Jangan bagikan kode ini ke siapa pun.
+
+2.
+*Perpustakaan*
+
+*Permintaan Reset Password*
+Halo {{nama}}, gunakan kode berikut untuk reset password: {{otp}}. Kode berlaku 5 menit.
+
+3.
+*Perpustakaan*
+
+*Kode Verifikasi*
+Nama    : {{nama}}
+Kode OTP: {{otp}}
+Jangan berikan kode ini kepada siapa pun, termasuk pihak yang mengaku dari perpustakaan.
+
+4.
+*Perpustakaan*
+
+Halo {{nama}}, kode OTP reset password-mu adalah {{otp}}. Kode ini berlaku selama 5 menit.
+
+5.
+*Perpustakaan*
+
+*Info Reset Password*
+{{nama}} - Kode OTP: {{otp}}
+Segera masukkan kode ini di halaman reset password.
+
+6.
+*Perpustakaan*
+
+*Kode OTP*
+Permintaan reset password atas nama {{nama}}. Kode: {{otp}} (berlaku 5 menit).
+
+7.
+*Perpustakaan*
+
+*Reset Password*
+Nama: {{nama}}
+Kode OTP: {{otp}}
+Jika kamu tidak meminta ini, abaikan pesan ini dan segera hubungi Pustakawan/Admin.
+
+8.
+*Perpustakaan*
+
+Kode reset password untuk {{nama}}: {{otp}}. Berlaku 5 menit, jangan dibagikan.
+
+9.
+*Perpustakaan*
+
+*Permintaan Reset Password*
+Halo {{nama}}, kami menerima permintaan reset password untuk akunmu. Kode OTP: {{otp}}. Berlaku 5 menit.
+
+10.
+*Perpustakaan*
+
+*Kode Verifikasi Reset Password*
+{{nama}}, masukkan kode berikut untuk melanjutkan reset password: {{otp}}. Kode kedaluwarsa dalam 5 menit demi keamanan akunmu.
+```
+
+---
+
+Setelah Anda pilih salah satu varian dan daftarkan `template_code: reset_password_otp` di panel gateway, jangan lupa isi Setting:
+
+```
+key   = wa_template_reset_password_otp
+value = reset_password_otp  (atau template_code sesuai yang muncul di panel)
+group = whatsapp
+```
+

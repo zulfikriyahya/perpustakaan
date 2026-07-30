@@ -131,7 +131,7 @@ enum RoleUser: string
     case Siswa = 'siswa';
     case Pegawai = 'pegawai';
     case Pustakawan = 'pustakawan';
-    case Admin = 'admin';
+    case Admin = 'super_admin';
 }
 
 ```
@@ -169,6 +169,22 @@ enum StatusPeminjaman: string
 ```
 ---
 
+## app/Enums/StatusRefund.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum StatusRefund: string
+{
+    case TidakPerlu = 'tidak_perlu';
+    case PerluRefund = 'perlu_refund';
+    case SudahDirefund = 'sudah_direfund';
+}
+
+```
+---
+
 ## app/Enums/TipeDenda.php
 ```php
 <?php
@@ -200,6 +216,1384 @@ class WhatsappGatewayException extends Exception
         string $pesanError,
     ) {
         parent::__construct("Gateway WhatsApp mengembalikan status {$statusCode}: {$pesanError}");
+    }
+}
+
+```
+---
+
+## app/Filament/Pages/Auth/Login.php
+```php
+<?php
+
+namespace App\Filament\Pages\Auth;
+
+use App\Models\User;
+use Filament\Auth\Pages\Login as BaseLogin;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Schema;
+
+// TODO: verifikasi signature terhadap versi package yang terpasang (filament/filament ^5.7).
+// Nama namespace parent (Filament\Auth\Pages\Login vs Filament\Pages\Auth\Login) dan
+// method getCredentialsFromFormData() perlu dicek ulang terhadap source filament/filament
+// versi 5.7 yang ter-install - saya tidak bisa memverifikasi langsung dari sini.
+class Login extends BaseLogin
+{
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            $this->getLoginFormComponent(),
+            $this->getPasswordFormComponent(),
+            $this->getRememberFormComponent(),
+        ]);
+    }
+
+    protected function getLoginFormComponent(): TextInput
+    {
+        return TextInput::make('login')
+            ->label('NISN / NIP / No. Telepon')
+            ->required()
+            ->autofocus()
+            ->extraInputAttributes(['tabindex' => 1]);
+    }
+
+    /**
+     * Resolusi identifier login ke kolom yang sesuai (Aturan: NISN untuk
+     * Siswa, NIP untuk Pegawai/Pustakawan/Admin, atau no_telepon sebagai
+     * fallback universal). TODO: GAP-SPEC - jika suatu saat NISN dan NIP
+     * bisa bentrok nilai (kemungkinan kecil, belum ada constraint silang),
+     * urutan pengecekan di bawah (nisn -> nip -> no_telepon) menentukan
+     * prioritas resolusi.
+     */
+    protected function getCredentialsFromFormData(array $data): array
+    {
+        $login = $data['login'];
+
+        $field = match (true) {
+            User::query()->where('nisn', $login)->exists() => 'nisn',
+            User::query()->where('nip', $login)->exists() => 'nip',
+            default => 'no_telepon',
+        };
+
+        return [
+            $field => $login,
+            'password' => $data['password'],
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Pages/Auth/RequestPasswordReset.php
+```php
+<?php
+
+namespace App\Filament\Pages\Auth;
+
+use App\Models\User;
+use App\Services\PasswordResetOtpService;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Pages\SimplePage;
+use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\HtmlString;
+
+/**
+ * Langkah 1: minta identifier (NISN/NIP/No. Telepon - sama seperti Login,
+ * lihat App\Filament\Pages\Auth\Login), kirim OTP via WhatsApp ke
+ * User.no_telepon, lalu redirect ke ResetPassword page. no_telepon ASLI
+ * (bukan raw input) disimpan di session, supaya PasswordResetOtpService
+ * (yang bekerja berbasis no_telepon) tetap konsisten walau user login
+ * pakai NISN/NIP.
+ */
+class RequestPasswordReset extends SimplePage
+{
+    protected string $view = 'filament.pages.auth.request-password-reset';
+
+    public ?array $data = [];
+
+    public function getHeading(): string|HtmlString
+    {
+        return 'Lupa Kata Sandi';
+    }
+
+    public function getSubheading(): string|HtmlString|null
+    {
+        return 'Masukkan NISN, NIP, atau No. Telepon yang terdaftar - kode OTP akan dikirim via WhatsApp.';
+    }
+
+    public function mount(): void
+    {
+        $this->form->fill();
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('login')
+                ->label('NISN / NIP / No. Telepon')
+                ->required(),
+        ])->statePath('data');
+    }
+
+    /**
+     * Resolusi identifier ke User - pola SAMA persis dengan
+     * Login::getCredentialsFromFormData() (Aturan poin 3, DRY). Jika suatu
+     * saat logic resolusi berubah (mis. tambah identifier baru), kedua
+     * tempat ini wajib disinkronkan bersamaan (poin 11).
+     */
+    protected function resolveUser(string $login): ?User
+    {
+        return User::query()
+            ->where('nisn', $login)
+            ->orWhere('nip', $login)
+            ->orWhere('no_telepon', $login)
+            ->first();
+    }
+
+    public function kirim(PasswordResetOtpService $otpService): void
+    {
+        $data = $this->form->getState();
+
+        $user = $this->resolveUser($data['login']);
+
+        if (! $user) {
+            // TODO: GAP-SPEC - notifikasi eksplisit "tidak terdaftar" atas
+            // permintaan (trade-off: bisa dipakai enumerasi identifier
+            // terdaftar). Lihat catatan sebelumnya jika ingin direvert ke
+            // pesan generik.
+            Notification::make()
+                ->title('Akun tidak ditemukan')
+                ->body('Pastikan NISN, NIP, atau No. Telepon yang dimasukkan sesuai dengan yang terdaftar di sistem perpustakaan.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $otpService->kirimOtp($user);
+
+        Session::put('reset_password_no_telepon', $user->no_telepon);
+
+        $this->redirect(
+            URL::signedRoute('filament.dashboard.auth.password-reset.reset')
+        );
+    }
+}
+
+```
+---
+
+## app/Filament/Pages/Auth/ResetPassword.php
+```php
+<?php
+
+namespace App\Filament\Pages\Auth;
+
+use App\Services\PasswordResetOtpService;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Pages\SimplePage;
+use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\HtmlString;
+
+/**
+ * Langkah 2: user masukkan OTP yang diterima di WhatsApp + password baru.
+ * no_telepon diambil dari session yang di-set RequestPasswordReset - jika
+ * session kosong (mis. buka langsung URL ini tanpa lewat step 1), tendang
+ * balik ke RequestPasswordReset.
+ */
+class ResetPassword extends SimplePage
+{
+    protected string $view = 'filament.pages.auth.reset-password';
+
+    public ?array $data = [];
+
+    public function getHeading(): string|HtmlString
+    {
+        return 'Reset Kata Sandi';
+    }
+
+    public function getSubheading(): string|HtmlString|null
+    {
+        return 'Masukkan kode OTP yang dikirim ke WhatsApp-mu.';
+    }
+
+    public function mount(): void
+    {
+        if (! Session::has('reset_password_no_telepon')) {
+            $this->redirect(route('filament.dashboard.auth.password-reset.request'));
+            return;
+        }
+
+        $this->form->fill();
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('otp')
+                ->label('Kode OTP')
+                ->required()
+                ->length(6),
+            TextInput::make('password')
+                ->label('Password Baru')
+                ->password()
+                ->required()
+                ->minLength(8),
+            TextInput::make('password_confirmation')
+                ->label('Konfirmasi Password Baru')
+                ->password()
+                ->required()
+                ->same('password'),
+        ])->statePath('data');
+    }
+
+    public function prosesReset(PasswordResetOtpService $otpService): void
+    {
+        $data = $this->form->getState();
+        $noTelepon = Session::get('reset_password_no_telepon');
+
+        try {
+            $otpService->verifikasiDanReset($noTelepon, $data['otp'], $data['password']);
+        } catch (\RuntimeException $e) {
+            Notification::make()->title($e->getMessage())->warning()->send();
+            return;
+        }
+
+        Session::forget('reset_password_no_telepon');
+
+        Notification::make()->title('Password berhasil direset, silakan login.')->success()->send();
+
+        $this->redirect(route('filament.dashboard.auth.login'));
+    }
+}
+
+```
+---
+
+## app/Filament/Pages/TransaksiCepat.php
+```php
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Enums\KondisiBuku;
+use App\Enums\StatusPeminjaman;
+use App\Models\Buku;
+use App\Models\Peminjaman;
+use App\Models\User;
+use App\Services\PeminjamanService;
+use App\Services\RfidResolverService;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use RuntimeException;
+
+/**
+ * Halaman transaksi cepat: scan kartu (identifikasi user) -> scan barcode
+ * buku satu per satu -> sistem OTOMATIS deteksi pinjam/kembali per buku,
+ * diproses langsung tiap scan (TIDAK dikumpulkan dulu, sesuai keputusan
+ * QA). Seluruh logic bisnis (limit, stok, Denda, Point, WA) tetap lewat
+ * PeminjamanService - halaman ini murni orkestrasi UI (Aturan poin 3).
+ *
+ * Reader RFID di komputer = USB keyboard-wedge (ketik ke input fokus,
+ * seperti barcode scanner), BUKAN endpoint device Attendance Machine -
+ * jangan disamakan dengan PerpustakaanDeviceController.
+ *
+ * Otorisasi: reuse Policy existing, tidak ada permission baru untuk
+ * halaman ini sendiri - akses digerbang oleh Create:Peminjaman.
+ *
+ * TODO: verifikasi signature terhadap versi package yang terpasang
+ * (filament/filament versi sesuai composer.json) - properti $view dan
+ * $navigationIcon di bawah mengikuti API Filament v4/v5 (schema-based),
+ * cek ulang jika versi terpasang berbeda.
+ */
+class TransaksiCepat extends Page
+{
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-bolt';
+
+    protected static ?string $navigationLabel = 'Transaksi Cepat';
+
+    protected string $view = 'filament.pages.transaksi-cepat';
+
+    public ?string $kartuInput = '';
+
+    public ?string $barcodeInput = '';
+
+    public ?User $user = null;
+
+    public bool $bisaMeminjam = false;
+
+    /**
+     * @var array<int, array{barcode: string, judul: string, aksi: string, pesan: string, sukses: bool}>
+     */
+    public array $riwayatScan = [];
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('create', Peminjaman::class) ?? false;
+    }
+
+    public function scanKartu(): void
+    {
+        $input = trim((string) $this->kartuInput);
+        $this->kartuInput = '';
+
+        if ($input === '') {
+            return;
+        }
+
+        try {
+            $this->user = app(RfidResolverService::class)->resolveUser($input);
+        } catch (RuntimeException $e) {
+            Notification::make()->danger()->title('User tidak ditemukan')->body($e->getMessage())->send();
+            return;
+        }
+
+        $this->riwayatScan = [];
+        $this->bisaMeminjam = app(PeminjamanService::class)->bisaMeminjam($this->user);
+
+        if ($this->user->status_suspend) {
+            Notification::make()
+                ->warning()
+                ->title('User sedang suspend')
+                ->body('User masih bisa mengembalikan buku, tapi tidak bisa meminjam baru sampai Denda lunas.')
+                ->send();
+        }
+    }
+
+    public function scanBarcode(): void
+    {
+        $barcode = trim((string) $this->barcodeInput);
+        $this->barcodeInput = '';
+
+        if ($barcode === '' || ! $this->user) {
+            return;
+        }
+
+        $buku = Buku::query()->where('barcode', $barcode)->first();
+
+        if (! $buku) {
+            $this->tambahRiwayat($barcode, '-', 'error', 'Barcode tidak ditemukan.', false);
+            return;
+        }
+
+        // Deteksi otomatis: ada Peminjaman aktif/terlambat milik user ini
+        // untuk buku ini -> kembalikan. Kalau tidak -> pinjam baru.
+        $peminjamanAktif = Peminjaman::query()
+            ->where('buku_id', $buku->id)
+            ->where('user_id', $this->user->id)
+            ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat])
+            ->first();
+
+        $service = app(PeminjamanService::class);
+
+        try {
+            if ($peminjamanAktif) {
+                $service->prosesPengembalian(
+                    peminjaman: $peminjamanAktif,
+                    kondisi: KondisiBuku::Baik, // default, koreksi manual lewat PengembalianResource jika perlu
+                    diprosesOleh: auth()->user(),
+                );
+                $this->tambahRiwayat($barcode, $buku->judul, 'dikembalikan', 'Berhasil dikembalikan (kondisi: baik).', true);
+            } else {
+                $service->pinjamBuku(
+                    user: $this->user,
+                    bukuIds: [$buku->id],
+                    diprosesOleh: auth()->user(),
+                );
+                $this->tambahRiwayat($barcode, $buku->judul, 'dipinjamkan', 'Berhasil dipinjamkan.', true);
+            }
+        } catch (RuntimeException $e) {
+            $this->tambahRiwayat($barcode, $buku->judul, 'error', $e->getMessage(), false);
+        }
+
+        $this->bisaMeminjam = app(PeminjamanService::class)->bisaMeminjam($this->user->fresh());
+    }
+
+    public function selesai(): void
+    {
+        $this->user = null;
+        $this->riwayatScan = [];
+        $this->bisaMeminjam = false;
+        $this->kartuInput = '';
+        $this->barcodeInput = '';
+    }
+
+    protected function tambahRiwayat(string $barcode, string $judul, string $aksi, string $pesan, bool $sukses): void
+    {
+        array_unshift($this->riwayatScan, [
+            'barcode' => $barcode,
+            'judul' => $judul,
+            'aksi' => $aksi,
+            'pesan' => $pesan,
+            'sukses' => $sukses,
+        ]);
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/BukuResource/Pages/CreateBuku.php
+```php
+<?php
+
+namespace App\Filament\Resources\BukuResource\Pages;
+
+use App\Filament\Resources\BukuResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateBuku extends CreateRecord
+{
+    protected static string $resource = BukuResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/BukuResource/Pages/EditBuku.php
+```php
+<?php
+
+namespace App\Filament\Resources\BukuResource\Pages;
+
+use App\Filament\Resources\BukuResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditBuku extends EditRecord
+{
+    protected static string $resource = BukuResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            DeleteAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/BukuResource/Pages/ListBukus.php
+```php
+<?php
+
+namespace App\Filament\Resources\BukuResource\Pages;
+
+use App\Filament\Resources\BukuResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListBukus extends ListRecords
+{
+    protected static string $resource = BukuResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/BukuResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\BukuResource\Pages;
+use App\Models\Buku;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+class BukuResource extends Resource
+{
+    protected static ?string $model = Buku::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-book-open';
+
+    protected static ?string $navigationLabel = 'Buku';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('judul')
+                ->required()
+                ->maxLength(255)
+                ->columnSpanFull(),
+            FileUpload::make('cover')
+                ->image()
+                ->directory('buku-cover'),
+            TextInput::make('penulis')
+                ->maxLength(255),
+            TextInput::make('penerbit')
+                ->maxLength(255),
+            TextInput::make('isbn')
+                ->label('ISBN')
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            TextInput::make('barcode')
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            Select::make('rak_id')
+                ->label('Rak')
+                ->relationship('rak', 'nama')
+                ->searchable()
+                ->preload(),
+            Select::make('kategoris')
+                ->label('Kategori')
+                ->relationship('kategoris', 'nama')
+                ->multiple()
+                ->preload()
+                ->searchable(),
+            TextInput::make('harga_ganti')
+                ->label('Harga Ganti')
+                ->numeric()
+                ->prefix('Rp')
+                ->required()
+                // TODO: GAP-SPEC - dipakai sebagai basis Denda.kerusakan (persentase
+                // dari Setting persentase_denda_kerusakan) dan Denda.kehilangan
+                // (penuh) - lihat PeminjamanService::hitungDendaKerusakan/Kehilangan.
+                // Wajib diisi akurat oleh Pustakawan/Admin saat input buku baru.
+                ->helperText('Dipakai sebagai basis perhitungan Denda kerusakan/kehilangan.'),
+            TextInput::make('stok')
+                ->numeric()
+                ->required()
+                ->default(1),
+            Textarea::make('deskripsi')
+                ->columnSpanFull(),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                ImageColumn::make('cover')
+                    ->square(),
+                TextColumn::make('judul')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('barcode')
+                    ->searchable(),
+                TextColumn::make('rak.nama')
+                    ->label('Rak')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('stok')
+                    ->sortable(),
+                TextColumn::make('harga_ganti')
+                    ->label('Harga Ganti')
+                    ->money('IDR')
+                    ->sortable(),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                SelectFilter::make('rak_id')
+                    ->label('Rak')
+                    ->relationship('rak', 'nama'),
+                SelectFilter::make('kategoris')
+                    ->label('Kategori')
+                    ->relationship('kategoris', 'nama'),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListBukus::route('/'),
+            'create' => Pages\CreateBuku::route('/create'),
+            'edit' => Pages\EditBuku::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KategoriResource/Pages/CreateKategori.php
+```php
+<?php
+
+namespace App\Filament\Resources\KategoriResource\Pages;
+
+use App\Filament\Resources\KategoriResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateKategori extends CreateRecord
+{
+    protected static string $resource = KategoriResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/KategoriResource/Pages/EditKategori.php
+```php
+<?php
+
+namespace App\Filament\Resources\KategoriResource\Pages;
+
+use App\Filament\Resources\KategoriResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditKategori extends EditRecord
+{
+    protected static string $resource = KategoriResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            DeleteAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KategoriResource/Pages/ListKategoris.php
+```php
+<?php
+
+namespace App\Filament\Resources\KategoriResource\Pages;
+
+use App\Filament\Resources\KategoriResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListKategoris extends ListRecords
+{
+    protected static string $resource = KategoriResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KategoriResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\KategoriResource\Pages;
+use App\Models\Kategori;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+class KategoriResource extends Resource
+{
+    protected static ?string $model = Kategori::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-tag';
+
+    protected static ?string $navigationLabel = 'Kategori';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('nama')
+                ->required()
+                ->maxLength(255),
+            Textarea::make('deskripsi')
+                ->columnSpanFull(),
+            Select::make('raks')
+                ->label('Rak Terkait')
+                ->relationship('raks', 'nama')
+                ->multiple()
+                ->preload()
+                ->searchable(),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('nama')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('deskripsi')
+                    ->limit(50)
+                    ->toggleable(),
+                TextColumn::make('bukus_count')
+                    ->label('Jumlah Buku')
+                    ->counts('bukus')
+                    ->sortable(),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                //
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListKategoris::route('/'),
+            'create' => Pages\CreateKategori::route('/create'),
+            'edit' => Pages\EditKategori::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/PeminjamanResource/Pages/CreatePeminjaman.php
+```php
+<?php
+
+namespace App\Filament\Resources\PeminjamanResource\Pages;
+
+use App\Filament\Resources\PeminjamanResource;
+use App\Models\Peminjaman;
+use App\Models\User;
+use App\Services\PeminjamanService;
+use Filament\Notifications\Notification;
+use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Database\Eloquent\Model;
+use RuntimeException;
+
+class CreatePeminjaman extends CreateRecord
+{
+    protected static string $resource = PeminjamanResource::class;
+
+    /**
+     * Override total - TIDAK memakai Peminjaman::create($data) bawaan
+     * Filament. Seluruh proses (validasi limit/suspend, stok, jatuh tempo,
+     * Point, WA) wajib lewat PeminjamanService::pinjamBuku() (Aturan poin 3).
+     *
+     * $data berisi 'user_id' dan 'buku_ids' (array) dari form - bukan kolom
+     * asli tabel peminjamans, jadi tidak bisa diserahkan ke Model::create().
+     */
+    protected function handleRecordCreation(array $data): Model
+    {
+        try {
+            $transaksi = app(PeminjamanService::class)->pinjamBuku(
+                user: User::findOrFail($data['user_id']),
+                bukuIds: $data['buku_ids'],
+                diprosesOleh: auth()->user(),
+            );
+
+            // Filament expects instance dari $this->getModel() (Peminjaman) -
+            // kembalikan salah satu baris hasil transaksi (bisa multi-buku).
+            return $transaksi->peminjamans->first();
+        } catch (RuntimeException $e) {
+            Notification::make()
+                ->danger()
+                ->title('Gagal memproses peminjaman')
+                ->body($e->getMessage())
+                ->send();
+
+            $this->halt();
+        }
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/PeminjamanResource/Pages/ListPeminjamans.php
+```php
+<?php
+
+namespace App\Filament\Resources\PeminjamanResource\Pages;
+
+use App\Filament\Resources\PeminjamanResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListPeminjamans extends ListRecords
+{
+    protected static string $resource = PeminjamanResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make()
+                ->label('Input Peminjaman Manual'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/PeminjamanResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Enums\KondisiBuku;
+use App\Enums\StatusPeminjaman;
+use App\Filament\Resources\PeminjamanResource\Pages;
+use App\Models\Buku;
+use App\Models\Peminjaman;
+use App\Services\PeminjamanService;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use RuntimeException;
+
+/**
+ * Form Create di sini adalah FALLBACK MANUAL untuk Pustakawan (input lewat
+ * panel jika device RFID/scan barcode error) - lihat konfirmasi Aturan.
+ * Alur normal tetap lewat endpoint device RFID + scan barcode fisik.
+ *
+ * Create SENGAJA tidak memakai Peminjaman::create() bawaan Filament -
+ * seluruh logic (validasi limit/suspend, kalkulasi jatuh tempo, stok, Point,
+ * WA) WAJIB lewat PeminjamanService::pinjamBuku() (Aturan poin 3, DRY).
+ * Lihat Pages\CreatePeminjaman::handleRecordCreation().
+ *
+ * Status Peminjaman TIDAK bisa diedit manual - transisi hanya lewat
+ * PeminjamanService (cron/Action pengembalian/laporkan hilang), karenanya
+ * Resource ini TIDAK punya halaman Edit sama sekali.
+ */
+class PeminjamanResource extends Resource
+{
+    protected static ?string $model = Peminjaman::class;
+
+    protected static ?string $slug = 'peminjaman';
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-arrow-path-rounded-square';
+
+
+    protected static ?string $navigationLabel = 'Peminjaman';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Select::make('user_id')
+                ->label('Peminjam')
+                ->relationship('user', 'nama')
+                ->searchable()
+                ->preload()
+                ->required(),
+            Select::make('buku_ids')
+                ->label('Buku')
+                ->multiple()
+                ->searchable()
+                ->preload()
+                ->options(fn() => Buku::query()->where('stok', '>', 0)->pluck('judul', 'id'))
+                ->helperText('Hanya menampilkan buku dengan stok tersedia. Validasi limit peminjaman aktif & status suspend dicek otomatis saat submit.')
+                ->required(),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('user.nama')
+                    ->label('Peminjam')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('buku.judul')
+                    ->label('Buku')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('tanggal_pinjam')
+                    ->date()
+                    ->sortable(),
+                TextColumn::make('tanggal_jatuh_tempo')
+                    ->date()
+                    ->sortable(),
+                TextColumn::make('status')
+                    ->badge()
+                    ->color(fn(StatusPeminjaman $state) => match ($state) {
+                        StatusPeminjaman::Aktif => 'success',
+                        StatusPeminjaman::Terlambat => 'danger',
+                        StatusPeminjaman::Selesai => 'gray',
+                        StatusPeminjaman::Hilang => 'warning',
+                    }),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                SelectFilter::make('status')
+                    ->options(collect(StatusPeminjaman::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
+            ])
+            ->recordActions([
+                Action::make('proses_pengembalian')
+                    ->label('Proses Pengembalian')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->schema([
+                        Select::make('kondisi')
+                            ->label('Kondisi Buku')
+                            ->options(collect(KondisiBuku::cases())->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)]))
+                            ->required(),
+                        Textarea::make('catatan')
+                            ->label('Catatan'),
+                    ])
+                    ->action(function (Peminjaman $record, array $data) {
+                        try {
+                            app(PeminjamanService::class)->prosesPengembalian(
+                                peminjaman: $record,
+                                kondisi: KondisiBuku::from($data['kondisi']),
+                                catatan: $data['catatan'] ?? null,
+                                diprosesOleh: auth()->user(),
+                            );
+
+                            Notification::make()
+                                ->success()
+                                ->title('Pengembalian berhasil diproses')
+                                ->send();
+                        } catch (RuntimeException $e) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Gagal memproses pengembalian')
+                                ->body($e->getMessage())
+                                ->send();
+                        }
+                    }),
+
+                Action::make('laporkan_hilang')
+                    ->label('Laporkan Hilang')
+                    ->icon('heroicon-o-exclamation-triangle')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalDescription('Buku belum dikembalikan secara fisik. Denda kehilangan penuh (Buku.harga_ganti) akan langsung dicatat.')
+                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->action(function (Peminjaman $record) {
+                        try {
+                            app(PeminjamanService::class)->laporkanHilang($record);
+
+                            Notification::make()
+                                ->success()
+                                ->title('Peminjaman ditandai hilang, Denda tercatat')
+                                ->send();
+                        } catch (RuntimeException $e) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Gagal melaporkan hilang')
+                                ->body($e->getMessage())
+                                ->send();
+                        }
+                    }),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListPeminjamans::route('/'),
+            'create' => Pages\CreatePeminjaman::route('/create'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/PengembalianResource/Pages/ListPengembalians.php
+```php
+<?php
+
+namespace App\Filament\Resources\PengembalianResource\Pages;
+
+use App\Filament\Resources\PengembalianResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListPengembalians extends ListRecords
+{
+    protected static string $resource = PengembalianResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/PengembalianResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Enums\KondisiBuku;
+use App\Filament\Resources\PengembalianResource\Pages;
+use App\Models\Pengembalian;
+use App\Services\PeminjamanService;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use RuntimeException;
+
+/**
+ * Tidak ada halaman Create/Edit - Pengembalian adalah HASIL dari
+ * PeminjamanService::prosesPengembalian() (dipicu Action "Proses
+ * Pengembalian" di PeminjamanResource).
+ *
+ * SATU pengecualian: Action "Koreksi Kondisi" di tabel ini, untuk kasus
+ * Pustakawan salah input kondisi saat transaksi cepat (lihat gap iterasi
+ * ini). Sengaja berupa Action terbatas (bukan Edit page penuh) - field yang
+ * bisa diubah cuma 'kondisi' + 'catatan', supaya lebih mudah di-audit.
+ * Seluruh efek samping (stok, Denda, status Peminjaman) wajib lewat
+ * PeminjamanService::koreksiKondisiPengembalian() (Aturan poin 3, DRY).
+ *
+ * TODO: ShieldSeeder perlu diberi permission 'Update:Pengembalian' untuk
+ * role Pustakawan DAN Admin (dikonfirmasi keduanya boleh koreksi) - Action
+ * ini digerbang oleh PengembalianPolicy::update().
+ */
+class PengembalianResource extends Resource
+{
+    protected static ?string $model = Pengembalian::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
+
+    protected static ?string $navigationLabel = 'Pengembalian';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('peminjaman.user.nama')
+                    ->label('Peminjam')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('peminjaman.buku.judul')
+                    ->label('Buku')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('tanggal_kembali')
+                    ->date()
+                    ->sortable(),
+                TextColumn::make('kondisi')
+                    ->badge()
+                    ->color(fn(KondisiBuku $state) => match ($state) {
+                        KondisiBuku::Baik => 'success',
+                        KondisiBuku::Rusak => 'warning',
+                        KondisiBuku::Hilang => 'danger',
+                    }),
+                TextColumn::make('catatan')
+                    ->limit(50)
+                    ->toggleable(),
+                TextColumn::make('diprosesOleh.nama')
+                    ->label('Diproses Oleh')
+                    ->toggleable(),
+            ])
+            ->filters([
+                SelectFilter::make('kondisi')
+                    ->options(collect(KondisiBuku::cases())->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)])),
+            ])
+            ->recordActions([
+                Action::make('koreksi_kondisi')
+                    ->label('Koreksi Kondisi')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('warning')
+                    ->authorize(fn(Pengembalian $record) => auth()->user()?->can('update', $record) ?? false)
+                    // dijaga PengembalianPolicy - lihat TODO ShieldSeeder di atas
+                    ->requiresConfirmation()
+                    ->modalDescription('Mengubah kondisi akan otomatis menyesuaikan stok dan Denda terkait (batalkan Denda lama, catat Denda baru jika perlu). Ini tidak bisa dibatalkan lewat tombol undo.')
+                    ->schema(fn(Pengembalian $record) => [
+                        Select::make('kondisi_baru')
+                            ->label('Kondisi Baru')
+                            ->options(
+                                collect(KondisiBuku::cases())
+                                    ->reject(fn($k) => $k === $record->kondisi)
+                                    ->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)])
+                            )
+                            ->required(),
+                        Textarea::make('catatan')
+                            ->label('Catatan Koreksi')
+                            ->default($record->catatan),
+                    ])
+                    ->action(function (Pengembalian $record, array $data) {
+                        try {
+                            app(PeminjamanService::class)->koreksiKondisiPengembalian(
+                                pengembalian: $record,
+                                kondisiBaru: KondisiBuku::from($data['kondisi_baru']),
+                                catatan: $data['catatan'] ?? null,
+                                diprosesOleh: auth()->user(),
+                            );
+
+                            Notification::make()
+                                ->success()
+                                ->title('Kondisi berhasil dikoreksi')
+                                ->send();
+                        } catch (RuntimeException $e) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Gagal mengoreksi kondisi')
+                                ->body($e->getMessage())
+                                ->send();
+                        }
+                    }),
+            ]);
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListPengembalians::route('/'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/RakResource/Pages/CreateRak.php
+```php
+<?php
+
+namespace App\Filament\Resources\RakResource\Pages;
+
+use App\Filament\Resources\RakResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateRak extends CreateRecord
+{
+    protected static string $resource = RakResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/RakResource/Pages/EditRak.php
+```php
+<?php
+
+namespace App\Filament\Resources\RakResource\Pages;
+
+use App\Filament\Resources\RakResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditRak extends EditRecord
+{
+    protected static string $resource = RakResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            DeleteAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/RakResource/Pages/ListRaks.php
+```php
+<?php
+
+namespace App\Filament\Resources\RakResource\Pages;
+
+use App\Filament\Resources\RakResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListRaks extends ListRecords
+{
+    protected static string $resource = RakResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/RakResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\RakResource\Pages;
+use App\Filament\Resources\RakResource\RelationManagers\BukusRelationManager;
+use App\Models\Rak;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+class RakResource extends Resource
+{
+    protected static ?string $model = Rak::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-archive-box';
+
+    protected static ?string $navigationLabel = 'Rak';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('nama')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('lokasi')
+                ->maxLength(255),
+            Select::make('kategoris')
+                ->label('Kategori Terkait')
+                ->relationship('kategoris', 'nama')
+                ->multiple()
+                ->preload()
+                ->searchable(),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('nama')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('lokasi')
+                    ->searchable(),
+                TextColumn::make('bukus_count')
+                    ->label('Jumlah Buku')
+                    ->counts('bukus')
+                    ->sortable(),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                //
+            ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            BukusRelationManager::class,
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListRaks::route('/'),
+            'create' => Pages\CreateRak::route('/create'),
+            'edit' => Pages\EditRak::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/RakResource/RelationManagers/BukusRelationManager.php
+```php
+<?php
+
+namespace App\Filament\Resources\RakResource\RelationManagers;
+
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+/**
+ * Rak -> Buku adalah relasi one-to-many ASLI (Buku.rak_id), bukan pivot -
+ * jadi RelationManager ini murni untuk LIHAT buku yang ada di rak ini.
+ * Create/Edit/Delete Buku tetap lewat BukuResource langsung (di sana Admin/
+ * Pustakawan bisa ganti rak_id-nya) - supaya tidak ada dua tempat berbeda
+ * yang bisa mengubah data Buku yang sama (Aturan poin 3, DRY).
+ */
+class BukusRelationManager extends RelationManager
+{
+    protected static string $relationship = 'bukus';
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->recordTitleAttribute('judul')
+            ->columns([
+                TextColumn::make('judul')
+                    ->searchable(),
+                TextColumn::make('barcode')
+                    ->searchable(),
+                TextColumn::make('stok'),
+            ])
+            ->headerActions([
+                //
+            ])
+            ->recordActions([
+                //
+            ])
+            ->toolbarActions([
+                //
+            ]);
     }
 }
 
@@ -563,6 +1957,14 @@ use Illuminate\Support\Facades\Log;
  * di pemanggil supaya job tidak perlu query Setting berulang dan supaya
  * kegagalan "template belum dikonfigurasi" tetap terdeteksi segera (bukan
  * baru diketahui setelah job diproses worker).
+ *
+ * Idempotency: reference_id yang dikirim oleh WhatsappService::kirimEvent()
+ * bersifat stabil per event (bukan UUID acak untuk event terjadwal seperti
+ * reminder H-3/H-1/denda), sehingga retry job ini maupun eksekusi cron
+ * ganda di hari yang sama aman - gateway mendeteksi reference_id yang
+ * sama dan mengembalikan 200 (bukan mengirim ulang WA), sesuai kontrak API
+ * §2.2 & §9 (idempotency window 24 jam). Retry di sini hanya menghitung
+ * ulang signature/timestamp, TIDAK pernah mengirim signature lama.
  */
 class KirimNotifikasiWhatsapp implements ShouldQueue
 {
@@ -586,6 +1988,21 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
      */
     public array $backoff = [5, 15, 30];
 
+    /**
+     * Status code gateway yang bersifat PERMANEN (retry tidak akan mengubah
+     * hasil, sesuai kontrak API §2.2):
+     * - 400: body/media/variabel tidak valid - kesalahan payload yang kita
+     *   kirim sendiri, tidak berubah walau di-retry.
+     * - 403: template_code tidak ditemukan/tidak terkait ke API key -
+     *   kesalahan konfigurasi Admin di panel gateway, bukan transient.
+     * - 409: reference_id sudah dipakai dengan payload BERBEDA - retry
+     *   dengan payload sama akan 409 lagi terus (lihat kontrak API §2.2).
+     *
+     * Di luar daftar ini (401 HMAC, 429 guard rail, 500 internal) dianggap
+     * transient dan tetap mengikuti siklus retry/backoff normal.
+     */
+    private const STATUS_PERMANEN = [400, 403, 409];
+
     public function __construct(
         protected string $templateCode,
         protected string $nomorTujuan,
@@ -603,24 +2020,32 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
                 referenceId: $this->referenceId,
             );
         } catch (WhatsappGatewayException $e) {
+            if (in_array($e->statusCode, self::STATUS_PERMANEN, true)) {
+                Log::error("KirimNotifikasiWhatsapp: kegagalan permanen (status {$e->statusCode}), tidak di-retry. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$e->getMessage()}");
+
+                // fail() langsung memindahkan job ke failed_jobs tanpa
+                // menghabiskan sisa percobaan $tries - retry dipastikan
+                // sia-sia untuk status di STATUS_PERMANEN.
+                $this->fail($e);
+
+                return;
+            }
+
             Log::error("KirimNotifikasiWhatsapp: gagal mengirim template '{$this->templateCode}' ke {$this->nomorTujuan}: {$e->getMessage()}");
 
-            // TODO: GAP-SPEC - dilempar ulang supaya queue worker melakukan
-            // retry sesuai $tries/$backoff. Jika error bersifat permanen
-            // (mis. template_code tidak terhubung ke API key, lihat kontrak
-            // API §2.2 kode 403), retry tidak akan membantu dan job akan
-            // berakhir di failed_jobs setelah 3 percobaan - belum ada
-            // pembedaan error permanen vs transient di level job ini.
+            // Transient (401/429/500 dsb.) - lempar ulang supaya queue
+            // worker retry sesuai $tries/$backoff.
             throw $e;
         }
     }
 
     /**
-     * Dipanggil otomatis oleh queue setelah seluruh percobaan ($tries) habis.
+     * Dipanggil otomatis oleh queue setelah seluruh percobaan ($tries) habis
+     * ATAU setelah $this->fail() dipanggil eksplisit di handle().
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error("KirimNotifikasiWhatsapp: job gagal permanen setelah {$this->tries} percobaan. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$exception->getMessage()}");
+        Log::error("KirimNotifikasiWhatsapp: job gagal permanen. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$exception->getMessage()}");
     }
 }
 
@@ -709,6 +2134,7 @@ class Denda extends Model
         'status_lunas',
         'tanggal_lunas',
         'keterangan',
+        'status_refund',
     ];
 
     protected function casts(): array
@@ -719,6 +2145,7 @@ class Denda extends Model
             'nominal' => 'decimal:2',
             'status_lunas' => 'boolean',
             'tanggal_lunas' => 'datetime',
+            'status_refund' => \App\Enums\StatusRefund::class,
         ];
     }
 
@@ -935,6 +2362,29 @@ class LevelBadge extends Model
 ```
 ---
 
+## app/Models/PasswordResetOtp.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class PasswordResetOtp extends Model
+{
+    protected $fillable = ['no_telepon', 'otp', 'expires_at'];
+
+    protected function casts(): array
+    {
+        return [
+            'expires_at' => 'datetime',
+        ];
+    }
+}
+
+```
+---
+
 ## app/Models/Peminjaman.php
 ```php
 <?php
@@ -953,6 +2403,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Peminjaman extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
+
+    protected $table = 'peminjamans';
 
     protected $fillable = [
         'transaksi_id',
@@ -1441,15 +2893,20 @@ class Transaksi extends Model
 namespace App\Models;
 
 use App\Enums\RoleUser;
+use BezhanSalleh\FilamentShield\Traits\HasPanelShield;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasName;
+use Filament\Panel;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements AuthenticatableContract
+class User extends Authenticatable implements AuthenticatableContract, HasName, FilamentUser
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasRoles;
 
     protected $fillable = [
         'avatar',
@@ -1481,15 +2938,29 @@ class User extends Authenticatable implements AuthenticatableContract
         ];
     }
 
+    public function getFilamentName(): string
+    {
+        return $this->nama;
+    }
+
+    /**
+     * Konfirmasi Aturan: SATU panel untuk semua role, pembatasan akses
+     * dilakukan lewat Policy per Resource (bukan di sini). Semua role yang
+     * berhasil login (termasuk yang status_suspend = true, karena mereka
+     * tetap perlu melihat Denda/Punishment miliknya sendiri untuk tahu
+     * alasan suspend) lolos ke panel. Guard sesungguhnya (Siswa tidak bisa
+     * CRUD Buku, Pustakawan tidak bisa ubah Setting, dst.) ditulis di
+     * masing-masing app/Policies/*Policy.php, di-enforce via Shield.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return true;
+    }
+
     public function levelBadge(): BelongsTo
     {
         return $this->belongsTo(LevelBadge::class);
     }
-
-    // TODO: GAP-SPEC - resolusi login multi-identifier (nisn/nip ATAU no_telepon) belum
-    // diimplementasikan. Filament default hanya support satu kolom username tetap.
-    // Butuh custom Login Page yang query:
-    //   User::where('nisn', $login)->orWhere('nip', $login)->orWhere('no_telepon', $login)->first()
 }
 
 ```
@@ -1564,12 +3035,38 @@ class DendaObserver
 ```
 ---
 
+## app/Observers/SettingObserver.php
+```php
+<?php
+
+namespace App\Observers;
+
+use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
+
+class SettingObserver
+{
+    public function saved(Setting $setting): void
+    {
+        Cache::forget("setting:{$setting->key}");
+    }
+
+    public function deleted(Setting $setting): void
+    {
+        Cache::forget("setting:{$setting->key}");
+    }
+}
+
+```
+---
+
 ## app/Observers/UserObserver.php
 ```php
 <?php
 
 namespace App\Observers;
 
+use App\Enums\RoleUser;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -1583,20 +3080,44 @@ use Illuminate\Support\Facades\Cache;
  * ATAU user dengan kartu terisi di-soft-delete/dipulihkan/dihapus permanen
  * (kartu tersebut harus hilang dari daftar aktif di device). Perubahan pada
  * kolom lain (nama, kelas, dst) TIDAK memicu bump versi.
+ *
+ * Juga menyinkronkan Spatie role berdasarkan User.role (RoleUser enum), agar
+ * akses Filament/Shield selalu konsisten dengan kolom role aplikasi -
+ * mapping 1:1 nama enum value <-> nama Spatie role (mis. 'pustakawan' ->
+ * 'pustakawan'), KECUALI 'admin' -> 'super_admin' (dikonfirmasi user: admin
+ * == super_admin). User hanya boleh punya SATU role Spatie hasil sync ini
+ * di satu waktu (syncRoles, bukan assignRole) - role lain yang di-assign
+ * manual di luar mapping ini (jika ada) akan ikut tercabut saat sync jalan.
  */
 class UserObserver
 {
+    /**
+     * Mapping RoleUser enum -> nama Spatie role.
+     */
+    private const ROLE_MAP = [
+        RoleUser::Admin->value => 'super_admin',
+        RoleUser::Pustakawan->value => 'pustakawan',
+        RoleUser::Siswa->value => 'siswa',
+        RoleUser::Pegawai->value => 'pegawai',
+    ];
+
     public function created(User $user): void
     {
         if ($user->no_kartu_rfid) {
             $this->bumpVersion();
         }
+
+        $this->syncRoleFromEnum($user);
     }
 
     public function updated(User $user): void
     {
         if ($user->wasChanged('no_kartu_rfid')) {
             $this->bumpVersion();
+        }
+
+        if ($user->wasChanged('role')) {
+            $this->syncRoleFromEnum($user);
         }
     }
 
@@ -1628,8 +3149,501 @@ class UserObserver
         // supaya device langsung melihat versi baru, bukan menunggu TTL habis.
         Cache::forget('setting:rfid_db_ver');
     }
+
+    protected function syncRoleFromEnum(User $user): void
+    {
+        $roleName = self::ROLE_MAP[$user->role->value] ?? null;
+
+        if ($roleName === null) {
+            // TODO: GAP-SPEC - enum case baru ditambahkan tapi belum dipetakan
+            // di ROLE_MAP. Tidak melakukan apa pun daripada menebak role.
+            return;
+        }
+
+        $user->syncRoles([$roleName]);
+    }
 }
 
+```
+---
+
+## app/Policies/BukuPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Buku;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class BukuPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Buku');
+    }
+
+    public function view(AuthUser $authUser, Buku $buku): bool
+    {
+        return $authUser->can('View:Buku');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Buku');
+    }
+
+    public function update(AuthUser $authUser, Buku $buku): bool
+    {
+        return $authUser->can('Update:Buku');
+    }
+
+    public function delete(AuthUser $authUser, Buku $buku): bool
+    {
+        return $authUser->can('Delete:Buku');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Buku');
+    }
+
+    public function restore(AuthUser $authUser, Buku $buku): bool
+    {
+        return $authUser->can('Restore:Buku');
+    }
+
+    public function forceDelete(AuthUser $authUser, Buku $buku): bool
+    {
+        return $authUser->can('ForceDelete:Buku');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Buku');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Buku');
+    }
+
+    public function replicate(AuthUser $authUser, Buku $buku): bool
+    {
+        return $authUser->can('Replicate:Buku');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Buku');
+    }
+
+}
+```
+---
+
+## app/Policies/KategoriPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Kategori;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class KategoriPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Kategori');
+    }
+
+    public function view(AuthUser $authUser, Kategori $kategori): bool
+    {
+        return $authUser->can('View:Kategori');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Kategori');
+    }
+
+    public function update(AuthUser $authUser, Kategori $kategori): bool
+    {
+        return $authUser->can('Update:Kategori');
+    }
+
+    public function delete(AuthUser $authUser, Kategori $kategori): bool
+    {
+        return $authUser->can('Delete:Kategori');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Kategori');
+    }
+
+    public function restore(AuthUser $authUser, Kategori $kategori): bool
+    {
+        return $authUser->can('Restore:Kategori');
+    }
+
+    public function forceDelete(AuthUser $authUser, Kategori $kategori): bool
+    {
+        return $authUser->can('ForceDelete:Kategori');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Kategori');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Kategori');
+    }
+
+    public function replicate(AuthUser $authUser, Kategori $kategori): bool
+    {
+        return $authUser->can('Replicate:Kategori');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Kategori');
+    }
+
+}
+```
+---
+
+## app/Policies/PeminjamanPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Peminjaman;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class PeminjamanPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Peminjaman');
+    }
+
+    public function view(AuthUser $authUser, Peminjaman $peminjaman): bool
+    {
+        return $authUser->can('View:Peminjaman');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Peminjaman');
+    }
+
+    public function update(AuthUser $authUser, Peminjaman $peminjaman): bool
+    {
+        return $authUser->can('Update:Peminjaman');
+    }
+
+    public function delete(AuthUser $authUser, Peminjaman $peminjaman): bool
+    {
+        return $authUser->can('Delete:Peminjaman');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Peminjaman');
+    }
+
+    public function restore(AuthUser $authUser, Peminjaman $peminjaman): bool
+    {
+        return $authUser->can('Restore:Peminjaman');
+    }
+
+    public function forceDelete(AuthUser $authUser, Peminjaman $peminjaman): bool
+    {
+        return $authUser->can('ForceDelete:Peminjaman');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Peminjaman');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Peminjaman');
+    }
+
+    public function replicate(AuthUser $authUser, Peminjaman $peminjaman): bool
+    {
+        return $authUser->can('Replicate:Peminjaman');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Peminjaman');
+    }
+
+}
+```
+---
+
+## app/Policies/PengembalianPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Pengembalian;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class PengembalianPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Pengembalian');
+    }
+
+    public function view(AuthUser $authUser, Pengembalian $pengembalian): bool
+    {
+        return $authUser->can('View:Pengembalian');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Pengembalian');
+    }
+
+    public function update(AuthUser $authUser, Pengembalian $pengembalian): bool
+    {
+        return $authUser->can('Update:Pengembalian');
+    }
+
+    public function delete(AuthUser $authUser, Pengembalian $pengembalian): bool
+    {
+        return $authUser->can('Delete:Pengembalian');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Pengembalian');
+    }
+
+    public function restore(AuthUser $authUser, Pengembalian $pengembalian): bool
+    {
+        return $authUser->can('Restore:Pengembalian');
+    }
+
+    public function forceDelete(AuthUser $authUser, Pengembalian $pengembalian): bool
+    {
+        return $authUser->can('ForceDelete:Pengembalian');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Pengembalian');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Pengembalian');
+    }
+
+    public function replicate(AuthUser $authUser, Pengembalian $pengembalian): bool
+    {
+        return $authUser->can('Replicate:Pengembalian');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Pengembalian');
+    }
+
+}
+```
+---
+
+## app/Policies/RakPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Rak;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class RakPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Rak');
+    }
+
+    public function view(AuthUser $authUser, Rak $rak): bool
+    {
+        return $authUser->can('View:Rak');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Rak');
+    }
+
+    public function update(AuthUser $authUser, Rak $rak): bool
+    {
+        return $authUser->can('Update:Rak');
+    }
+
+    public function delete(AuthUser $authUser, Rak $rak): bool
+    {
+        return $authUser->can('Delete:Rak');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Rak');
+    }
+
+    public function restore(AuthUser $authUser, Rak $rak): bool
+    {
+        return $authUser->can('Restore:Rak');
+    }
+
+    public function forceDelete(AuthUser $authUser, Rak $rak): bool
+    {
+        return $authUser->can('ForceDelete:Rak');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Rak');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Rak');
+    }
+
+    public function replicate(AuthUser $authUser, Rak $rak): bool
+    {
+        return $authUser->can('Replicate:Rak');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Rak');
+    }
+
+}
+```
+---
+
+## app/Policies/RolePolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use Spatie\Permission\Models\Role;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class RolePolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Role');
+    }
+
+    public function view(AuthUser $authUser, Role $role): bool
+    {
+        return $authUser->can('View:Role');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Role');
+    }
+
+    public function update(AuthUser $authUser, Role $role): bool
+    {
+        return $authUser->can('Update:Role');
+    }
+
+    public function delete(AuthUser $authUser, Role $role): bool
+    {
+        return $authUser->can('Delete:Role');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Role');
+    }
+
+    public function restore(AuthUser $authUser, Role $role): bool
+    {
+        return $authUser->can('Restore:Role');
+    }
+
+    public function forceDelete(AuthUser $authUser, Role $role): bool
+    {
+        return $authUser->can('ForceDelete:Role');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Role');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Role');
+    }
+
+    public function replicate(AuthUser $authUser, Role $role): bool
+    {
+        return $authUser->can('Replicate:Role');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Role');
+    }
+
+}
 ```
 ---
 
@@ -1640,10 +3654,13 @@ class UserObserver
 namespace App\Providers;
 
 use App\Models\Denda;
+use App\Models\Setting;
 use App\Models\User;
 use App\Observers\DendaObserver;
+use App\Observers\SettingObserver;
 use App\Observers\UserObserver;
 use Illuminate\Support\ServiceProvider;
+use BezhanSalleh\FilamentShield\Facades\FilamentShield;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -1654,8 +3671,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        FilamentShield::enforcePolicies();
         Denda::observe(DendaObserver::class);
         User::observe(UserObserver::class);
+        Setting::observe(SettingObserver::class); // invalidasi cache Setting::get()
     }
 }
 
@@ -1668,6 +3687,10 @@ class AppServiceProvider extends ServiceProvider
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\Login;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use App\Filament\Pages\Auth\RequestPasswordReset;
+use App\Filament\Pages\Auth\ResetPassword;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -1693,7 +3716,11 @@ class DashboardPanelProvider extends PanelProvider
             ->default()
             ->id('dashboard')
             ->path('dashboard')
-            ->login()
+            ->login(Login::class)
+            ->passwordReset(
+                RequestPasswordReset::class,
+                ResetPassword::class,
+            )
             ->colors([
                 'primary' => Color::Amber,
             ])
@@ -1718,9 +3745,136 @@ class DashboardPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            ->plugins([
+                FilamentShieldPlugin::make(),
+            ])
             ->authMiddleware([
                 Authenticate::class,
             ]);
+    }
+}
+
+```
+---
+
+## app/Rules/FormatKartuRfid.php
+```php
+<?php
+
+namespace App\Rules;
+
+use Closure;
+use Illuminate\Contracts\Validation\ValidationRule;
+
+/**
+ * Satu sumber kebenaran untuk validasi format no_kartu_rfid (Aturan poin 3).
+ * Kontrak mengikat ke firmware Attendance Machine (lihat
+ * PerpustakaanDeviceController::rfidList() - firmware downloadRfidDb() hanya
+ * menerima baris PERSIS 10 digit angka, isdigit() check + len == 10).
+ *
+ * Kartu yang tidak lolos rule ini akan tersimpan di DB tapi TIDAK PERNAH
+ * muncul di daftar rfid-list yang diunduh device (lihat filter REGEXP di
+ * controller) - user tersebut tidak akan bisa tap RFID untuk Kunjungan.
+ *
+ * Wajib dipakai di:
+ * - UserResource form (Filament) saat Resource ini dibuat.
+ * - Form Request mana pun yang membuat/mengubah User.no_kartu_rfid.
+ */
+class FormatKartuRfid implements ValidationRule
+{
+    public function validate(string $attribute, mixed $value, Closure $fail): void
+    {
+        if ($value === null || $value === '') {
+            return; // nullable, kartu belum ditempel/didaftarkan
+        }
+
+        if (! preg_match('/^[0-9]{10}$/', (string) $value)) {
+            $fail('Nomor kartu RFID harus persis 10 digit angka (sesuai kontrak firmware Attendance Machine). Kartu dengan format lain tidak akan terbaca oleh device.');
+        }
+    }
+}
+
+```
+---
+
+## app/Services/PasswordResetOtpService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\PasswordResetOtp;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+
+/**
+ * Satu sumber kebenaran untuk alur reset password via OTP WhatsApp (Aturan
+ * poin 3) - jangan generate/verifikasi OTP di tempat lain (Filament Page,
+ * Controller, dsb.), semua wajib lewat service ini.
+ */
+class PasswordResetOtpService
+{
+    public function __construct(
+        protected WhatsappService $whatsappService,
+    ) {}
+
+    /**
+     * TODO: ASUMSI - panjang OTP 6 digit, masa berlaku 5 menit, rate limit
+     * 1 permintaan per menit per no_telepon. Belum ada key Setting khusus
+     * untuk ini karena spec tidak menyebutkan; kalau Admin butuh Setting
+     * yang bisa dikonfigurasi (mis. otp_ttl_menit), belum diimplementasikan
+     * pada iterasi ini.
+     */
+    public function kirimOtp(User $user): void
+    {
+        $rateLimitKey = "otp-reset:{$user->no_telepon}";
+
+        if (RateLimiter::tooManyAttempts($rateLimitKey, 1)) {
+            $detik = RateLimiter::availableIn($rateLimitKey);
+            throw new \RuntimeException("Tunggu {$detik} detik sebelum meminta OTP baru.");
+        }
+        RateLimiter::hit($rateLimitKey, 60);
+
+        $otp = (string) random_int(100000, 999999);
+
+        PasswordResetOtp::query()->where('no_telepon', $user->no_telepon)->delete();
+        PasswordResetOtp::create([
+            'no_telepon' => $user->no_telepon,
+            'otp' => Hash::make($otp),
+            'expires_at' => now()->addMinutes(5),
+        ]);
+
+        // eventCode 'reset_password_otp' - TODO: ASUMSI, event BARU di luar 10
+        // yang sudah didaftarkan Admin di panel gateway. Wajib dibuat template
+        // baru + diisi ke Setting 'wa_template_reset_password_otp'.
+        $this->whatsappService->kirimEvent(
+            eventCode: 'reset_password_otp',
+            nomorTujuan: $user->no_telepon,
+            variables: ['nama' => $user->nama, 'otp' => $otp],
+            referenceId: "reset-otp-{$user->id}-" . now()->timestamp,
+        );
+    }
+
+    /**
+     * @throws \RuntimeException jika OTP salah/kedaluwarsa/tidak ada permintaan
+     */
+    public function verifikasiDanReset(string $noTelepon, string $otp, string $passwordBaru): void
+    {
+        $record = PasswordResetOtp::query()
+            ->where('no_telepon', $noTelepon)
+            ->where('expires_at', '>', now())
+            ->latest('id')
+            ->first();
+
+        if (! $record || ! Hash::check($otp, $record->otp)) {
+            throw new \RuntimeException('Kode OTP salah atau sudah kedaluwarsa.');
+        }
+
+        $user = User::query()->where('no_telepon', $noTelepon)->firstOrFail();
+        $user->update(['password' => Hash::make($passwordBaru)]);
+
+        $record->delete();
     }
 }
 
@@ -1907,6 +4061,88 @@ class PeminjamanService
         return $pengembalian;
     }
 
+    /**
+     * Koreksi kondisi Pengembalian yang SUDAH final (dipanggil dari Action
+     * "Koreksi Kondisi" di PengembalianResource - Pustakawan/Admin, lihat
+     * PengembalianPolicy). Method TERPISAH dari prosesPengembalian() supaya
+     * alur normal tidak berubah (Aturan poin 9/10).
+     *
+     * Efek: sesuaikan stok, batalkan Denda dari kondisi lama yang sudah
+     * tidak relevan, catat Denda baru sesuai kondisi baru, update status
+     * Peminjaman, update record Pengembalian.
+     */
+    public function koreksiKondisiPengembalian(
+        Pengembalian $pengembalian,
+        KondisiBuku $kondisiBaru,
+        ?string $catatan = null,
+        ?User $diprosesOleh = null,
+    ): Pengembalian {
+        $peminjaman = $pengembalian->peminjaman;
+        $kondisiLama = $pengembalian->kondisi;
+
+        if ($kondisiLama === $kondisiBaru) {
+            throw new RuntimeException('Kondisi baru sama dengan kondisi sebelumnya, tidak ada yang dikoreksi.');
+        }
+
+        if (! in_array($peminjaman->status, [StatusPeminjaman::Selesai, StatusPeminjaman::Hilang], true)) {
+            throw new RuntimeException('Peminjaman ini belum berstatus final (Selesai/Hilang), gunakan proses pengembalian normal.');
+        }
+
+        $pengembalian = DB::transaction(function () use ($pengembalian, $peminjaman, $kondisiLama, $kondisiBaru, $catatan, $diprosesOleh) {
+            // Sesuaikan stok: buku fisik dianggap kembali/hilang sesuai kondisi baru.
+            if ($kondisiLama === KondisiBuku::Hilang && $kondisiBaru !== KondisiBuku::Hilang) {
+                $peminjaman->buku()->increment('stok');
+            } elseif ($kondisiLama !== KondisiBuku::Hilang && $kondisiBaru === KondisiBuku::Hilang) {
+                $peminjaman->buku()->decrement('stok');
+            }
+
+            // Batalkan Denda dari kondisi lama yang tidak lagi berlaku.
+            if ($kondisiLama === KondisiBuku::Rusak && $kondisiBaru !== KondisiBuku::Rusak) {
+                $this->batalkanDenda($peminjaman, TipeDenda::Kerusakan);
+            }
+            if ($kondisiLama === KondisiBuku::Hilang && $kondisiBaru !== KondisiBuku::Hilang) {
+                $this->batalkanDenda($peminjaman, TipeDenda::Kehilangan);
+            }
+
+            // Catat Denda baru sesuai kondisi baru.
+            if ($kondisiBaru === KondisiBuku::Rusak && $kondisiLama !== KondisiBuku::Rusak) {
+                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->buku));
+                $this->pointService->catatEvent($peminjaman->user, EventTypePoint::Kerusakan, 'peminjaman', $peminjaman->id, 'Koreksi kondisi ke rusak');
+            }
+            if ($kondisiBaru === KondisiBuku::Hilang && $kondisiLama !== KondisiBuku::Hilang) {
+                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->buku));
+                $this->pointService->catatEvent($peminjaman->user, EventTypePoint::Kehilangan, 'peminjaman', $peminjaman->id, 'Koreksi kondisi ke hilang');
+            }
+
+            // TODO: GAP-SPEC - Point yang sudah tercatat dari kondisi lama
+            // (mis. event Pengembalian/Kerusakan/Kehilangan sebelumnya) TIDAK
+            // di-reverse saat koreksi; hanya menambah event baru sesuai
+            // kondisi baru. Akumulasi point/badge/reward/punishment tidak
+            // mundur otomatis - butuh keputusan terpisah jika diperlukan.
+
+            $peminjaman->update([
+                'status' => $kondisiBaru === KondisiBuku::Hilang ? StatusPeminjaman::Hilang : StatusPeminjaman::Selesai,
+            ]);
+
+            $pengembalian->update([
+                'kondisi' => $kondisiBaru,
+                'catatan' => $catatan ?? $pengembalian->catatan,
+                'diproses_oleh' => $diprosesOleh?->id,
+            ]);
+
+            return $pengembalian->fresh();
+        });
+
+        $this->whatsappService->kirimEvent(
+            eventCode: 'koreksi_kondisi_pengembalian',
+            nomorTujuan: $peminjaman->user->no_telepon,
+            variables: ['nama' => $peminjaman->user->nama, 'kondisi_lama' => $kondisiLama->value, 'kondisi_baru' => $kondisiBaru->value],
+            referenceId: "koreksi-pengembalian-{$pengembalian->id}",
+        );
+
+        return $pengembalian;
+    }
+
     public function laporkanHilang(Peminjaman $peminjaman): Denda
     {
         if (! in_array($peminjaman->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true)) {
@@ -1990,12 +4226,6 @@ class PeminjamanService
         return $stat;
     }
 
-    /**
-     * Hari telat = 0 jika belum/tepat jatuh tempo. Sengaja ditulis tanpa
-     * bergantung pada konvensi tanda diffInDays($other, false) - meski sudah
-     * diverifikasi arahnya benar, bentuk ini rawan salah baca/salah refactor
-     * di masa depan karena tanda hasilnya tidak eksplisit di tempat pemanggilan.
-     */
     protected function hitungHariTelat(Peminjaman $peminjaman): int
     {
         $jatuhTempo = Carbon::parse($peminjaman->tanggal_jatuh_tempo)->startOfDay();
@@ -2046,6 +4276,42 @@ class PeminjamanService
 
         return $denda;
     }
+
+    /**
+     * Batalkan Denda aktif (tipe tertentu) milik satu Peminjaman - dipanggil
+     * saat koreksi kondisi Pengembalian menghilangkan alasan Denda tersebut.
+     * TIDAK soft-delete (riwayat tetap auditable) - nominal dipaksa 0 dan
+     * status_lunas dipaksa true (memicu DendaObserver::updated() -> cek
+     * auto-unsuspend user, sudah dikonfirmasi sebagai perilaku yang diinginkan).
+     */
+    protected function batalkanDenda(Peminjaman $peminjaman, TipeDenda $tipe): void
+    {
+        $denda = Denda::query()
+            ->where('peminjaman_id', $peminjaman->id)
+            ->where('tipe', $tipe)
+            ->latest()
+            ->first();
+
+        if (! $denda || (float) $denda->nominal === 0.0) {
+            return; // tidak ada Denda aktif untuk tipe ini, atau sudah pernah dibatalkan
+        }
+
+        $sudahTerbayar = $denda->status_lunas;
+
+        $denda->update([
+            'nominal' => 0,
+            'status_lunas' => true,
+            'tanggal_lunas' => now(),
+            'keterangan' => trim(($denda->keterangan ? $denda->keterangan . ' | ' : '')
+                . ($sudahTerbayar
+                    ? 'Dibatalkan otomatis (SUDAH TERBAYAR SEBELUM KOREKSI - perlu refund manual di luar sistem): koreksi kondisi Pengembalian.'
+                    : 'Dibatalkan otomatis: koreksi kondisi Pengembalian.')),
+        ]);
+
+        // TODO: GAP-SPEC - jika $sudahTerbayar true, sistem ini tidak
+        // menangani proses refund (uang fisik/transfer) - hanya menandai
+        // audit trail. Refund di luar sistem, keputusan Admin/Pustakawan.
+    }
 }
 
 ```
@@ -2067,6 +4333,7 @@ use App\Models\RewardLog;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+
 
 class PointService
 {
@@ -2143,44 +4410,53 @@ class PointService
     }
 
     /**
-     * Cek apakah user baru saja melewati threshold Reward yang belum pernah didapat.
+     * Cek Reward yang tercapai. KEPUTUSAN FINAL (dikonfirmasi): hanya threshold
+     * TERTINGGI yang diproses per pemanggilan, bukan seluruh threshold yang
+     * terlampaui sekaligus. Reward dengan threshold_point lebih rendah yang
+     * belum pernah didapat TIDAK di-backfill jika user melompati beberapa
+     * threshold dalam satu event - hanya akan tercatat jika suatu saat menjadi
+     * satu-satunya/tertinggi yang eligible.
      */
     protected function cekReward(User $user): void
     {
-        $rewardTercapai = Reward::query()
+        $reward = Reward::query()
             ->where('aktif', true)
             ->where('threshold_point', '<=', $user->akumulasi_point)
             ->whereDoesntHave('rewardLogs', fn($q) => $q->where('user_id', $user->id))
-            ->get();
+            ->orderByDesc('threshold_point')
+            ->first();
 
-        foreach ($rewardTercapai as $reward) {
-            $rewardLog = RewardLog::create([
-                'user_id' => $user->id,
-                'reward_id' => $reward->id,
-                'tanggal_didapat' => now(),
-            ]);
-
-            // eventCode 'reward_didapat' - TODO: ASUMSI, samakan dengan Setting
-            // wa_template_reward_didapat.
-            $this->whatsappService->kirimEvent(
-                eventCode: 'reward_didapat',
-                nomorTujuan: $user->no_telepon,
-                variables: ['nama' => $user->nama, 'reward' => $reward->nama],
-                referenceId: "reward-{$rewardLog->id}",
-            );
+        if (! $reward) {
+            return;
         }
+
+        $rewardLog = RewardLog::create([
+            'user_id' => $user->id,
+            'reward_id' => $reward->id,
+            'tanggal_didapat' => now(),
+        ]);
+
+        // eventCode 'reward_didapat' - TODO: ASUMSI, samakan dengan Setting
+        // wa_template_reward_didapat.
+        $this->whatsappService->kirimEvent(
+            eventCode: 'reward_didapat',
+            nomorTujuan: $user->no_telepon,
+            variables: ['nama' => $user->nama, 'reward' => $reward->nama],
+            referenceId: "reward-{$rewardLog->id}",
+        );
     }
 
     /**
-     * Cek apakah user baru saja melewati threshold Punishment (point minus).
-     * TODO: GAP-SPEC - overlap status_suspend dengan Denda. Suspend dari Punishment
-     * TIDAK ditandai lunas/tidak seperti Denda, melainkan berdasarkan tanggal_berakhir.
-     * DendaObserver sudah disesuaikan untuk ikut mengecek PunishmentLog aktif sebelum
-     * unsuspend user (lihat app/Observers/DendaObserver.php).
+     * Cek Punishment yang tercapai. KEPUTUSAN FINAL (dikonfirmasi): hanya threshold
+     * TERTINGGI yang diproses per pemanggilan, bukan seluruh threshold yang
+     * terlampaui sekaligus. Punishment dengan threshold_point lebih rendah yang
+     * belum pernah didapat TIDAK di-backfill jika user melompati beberapa
+     * threshold dalam satu event - hanya akan tercatat jika suatu saat menjadi
+     * satu-satunya/tertinggi yang eligible.
      */
     protected function cekPunishment(User $user): void
     {
-        $punishmentTercapai = Punishment::query()
+        $punishment = Punishment::query()
             ->where('aktif', true)
             ->where('threshold_point_minus', '>=', $user->akumulasi_point)
             ->whereDoesntHave('punishmentLogs', function ($q) use ($user) {
@@ -2190,29 +4466,97 @@ class PointService
                             ->orWhere('tanggal_berakhir', '>', now());
                     });
             })
-            ->get();
+            ->orderBy('threshold_point_minus')
+            ->first();
 
-        foreach ($punishmentTercapai as $punishment) {
-            $punishmentLog = PunishmentLog::create([
-                'user_id' => $user->id,
-                'punishment_id' => $punishment->id,
-                'tanggal_diterapkan' => now(),
-                'tanggal_berakhir' => $punishment->durasi_suspend_hari
-                    ? now()->addDays($punishment->durasi_suspend_hari)
-                    : null,
+        if (! $punishment) {
+            return;
+        }
+
+        $punishmentLog = PunishmentLog::create([
+            'user_id' => $user->id,
+            'punishment_id' => $punishment->id,
+            'tanggal_diterapkan' => now(),
+            'tanggal_berakhir' => $punishment->durasi_suspend_hari
+                ? now()->addDays($punishment->durasi_suspend_hari)
+                : null,
+        ]);
+
+        $user->update(['status_suspend' => true]);
+
+        // eventCode 'punishment_diterapkan' - TODO: ASUMSI, samakan dengan
+        // Setting wa_template_punishment_diterapkan.
+        $this->whatsappService->kirimEvent(
+            eventCode: 'punishment_diterapkan',
+            nomorTujuan: $user->no_telepon,
+            variables: ['nama' => $user->nama, 'alasan' => $punishment->nama],
+            referenceId: "punishment-{$punishmentLog->id}",
+        );
+    }
+    /**
+     * Reverse SATU Point log (mis. saat koreksi kondisi Pengembalian
+     * membatalkan alasan event tersebut). Insert entry Point BARU dengan
+     * nilai negasi (bukan hapus log lama - riwayat harus auditable),
+     * turunkan akumulasi_point, lalu cek ulang Badge (bisa turun level).
+     *
+     * TODO: GAP-SPEC - Reward/Punishment yang SUDAH terlanjur didapat dari
+     * akumulasi sebelum reversal ini TIDAK ditarik kembali. Alasan: logic
+     * cekReward()/cekPunishment() hanya memproses "threshold tertinggi yang
+     * belum pernah didapat" (lihat komentar KEPUTUSAN FINAL di method
+     * tersebut) - tidak ada mekanisme "un-award" yang terdefinisi di spec,
+     * dan menariknya kembali (mis. reward yang sudah dikirim notifikasi WA
+     * atau bahkan sudah diklaim fisik) berisiko lebih besar daripada
+     * membiarkannya. Ini keputusan produk yang perlu dikonfirmasi terpisah
+     * jika ternyata reward/punishment WAJIB ikut di-reverse.
+     */
+    public function batalkanEvent(
+        Point $pointAsli,
+        ?string $keterangan = null,
+    ): Point {
+        return DB::transaction(function () use ($pointAsli, $keterangan) {
+            $pointBalik = Point::create([
+                'user_id' => $pointAsli->user_id,
+                'event_type' => $pointAsli->event_type,
+                'nilai' => -$pointAsli->nilai,
+                'ref_type' => $pointAsli->ref_type,
+                'ref_id' => $pointAsli->ref_id,
+                'keterangan' => $keterangan ?? "Pembatalan otomatis dari Point #{$pointAsli->id}",
             ]);
 
-            $user->update(['status_suspend' => true]);
+            $user = $pointAsli->user;
+            $user->increment('akumulasi_point', -$pointAsli->nilai);
+            $user->refresh();
 
-            // eventCode 'punishment_diterapkan' - TODO: ASUMSI, samakan dengan
-            // Setting wa_template_punishment_diterapkan.
-            $this->whatsappService->kirimEvent(
-                eventCode: 'punishment_diterapkan',
-                nomorTujuan: $user->no_telepon,
-                variables: ['nama' => $user->nama, 'alasan' => $punishment->nama],
-                referenceId: "punishment-{$punishmentLog->id}",
-            );
-        }
+            $this->cekBadge($user);
+            // Reward/Punishment sengaja tidak di-cek ulang di sini - lihat
+            // TODO: GAP-SPEC di docblock method ini.
+
+            return $pointBalik;
+        });
+    }
+
+    /**
+     * Cari Point log terakhir milik user untuk ref tertentu (dipakai
+     * PeminjamanService::batalkanDenda untuk tahu Point mana yang harus
+     * di-reverse saat koreksi kondisi). Dibatasi ke event_type spesifik
+     * supaya tidak salah mengambil Point dari event lain yang kebetulan
+     * punya ref_type/ref_id sama (mis. 'peminjaman'+id yang sama dipakai
+     * beberapa EventTypePoint berbeda: Peminjaman, Pengembalian, Kerusakan,
+     * Kehilangan).
+     */
+    public function cariPointTerakhir(
+        int $userId,
+        EventTypePoint $eventType,
+        string $refType,
+        string $refId,
+    ): ?Point {
+        return Point::query()
+            ->where('user_id', $userId)
+            ->where('event_type', $eventType)
+            ->where('ref_type', $refType)
+            ->where('ref_id', $refId)
+            ->latest()
+            ->first();
     }
 }
 
@@ -2376,12 +4720,17 @@ class WhatsappService
 
     /**
      * Titik masuk TUNGGAL untuk seluruh notifikasi WA di aplikasi (Aturan
-     * poin 3 - Prinsip DRY). Sejak iterasi ini, method ini TIDAK memanggil
-     * gateway secara langsung - hanya me-resolve template_code dari Setting
-     * (sinkron, cepat, sudah di-cache 5 menit oleh Setting::get) lalu
-     * men-dispatch KirimNotifikasiWhatsapp ke queue 'whatsapp', supaya
-     * Peminjaman/Denda/Point tidak menunggu request HTTP ke gateway selesai
-     * (Logic Module §11 checklist: "Job/Queue terpisah untuk notifikasi WA").
+     * poin 3 - Prinsip DRY). Method ini hanya me-resolve template_code dari
+     * Setting lalu men-dispatch KirimNotifikasiWhatsapp ke queue 'whatsapp'.
+     *
+     * ->afterCommit(): pemanggil (PeminjamanService::tandaiDenda,
+     * PointService::catatEvent, dsb.) sering berada di dalam DB::transaction.
+     * Tanpa afterCommit(), worker queue 'redis' bisa memproses job sebelum
+     * transaksi commit (config/queue.php redis tidak set after_commit=true
+     * secara global) - kalau transaksi rollback, notifikasi WA sudah
+     * terlanjur terkirim untuk data yang batal tersimpan. Jika dipanggil di
+     * luar transaksi (tidak ada transaksi aktif), afterCommit() tidak
+     * memberi efek tambahan - job tetap dispatch langsung.
      *
      * Key pola: wa_template_{event_code}, mis. 'wa_template_peminjaman_aktif'.
      *
@@ -2400,19 +4749,16 @@ class WhatsappService
         ?string $referenceId = null,
     ): void {
         $templateCode = Setting::get("wa_template_{$eventCode}");
-
         if (! $templateCode) {
             Log::warning("WhatsappService: template untuk event '{$eventCode}' belum dikonfigurasi di Setting, notifikasi di-skip.");
-
             return;
         }
-
         KirimNotifikasiWhatsapp::dispatch(
             $templateCode,
             $nomorTujuan,
             $variables,
             $referenceId ?? (string) Str::uuid(),
-        )->onQueue('whatsapp');
+        )->onQueue('whatsapp')->afterCommit();
     }
 
     /**
@@ -3118,6 +5464,299 @@ return [
 ```
 ---
 
+## config/filament-shield.php
+```php
+<?php
+
+declare(strict_types=1);
+use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
+use Filament\Pages\Dashboard;
+use Filament\Widgets\AccountWidget;
+use Filament\Widgets\FilamentInfoWidget;
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shield Resource
+    |--------------------------------------------------------------------------
+    |
+    | Here you may configure the built-in role management resource. You can
+    | customize the URL, choose whether to show model paths, group it under
+    | a cluster, and decide which permission tabs to display.
+    |
+    */
+
+    'shield_resource' => [
+        'slug' => 'shield/roles',
+        'show_model_path' => true,
+        'cluster' => null,
+        'tabs' => [
+            'pages' => true,
+            'widgets' => true,
+            'resources' => true,
+            'custom_permissions' => false,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Multi-Tenancy
+    |--------------------------------------------------------------------------
+    |
+    | When your application supports teams, Shield will automatically detect
+    | and configure the tenant model during setup. This enables tenant-scoped
+    | roles and permissions throughout your application.
+    |
+    */
+
+    'tenant_model' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | User Model
+    |--------------------------------------------------------------------------
+    |
+    | This value contains the class name of your user model. This model will
+    | be used for role assignments and must implement the HasRoles trait
+    | provided by the Spatie\Permission package.
+    |
+    */
+
+    'auth_provider_model' => 'App\\Models\\User',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Super Admin
+    |--------------------------------------------------------------------------
+    |
+    | Here you may define a super admin that has unrestricted access to your
+    | application. You can choose to implement this via Laravel's gate system
+    | or as a traditional role with all permissions explicitly assigned.
+    |
+    */
+
+    'super_admin' => [
+        'enabled' => true,
+        'name' => 'super_admin',
+        'define_via_gate' => false,
+        'intercept_gate' => 'before',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Panel User
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, Shield will create a basic panel user role that can be
+    | assigned to users who should have access to your Filament panels but
+    | don't need any specific permissions beyond basic authentication.
+    |
+    */
+
+    'panel_user' => [
+        'enabled' => true,
+        'name' => 'panel_user',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Permission Builder
+    |--------------------------------------------------------------------------
+    |
+    | You can customize how permission keys are generated to match your
+    | preferred naming convention and organizational standards. Shield uses
+    | these settings when creating permission names from your resources.
+    |
+    | Supported formats: snake, kebab, pascal, camel, upper_snake, lower_snake
+    |
+    | Note: The separator must not conflict with the case format's own
+    | delimiter. For example, `_` cannot be used with snake/lower_snake/
+    | upper_snake, and `-` cannot be used with kebab.
+    |
+    | When `format_custom_permission_keys` is true (default), custom
+    | permissions defined below will have their keys formatted according to
+    | the case setting. If your custom permissions come from external sources
+    | (e.g. Terraform, Keycloak) and must remain unchanged, set this to false.
+    | When using the separator in custom permission definitions, each segment
+    | will be formatted independently (e.g. 'view:system_log' with pascal
+    | case becomes 'View:SystemLog').
+    |
+    */
+
+    'permissions' => [
+        'separator' => ':',
+        'case' => 'pascal',
+        'generate' => true,
+        'format_custom_permission_keys' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Policies
+    |--------------------------------------------------------------------------
+    |
+    | Shield can automatically generate Laravel policies for your resources.
+    | Generated policies mirror each model's location: models under
+    | app/Models map into the path below (keeping their nesting), models in
+    | any other "Models" directory get a sibling "Policies" directory, and
+    | vendor models fall back to the path below. When merge is enabled, the
+    | methods below will be combined with any resource-specific methods you
+    | define in the resources section.
+    |
+    */
+
+    'policies' => [
+        'path' => app_path('Policies'),
+        'merge' => true,
+        'generate' => true,
+        'methods' => [
+            'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny', 'restore',
+            'forceDelete', 'forceDeleteAny', 'restoreAny', 'replicate', 'reorder',
+        ],
+        'single_parameter_methods' => [
+            'viewAny',
+            'create',
+            'deleteAny',
+            'forceDeleteAny',
+            'restoreAny',
+            'reorder',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Localization
+    |--------------------------------------------------------------------------
+    |
+    | Shield supports multiple languages out of the box. When enabled, you
+    | can provide translated labels for permissions to create a more
+    | localized experience for your international users.
+    |
+    */
+
+    'localization' => [
+        'enabled' => false,
+        'key' => 'filament-shield::filament-shield.resource_permission_prefixes_labels',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Resources
+    |--------------------------------------------------------------------------
+    |
+    | Here you can fine-tune permissions for specific Filament resources.
+    | Use the 'manage' array to override the default policy methods for
+    | individual resources, giving you granular control over permissions.
+    |
+    */
+
+    'resources' => [
+        'subject' => 'model',
+        'manage' => [
+            RoleResource::class => [
+                'viewAny',
+                'view',
+                'create',
+                'update',
+                'delete',
+            ],
+        ],
+        'exclude' => [
+            //
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Pages
+    |--------------------------------------------------------------------------
+    |
+    | Most Filament pages only require view permissions. Pages listed in the
+    | exclude array will be skipped during permission generation and won't
+    | appear in your role management interface.
+    |
+    */
+
+    'pages' => [
+        'subject' => 'class',
+        'prefix' => 'view',
+        'exclude' => [
+            Dashboard::class,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Widgets
+    |--------------------------------------------------------------------------
+    |
+    | Like pages, widgets typically only need view permissions. Add widgets
+    | to the exclude array if you don't want them to appear in your role
+    | management interface.
+    |
+    */
+
+    'widgets' => [
+        'subject' => 'class',
+        'prefix' => 'view',
+        'exclude' => [
+            AccountWidget::class,
+            FilamentInfoWidget::class,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Custom Permissions
+    |--------------------------------------------------------------------------
+    |
+    | Sometimes you need permissions that don't map to resources, pages, or
+    | widgets. Define any custom permissions here and they'll be available
+    | when editing roles in your application.
+    |
+    | Keys are formatted per the Permission Builder settings above; set
+    | permissions.format_custom_permission_keys to false to use them as-is.
+    |
+    */
+
+    'custom_permissions' => [],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Entity Discovery
+    |--------------------------------------------------------------------------
+    |
+    | By default, Shield only looks for entities in your default Filament
+    | panel. Enable these options if you're using multiple panels and want
+    | Shield to discover entities across all of them.
+    |
+    */
+
+    'discovery' => [
+        'discover_all_resources' => false,
+        'discover_all_widgets' => false,
+        'discover_all_pages' => false,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Role Policy
+    |--------------------------------------------------------------------------
+    |
+    | Shield can automatically register a policy for role management itself.
+    | This lets you control who can manage roles using Laravel's built-in
+    | authorization system. Requires a RolePolicy class in your app.
+    |
+    */
+
+    'register_role_policy' => true,
+
+];
+
+```
+---
+
 ## config/filesystems.php
 ```php
 <?php
@@ -3461,6 +6100,231 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+];
+
+```
+---
+
+## config/permission.php
+```php
+<?php
+
+use Spatie\Permission\DefaultTeamResolver;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+
+return [
+
+    'models' => [
+
+        /*
+         * When using the "HasPermissions" trait from this package, we need to know which
+         * Eloquent model should be used to retrieve your permissions. Of course, it
+         * is often just the "Permission" model but you may use whatever you like.
+         *
+         * The model you want to use as a Permission model needs to implement the
+         * `Spatie\Permission\Contracts\Permission` contract.
+         */
+
+        'permission' => Permission::class,
+
+        /*
+         * When using the "HasRoles" trait from this package, we need to know which
+         * Eloquent model should be used to retrieve your roles. Of course, it
+         * is often just the "Role" model but you may use whatever you like.
+         *
+         * The model you want to use as a Role model needs to implement the
+         * `Spatie\Permission\Contracts\Role` contract.
+         */
+
+        'role' => Role::class,
+
+        /*
+         * When using the "Teams" feature from this package, we need to know which
+         * Eloquent model should be used to retrieve your teams. Of course, it
+         * is often just the "Team" model but you may use whatever you like.
+         */
+        'team' => null,
+
+        /*
+         * When using the "HasModels" trait and passing raw IDs to syncModels,
+         * attachModels, or detachModels, this model class will be used to
+         * resolve those IDs. If null, defaults to the guard's model.
+         */
+        'default_model' => null,
+    ],
+
+    'table_names' => [
+
+        /*
+         * When using the "HasRoles" trait from this package, we need to know which
+         * table should be used to retrieve your roles. We have chosen a basic
+         * default value but you may easily change it to any table you like.
+         */
+
+        'roles' => 'roles',
+
+        /*
+         * When using the "HasPermissions" trait from this package, we need to know which
+         * table should be used to retrieve your permissions. We have chosen a basic
+         * default value but you may easily change it to any table you like.
+         */
+
+        'permissions' => 'permissions',
+
+        /*
+         * When using the "HasPermissions" trait from this package, we need to know which
+         * table should be used to retrieve your models permissions. We have chosen a
+         * basic default value but you may easily change it to any table you like.
+         */
+
+        'model_has_permissions' => 'model_has_permissions',
+
+        /*
+         * When using the "HasRoles" trait from this package, we need to know which
+         * table should be used to retrieve your models roles. We have chosen a
+         * basic default value but you may easily change it to any table you like.
+         */
+
+        'model_has_roles' => 'model_has_roles',
+
+        /*
+         * When using the "HasRoles" trait from this package, we need to know which
+         * table should be used to retrieve your roles permissions. We have chosen a
+         * basic default value but you may easily change it to any table you like.
+         */
+
+        'role_has_permissions' => 'role_has_permissions',
+    ],
+
+    'column_names' => [
+        /*
+         * Change this if you want to name the related pivots other than defaults
+         */
+        'role_pivot_key' => null, // default 'role_id',
+        'permission_pivot_key' => null, // default 'permission_id',
+
+        /*
+         * Change this if you want to name the related model primary key other than
+         * `model_id`.
+         *
+         * For example, this would be nice if your primary keys are all UUIDs. In
+         * that case, name this `model_uuid`.
+         */
+
+        'model_morph_key' => 'model_id',
+
+        /*
+         * Change this if you want to use the teams feature and your related model's
+         * foreign key is other than `team_id`.
+         */
+
+        'team_foreign_key' => 'team_id',
+    ],
+
+    /*
+     * When set to true, the method for checking permissions will be registered on the gate.
+     * Set this to false if you want to implement custom logic for checking permissions.
+     */
+
+    'register_permission_check_method' => true,
+
+    /*
+     * When set to true, Laravel\Octane\Events\OperationTerminated event listener will be registered
+     * this will refresh permissions on every TickTerminated, TaskTerminated and RequestTerminated
+     * NOTE: This should not be needed in most cases, but an Octane/Vapor combination benefited from it.
+     */
+    'register_octane_reset_listener' => false,
+
+    /*
+     * Events will fire when a role or permission is assigned/unassigned:
+     * \Spatie\Permission\Events\RoleAttachedEvent
+     * \Spatie\Permission\Events\RoleDetachedEvent
+     * \Spatie\Permission\Events\PermissionAttachedEvent
+     * \Spatie\Permission\Events\PermissionDetachedEvent
+     *
+     * To enable, set to true, and then create listeners to watch these events.
+     */
+    'events_enabled' => false,
+
+    /*
+     * Teams Feature.
+     * When set to true the package implements teams using the 'team_foreign_key'.
+     * If you want the migrations to register the 'team_foreign_key', you must
+     * set this to true before doing the migration.
+     * If you already did the migration then you must make a new migration to also
+     * add 'team_foreign_key' to 'roles', 'model_has_roles', and 'model_has_permissions'
+     * (view the latest version of this package's migration file)
+     */
+
+    'teams' => false,
+
+    /*
+     * The class to use to resolve the permissions team id
+     */
+    'team_resolver' => DefaultTeamResolver::class,
+
+    /*
+     * Passport Client Credentials Grant
+     * When set to true the package will use Passports Client to check permissions
+     */
+
+    'use_passport_client_credentials' => false,
+
+    /*
+     * When set to true, the required permission names are added to exception messages.
+     * This could be considered an information leak in some contexts, so the default
+     * setting is false here for optimum safety.
+     */
+
+    'display_permission_in_exception' => false,
+
+    /*
+     * When set to true, the required role names are added to exception messages.
+     * This could be considered an information leak in some contexts, so the default
+     * setting is false here for optimum safety.
+     */
+
+    'display_role_in_exception' => false,
+
+    /*
+     * By default wildcard permission lookups are disabled.
+     * See documentation to understand supported syntax.
+     */
+
+    'enable_wildcard_permission' => false,
+
+    /*
+     * The class to use for interpreting wildcard permissions.
+     * If you need to modify delimiters, override the class and specify its name here.
+     */
+    // 'wildcard_permission' => Spatie\Permission\WildcardPermission::class,
+
+    /* Cache-specific settings */
+
+    'cache' => [
+
+        /*
+         * By default all permissions are cached for 24 hours to speed up performance.
+         * When permissions or roles are updated the cache is flushed automatically.
+         */
+
+        'expiration_time' => DateInterval::createFromDateString('24 hours'),
+
+        /*
+         * The cache key used to store all permissions.
+         */
+
+        'key' => 'spatie.permission.cache',
+
+        /*
+         * You may optionally indicate a specific cache driver to use for permission and
+         * role caching using any of the `store` drivers listed in the cache.php config
+         * file. Using 'default' here means to use the `default` set in cache.php.
+         */
+
+        'store' => 'default',
+    ],
 ];
 
 ```
@@ -4154,8 +7018,12 @@ class PunishmentFactory extends Factory
         return [
             'nama' => fake()->word(),
             'deskripsi' => fake()->text(),
-            'threshold_point_minus' => fake()->numberBetween(-10000, 10000),
-            'durasi_suspend_hari' => fake()->numberBetween(-10000, 10000),
+            'threshold_point_minus' => fake()->numberBetween(-10000, -1),
+            // durasi_suspend_hari harus positif - dipakai sebagai
+            // now()->addDays() di PointService::cekPunishment(). Nilai
+            // negatif sebelumnya menghasilkan tanggal_berakhir di masa lalu,
+            // membuat punishment otomatis "berakhir" saat baru dibuat.
+            'durasi_suspend_hari' => fake()->numberBetween(1, 30),
             'aktif' => fake()->boolean(),
         ];
     }
@@ -4495,7 +7363,7 @@ return new class extends Migration
             $table->id();
             $table->string('avatar')->nullable();
             $table->string('nama');
-            $table->enum('role', ['siswa', 'pegawai', 'pustakawan', 'admin'])->default('siswa');
+            $table->enum('role', ['siswa', 'pegawai', 'pustakawan', 'super_admin'])->default('siswa');
             $table->string('nis')->nullable()->unique();
             $table->string('nip')->nullable()->unique();
             $table->string('kelas')->nullable();
@@ -5106,6 +7974,149 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_07_29_222935_create_permission_tables.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        $teams = config('permission.teams');
+        $tableNames = config('permission.table_names');
+        $columnNames = config('permission.column_names');
+        $pivotRole = $columnNames['role_pivot_key'] ?? 'role_id';
+        $pivotPermission = $columnNames['permission_pivot_key'] ?? 'permission_id';
+
+        throw_if(empty($tableNames), 'Error: config/permission.php not loaded. Run [php artisan config:clear] and try again.');
+        throw_if($teams && empty($columnNames['team_foreign_key'] ?? null), 'Error: team_foreign_key on config/permission.php not loaded. Run [php artisan config:clear] and try again.');
+
+        /**
+         * See `docs/prerequisites.md` for suggested lengths on 'name' and 'guard_name' if "1071 Specified key was too long" errors are encountered.
+         */
+        Schema::create($tableNames['permissions'], static function (Blueprint $table) {
+            $table->id(); // permission id
+            $table->string('name');
+            $table->string('guard_name');
+            $table->timestamps();
+
+            $table->unique(['name', 'guard_name']);
+        });
+
+        /**
+         * See `docs/prerequisites.md` for suggested lengths on 'name' and 'guard_name' if "1071 Specified key was too long" errors are encountered.
+         */
+        Schema::create($tableNames['roles'], static function (Blueprint $table) use ($teams, $columnNames) {
+            $table->id(); // role id
+            if ($teams || config('permission.testing')) { // permission.testing is a fix for sqlite testing
+                $table->unsignedBigInteger($columnNames['team_foreign_key'])->nullable();
+                $table->index($columnNames['team_foreign_key'], 'roles_team_foreign_key_index');
+            }
+            $table->string('name');
+            $table->string('guard_name');
+            $table->timestamps();
+            if ($teams || config('permission.testing')) {
+                $table->unique([$columnNames['team_foreign_key'], 'name', 'guard_name']);
+            } else {
+                $table->unique(['name', 'guard_name']);
+            }
+        });
+
+        Schema::create($tableNames['model_has_permissions'], static function (Blueprint $table) use ($tableNames, $columnNames, $pivotPermission, $teams) {
+            $table->unsignedBigInteger($pivotPermission);
+
+            $table->string('model_type');
+            $table->unsignedBigInteger($columnNames['model_morph_key']);
+            $table->index([$columnNames['model_morph_key'], 'model_type'], 'model_has_permissions_model_id_model_type_index');
+
+            $table->foreign($pivotPermission)
+                ->references('id') // permission id
+                ->on($tableNames['permissions'])
+                ->cascadeOnDelete();
+            if ($teams) {
+                $table->unsignedBigInteger($columnNames['team_foreign_key']);
+                $table->index($columnNames['team_foreign_key'], 'model_has_permissions_team_foreign_key_index');
+
+                $table->primary([$columnNames['team_foreign_key'], $pivotPermission, $columnNames['model_morph_key'], 'model_type'],
+                    'model_has_permissions_permission_model_type_primary');
+            } else {
+                $table->primary([$pivotPermission, $columnNames['model_morph_key'], 'model_type'],
+                    'model_has_permissions_permission_model_type_primary');
+            }
+        });
+
+        Schema::create($tableNames['model_has_roles'], static function (Blueprint $table) use ($tableNames, $columnNames, $pivotRole, $teams) {
+            $table->unsignedBigInteger($pivotRole);
+
+            $table->string('model_type');
+            $table->unsignedBigInteger($columnNames['model_morph_key']);
+            $table->index([$columnNames['model_morph_key'], 'model_type'], 'model_has_roles_model_id_model_type_index');
+
+            $table->foreign($pivotRole)
+                ->references('id') // role id
+                ->on($tableNames['roles'])
+                ->cascadeOnDelete();
+            if ($teams) {
+                $table->unsignedBigInteger($columnNames['team_foreign_key']);
+                $table->index($columnNames['team_foreign_key'], 'model_has_roles_team_foreign_key_index');
+
+                $table->primary([$columnNames['team_foreign_key'], $pivotRole, $columnNames['model_morph_key'], 'model_type'],
+                    'model_has_roles_role_model_type_primary');
+            } else {
+                $table->primary([$pivotRole, $columnNames['model_morph_key'], 'model_type'],
+                    'model_has_roles_role_model_type_primary');
+            }
+        });
+
+        Schema::create($tableNames['role_has_permissions'], static function (Blueprint $table) use ($tableNames, $pivotRole, $pivotPermission) {
+            $table->unsignedBigInteger($pivotPermission);
+            $table->unsignedBigInteger($pivotRole);
+
+            $table->foreign($pivotPermission)
+                ->references('id') // permission id
+                ->on($tableNames['permissions'])
+                ->cascadeOnDelete();
+
+            $table->foreign($pivotRole)
+                ->references('id') // role id
+                ->on($tableNames['roles'])
+                ->cascadeOnDelete();
+
+            $table->primary([$pivotPermission, $pivotRole], 'role_has_permissions_permission_id_role_id_primary');
+        });
+
+        app('cache')
+            ->store(config('permission.cache.store') != 'default' ? config('permission.cache.store') : null)
+            ->forget(config('permission.cache.key'));
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        $tableNames = config('permission.table_names');
+
+        throw_if(empty($tableNames), 'Error: config/permission.php not found and defaults could not be merged. Please publish the package configuration before proceeding, or drop the tables manually.');
+
+        Schema::dropIfExists($tableNames['role_has_permissions']);
+        Schema::dropIfExists($tableNames['model_has_roles']);
+        Schema::dropIfExists($tableNames['model_has_permissions']);
+        Schema::dropIfExists($tableNames['roles']);
+        Schema::dropIfExists($tableNames['permissions']);
+    }
+};
+
+```
+---
+
 ## database/migrations/2026_07_30_000001_add_unique_user_tanggal_to_kunjungans_table.php
 ```php
 <?php
@@ -5302,6 +8313,139 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_07_30_000006_create_password_reset_otps_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Tabel baru murni (tidak mengubah tabel existing) untuk OTP reset password
+ * via WhatsApp - user tidak punya kolom email, jadi Password Broker Laravel
+ * (email + password_reset_tokens) tidak dipakai. Aman di-rollback kapan pun,
+ * tidak berdampak ke data peminjaman/denda/point (poin 16 Aturan).
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('password_reset_otps', function (Blueprint $table) {
+            $table->id();
+            $table->string('no_telepon')->index();
+            $table->string('otp'); // disimpan hashed (Hash::make), bukan plain
+            $table->timestamp('expires_at');
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('password_reset_otps');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_30_000007_add_indexes_untuk_performa_query.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Index tambahan sesuai Logic Module §11 checklist - kolom yang sering
+ * di-query: filter status Peminjaman aktif/terlambat (cron harian, cek
+ * limit peminjaman), sort/filter jatuh tempo (cron reminder), filter Denda
+ * belum lunas (DendaObserver, halaman "denda saya"), dan unique-per-hari
+ * Kunjungan (RFID). Additive only - tidak mengubah data/kolom existing,
+ * aman rollback via dropIndex().
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->index('status');
+            $table->index('tanggal_jatuh_tempo');
+        });
+
+        Schema::table('dendas', function (Blueprint $table) {
+            $table->index('status_lunas');
+        });
+
+        Schema::table('kunjungans', function (Blueprint $table) {
+            $table->index('tanggal');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->dropIndex(['status']);
+            $table->dropIndex(['tanggal_jatuh_tempo']);
+        });
+
+        Schema::table('dendas', function (Blueprint $table) {
+            $table->dropIndex(['status_lunas']);
+        });
+
+        Schema::table('kunjungans', function (Blueprint $table) {
+            $table->dropIndex(['tanggal']);
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_30_000008_add_status_refund_to_dendas_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Menutup gap refund (lihat PeminjamanService::batalkanDenda). Saat Denda
+ * yang SUDAH TERBAYAR dibatalkan (koreksi kondisi Pengembalian), sistem
+ * tidak bisa mengembalikan uang secara otomatis - kolom ini hanya menandai
+ * status refund manual di luar sistem, supaya Admin/Pustakawan punya
+ * catatan tugas yang jelas, bukan hilang begitu saja di kolom 'keterangan'.
+ *
+ * PERUBAHAN SKEMA EKSPLISIT (Aturan poin 16): kolom baru, nullable,
+ * default 'tidak_perlu' - tidak mengubah/menghapus kolom existing, aman
+ * untuk data produksi yang sudah ada (semua baris lama otomatis
+ * 'tidak_perlu', tidak salah secara historis karena Denda lama tidak
+ * pernah dibatalkan oleh mekanisme ini).
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('dendas', function (Blueprint $table) {
+            $table->enum('status_refund', ['tidak_perlu', 'perlu_refund', 'sudah_direfund'])
+                ->default('tidak_perlu')
+                ->after('status_lunas');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('dendas', function (Blueprint $table) {
+            $table->dropColumn('status_refund');
+        });
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -5317,19 +8461,18 @@ class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
         $this->call(SettingSeeder::class);
 
         User::factory()->create([
             'nama' => 'Admin Perpustakaan',
-            'role' => 'admin',
-            'no_telepon' => '628123456789',
+            'role' => 'super_admin',
+            'no_telepon' => '62895351856267',
             'password' => Hash::make('password'),
         ]);
+
+        $this->call(ShieldSeeder::class);
     }
 }
 
@@ -5353,10 +8496,13 @@ use Illuminate\Database\Seeder;
  * Admin lewat panel sebelum dianggap final, terutama nilai Point yang
  * menentukan kecepatan naik Badge dan pemicu Punishment.
  *
- * SENGAJA TIDAK menyeed wa_template_* - template_code terkait belum dibuat
- * di panel WhatsApp Gateway (dok kontrak API §4.2). Sampai template dibuat
- * manual dan key ini diisi, WhatsappService::kirimEvent() akan skip dengan
- * Log::warning (by design), notifikasi WA tidak terkirim.
+ * wa_template_* SEKARANG ikut diseed (berubah dari iterasi sebelumnya) -
+ * template_code yang dipakai di bawah ini diasumsikan SAMA PERSIS dengan
+ * "Kode Template" pada dokumen Template WhatsApp - Perpustakaan (11 event).
+ * TODO: ASUMSI - WAJIB dicek ulang terhadap template_code yang benar-benar
+ * terdaftar di panel gateway zedlabs; kalau berbeda, WhatsappService akan
+ * mengirim template_code yang salah dan gateway akan menolak (lihat kontrak
+ * API dok bagian 2.2, kemungkinan respons 4xx dari WhatsappGatewayException).
  */
 class SettingSeeder extends Seeder
 {
@@ -5388,6 +8534,23 @@ class SettingSeeder extends Seeder
             ['key' => 'point_pengembalian', 'value' => '3', 'group' => GroupSetting::Point, 'keterangan' => 'TODO: ASUMSI - point per pengembalian kondisi baik/tepat waktu.'],
             ['key' => 'point_kerusakan', 'value' => '-10', 'group' => GroupSetting::Point, 'keterangan' => 'TODO: ASUMSI - point (negatif) saat buku dikembalikan rusak.'],
             ['key' => 'point_kehilangan', 'value' => '-20', 'group' => GroupSetting::Point, 'keterangan' => 'TODO: ASUMSI - point (negatif) saat buku dilaporkan/berstatus hilang.'],
+
+            // --- Kategori C: template_code WhatsApp (11 event) ---
+            // TODO: ASUMSI - value di bawah diasumsikan sama persis dengan template_code
+            // yang Anda daftarkan di panel gateway zedlabs. WAJIB dicocokkan manual.
+            ['key' => 'wa_template_peminjaman_aktif', 'value' => 'peminjaman_aktif', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_reminder_h3', 'value' => 'reminder_h3', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_reminder_h1', 'value' => 'reminder_h1', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_jadi_terlambat', 'value' => 'jadi_terlambat', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_pengembalian_diproses', 'value' => 'pengembalian_diproses', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_denda_dibuat', 'value' => 'denda_dibuat', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_denda_lunas', 'value' => 'denda_lunas', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_badge_naik', 'value' => 'badge_naik', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_reward_didapat', 'value' => 'reward_didapat', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_punishment_diterapkan', 'value' => 'punishment_diterapkan', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_reset_password_otp', 'value' => 'reset_password_otp', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
+            ['key' => 'wa_template_koreksi_kondisi_pengembalian', 'value' => 'koreksi_kondisi_pengembalian', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat Pustakawan/Admin mengoreksi kondisi Pengembalian yang sudah final.'],
+            ['key' => 'wa_template_denda_dibatalkan_perlu_refund', 'value' => 'denda_dibatalkan_perlu_refund', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat Denda yang SUDAH TERBAYAR dibatalkan akibat koreksi kondisi - Admin wajib menindaklanjuti refund manual (lihat Denda.status_refund).'],
         ];
 
         foreach ($settings as $setting) {
@@ -5400,6 +8563,129 @@ class SettingSeeder extends Seeder
                 ]
             );
         }
+    }
+}
+
+```
+---
+
+## database/seeders/ShieldSeeder.php
+```php
+<?php
+
+namespace Database\Seeders;
+
+use App\Enums\RoleUser;
+use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+
+/**
+ * Mapping Role Spatie -> Permission, sesuai scope akses di dokumen
+ * Logic Module Perpustakaan v1.0 poin 1 (dikonfirmasi user):
+ *
+ * - super_admin (User.role = admin): akses penuh semua permission.
+ * - pustakawan : full CRUD Buku/Kategori/Rak (master data) + Peminjaman/
+ *                Pengembalian (proses pinjam-kembali, termasuk Action
+ *                "Proses Pengembalian"/"Laporkan Hilang" - keduanya di-guard
+ *                oleh ViewAny:Peminjaman, bukan permission terpisah, sesuai
+ *                konfirmasi: hanya Admin & Pustakawan yang boleh akses sama
+ *                sekali ke Resource ini).
+ * - siswa/pegawai: TIDAK diberi permission Resource apa pun di panel ini.
+ *   Kebutuhan "lihat point/badge/histori/denda pribadi" akan dipenuhi lewat
+ *   halaman scoped-ke-user terpisah (bukan Resource CRUD Filament biasa) -
+ *   BELUM dibuat di iterasi ini.
+ *   TODO: GAP-SPEC - role Spatie 'siswa' dan 'pegawai' dibuat sebagai
+ *   placeholder kosong sekarang supaya UserObserver/assignment role di masa
+ *   depan tidak perlu migration ulang, tapi belum ada guna praktis sampai
+ *   halaman "milik saya" dibuat dan permission-nya di-generate.
+ */
+class ShieldSeeder extends Seeder
+{
+    public function run(): void
+    {
+        // guard 'web' adalah default Spatie & Filament panel ini.
+        $superAdmin = Role::firstOrCreate([
+            'name' => 'super_admin',
+            'guard_name' => 'web',
+        ]);
+        $superAdmin->syncPermissions(Permission::all());
+
+        $pustakawan = Role::firstOrCreate([
+            'name' => 'pustakawan',
+            'guard_name' => 'web',
+        ]);
+        $pustakawan->syncPermissions(
+            Permission::whereIn('name', [
+                'ViewAny:Buku',
+                'View:Buku',
+                'Create:Buku',
+                'Update:Buku',
+                'Delete:Buku',
+                'DeleteAny:Buku',
+                'Restore:Buku',
+                'RestoreAny:Buku',
+                'ForceDelete:Buku',
+                'ForceDeleteAny:Buku',
+                'Replicate:Buku',
+                'Reorder:Buku',
+
+                'ViewAny:Kategori',
+                'View:Kategori',
+                'Create:Kategori',
+                'Update:Kategori',
+                'Delete:Kategori',
+                'DeleteAny:Kategori',
+                'Restore:Kategori',
+                'RestoreAny:Kategori',
+                'ForceDelete:Kategori',
+                'ForceDeleteAny:Kategori',
+                'Replicate:Kategori',
+                'Reorder:Kategori',
+
+                'ViewAny:Rak',
+                'View:Rak',
+                'Create:Rak',
+                'Update:Rak',
+                'Delete:Rak',
+                'DeleteAny:Rak',
+                'Restore:Rak',
+                'RestoreAny:Rak',
+                'ForceDelete:Rak',
+                'ForceDeleteAny:Rak',
+                'Replicate:Rak',
+                'Reorder:Rak',
+
+                // Peminjaman: create dipakai form manual fallback (lihat
+                // PeminjamanResource\Pages\CreatePeminjaman). Update/Delete
+                // TIDAK diberikan - status Peminjaman HANYA boleh berubah
+                // lewat PeminjamanService (Action Proses Pengembalian/
+                // Laporkan Hilang, atau cron harian), tidak ada halaman Edit
+                // di Resource ini sama sekali.
+                'ViewAny:Peminjaman',
+                'View:Peminjaman',
+                'Create:Peminjaman',
+
+                // Pengembalian: READ-ONLY di Resource (canCreate() => false),
+                // permission Create/Update/Delete tidak dipakai UI tapi tetap
+                // di-generate Shield - sengaja TIDAK diberikan ke pustakawan
+                // supaya tidak ada jalan lain mengubah data selain lewat
+                // PeminjamanService::prosesPengembalian().
+                'ViewAny:Pengembalian',
+                'View:Pengembalian',
+            ])->get()
+        );
+
+        // Placeholder kosong - lihat TODO: GAP-SPEC di atas class.
+        Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'pegawai', 'guard_name' => 'web']);
+
+        // Sinkronkan ulang semua user existing yang role App-nya 'admin'
+        // ke Spatie role 'super_admin', jaga-jaga kalau di-run setelah ada
+        // user baru sebelum Observer sempat jalan (mis. hasil import/seed).
+        \App\Models\User::where('role', RoleUser::Admin)->each(
+            fn($user) => $user->syncRoles(['super_admin'])
+        );
     }
 }
 
@@ -5440,173 +8726,198 @@ return Application::configure(basePath: dirname(__DIR__))
 ## bootstrap/cache/packages.php
 ```php
 <?php return array (
-  'anourvalar/eloquent-serialize' => 
+  'anourvalar/eloquent-serialize' =>
   array (
-    'aliases' => 
+    'aliases' =>
     array (
       'EloquentSerialize' => 'AnourValar\\EloquentSerialize\\Facades\\EloquentSerializeFacade',
     ),
   ),
-  'blade-ui-kit/blade-heroicons' => 
+  'bezhansalleh/filament-plugin-essentials' =>
   array (
-    'providers' => 
+    'providers' =>
+    array (
+      0 => 'BezhanSalleh\\PluginEssentials\\PluginEssentialsServiceProvider',
+    ),
+  ),
+  'bezhansalleh/filament-shield' =>
+  array (
+    'aliases' =>
+    array (
+      'FilamentShield' => 'BezhanSalleh\\FilamentShield\\Facades\\FilamentShield',
+    ),
+    'providers' =>
+    array (
+      0 => 'BezhanSalleh\\FilamentShield\\FilamentShieldServiceProvider',
+    ),
+  ),
+  'blade-ui-kit/blade-heroicons' =>
+  array (
+    'providers' =>
     array (
       0 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
     ),
   ),
-  'blade-ui-kit/blade-icons' => 
+  'blade-ui-kit/blade-icons' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
     ),
   ),
-  'filament/actions' => 
+  'filament/actions' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\Actions\\ActionsServiceProvider',
     ),
   ),
-  'filament/filament' => 
+  'filament/filament' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\FilamentServiceProvider',
     ),
   ),
-  'filament/forms' => 
+  'filament/forms' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\Forms\\FormsServiceProvider',
     ),
   ),
-  'filament/infolists' => 
+  'filament/infolists' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\Infolists\\InfolistsServiceProvider',
     ),
   ),
-  'filament/notifications' => 
+  'filament/notifications' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\Notifications\\NotificationsServiceProvider',
     ),
   ),
-  'filament/query-builder' => 
+  'filament/query-builder' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
     ),
   ),
-  'filament/schemas' => 
+  'filament/schemas' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\Schemas\\SchemasServiceProvider',
     ),
   ),
-  'filament/support' => 
+  'filament/support' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\Support\\SupportServiceProvider',
     ),
   ),
-  'filament/tables' => 
+  'filament/tables' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\Tables\\TablesServiceProvider',
     ),
   ),
-  'filament/widgets' => 
+  'filament/widgets' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Filament\\Widgets\\WidgetsServiceProvider',
     ),
   ),
-  'kirschbaum-development/eloquent-power-joins' => 
+  'kirschbaum-development/eloquent-power-joins' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
     ),
   ),
-  'laravel-shift/blueprint' => 
+  'laravel-shift/blueprint' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Blueprint\\BlueprintServiceProvider',
     ),
   ),
-  'laravel/pail' => 
+  'laravel/pail' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Laravel\\Pail\\PailServiceProvider',
     ),
   ),
-  'laravel/pao' => 
+  'laravel/pao' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
     ),
   ),
-  'laravel/tinker' => 
+  'laravel/tinker' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Laravel\\Tinker\\TinkerServiceProvider',
     ),
   ),
-  'livewire/livewire' => 
+  'livewire/livewire' =>
   array (
-    'aliases' => 
+    'aliases' =>
     array (
       'Livewire' => 'Livewire\\Livewire',
     ),
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Livewire\\LivewireServiceProvider',
     ),
   ),
-  'nesbot/carbon' => 
+  'nesbot/carbon' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Carbon\\Laravel\\ServiceProvider',
     ),
   ),
-  'nunomaduro/collision' => 
+  'nunomaduro/collision' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     ),
   ),
-  'nunomaduro/termwind' => 
+  'nunomaduro/termwind' =>
   array (
-    'providers' => 
+    'providers' =>
     array (
       0 => 'Termwind\\Laravel\\TermwindServiceProvider',
     ),
   ),
-  'ryangjchandler/blade-capture-directive' => 
+  'ryangjchandler/blade-capture-directive' =>
   array (
-    'aliases' => 
+    'aliases' =>
     array (
       'BladeCaptureDirective' => 'RyanChandler\\BladeCaptureDirective\\Facades\\BladeCaptureDirective',
     ),
-    'providers' => 
+    'providers' =>
     array (
       0 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
+    ),
+  ),
+  'spatie/laravel-permission' =>
+  array (
+    'providers' =>
+    array (
+      0 => 'Spatie\\Permission\\PermissionServiceProvider',
     ),
   ),
 );
@@ -5616,7 +8927,7 @@ return Application::configure(basePath: dirname(__DIR__))
 ## bootstrap/cache/services.php
 ```php
 <?php return array (
-  'providers' => 
+  'providers' =>
   array (
     0 => 'Illuminate\\Auth\\AuthServiceProvider',
     1 => 'Illuminate\\Broadcasting\\BroadcastServiceProvider',
@@ -5642,32 +8953,35 @@ return Application::configure(basePath: dirname(__DIR__))
     21 => 'Illuminate\\Translation\\TranslationServiceProvider',
     22 => 'Illuminate\\Validation\\ValidationServiceProvider',
     23 => 'Illuminate\\View\\ViewServiceProvider',
-    24 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
-    25 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
-    26 => 'Filament\\Actions\\ActionsServiceProvider',
-    27 => 'Filament\\FilamentServiceProvider',
-    28 => 'Filament\\Forms\\FormsServiceProvider',
-    29 => 'Filament\\Infolists\\InfolistsServiceProvider',
-    30 => 'Filament\\Notifications\\NotificationsServiceProvider',
-    31 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
-    32 => 'Filament\\Schemas\\SchemasServiceProvider',
-    33 => 'Filament\\Support\\SupportServiceProvider',
-    34 => 'Filament\\Tables\\TablesServiceProvider',
-    35 => 'Filament\\Widgets\\WidgetsServiceProvider',
-    36 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
-    37 => 'Blueprint\\BlueprintServiceProvider',
-    38 => 'Laravel\\Pail\\PailServiceProvider',
-    39 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
-    40 => 'Laravel\\Tinker\\TinkerServiceProvider',
-    41 => 'Livewire\\LivewireServiceProvider',
-    42 => 'Carbon\\Laravel\\ServiceProvider',
-    43 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
-    44 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    45 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
-    46 => 'App\\Providers\\AppServiceProvider',
-    47 => 'App\\Providers\\Filament\\DashboardPanelProvider',
+    24 => 'BezhanSalleh\\PluginEssentials\\PluginEssentialsServiceProvider',
+    25 => 'BezhanSalleh\\FilamentShield\\FilamentShieldServiceProvider',
+    26 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
+    27 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
+    28 => 'Filament\\Actions\\ActionsServiceProvider',
+    29 => 'Filament\\FilamentServiceProvider',
+    30 => 'Filament\\Forms\\FormsServiceProvider',
+    31 => 'Filament\\Infolists\\InfolistsServiceProvider',
+    32 => 'Filament\\Notifications\\NotificationsServiceProvider',
+    33 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
+    34 => 'Filament\\Schemas\\SchemasServiceProvider',
+    35 => 'Filament\\Support\\SupportServiceProvider',
+    36 => 'Filament\\Tables\\TablesServiceProvider',
+    37 => 'Filament\\Widgets\\WidgetsServiceProvider',
+    38 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
+    39 => 'Blueprint\\BlueprintServiceProvider',
+    40 => 'Laravel\\Pail\\PailServiceProvider',
+    41 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
+    42 => 'Laravel\\Tinker\\TinkerServiceProvider',
+    43 => 'Livewire\\LivewireServiceProvider',
+    44 => 'Carbon\\Laravel\\ServiceProvider',
+    45 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
+    46 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    47 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
+    48 => 'Spatie\\Permission\\PermissionServiceProvider',
+    49 => 'App\\Providers\\AppServiceProvider',
+    50 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
-  'eager' => 
+  'eager' =>
   array (
     0 => 'Illuminate\\Auth\\AuthServiceProvider',
     1 => 'Illuminate\\Cookie\\CookieServiceProvider',
@@ -5679,30 +8993,33 @@ return Application::configure(basePath: dirname(__DIR__))
     7 => 'Illuminate\\Pagination\\PaginationServiceProvider',
     8 => 'Illuminate\\Session\\SessionServiceProvider',
     9 => 'Illuminate\\View\\ViewServiceProvider',
-    10 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
-    11 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
-    12 => 'Filament\\Actions\\ActionsServiceProvider',
-    13 => 'Filament\\FilamentServiceProvider',
-    14 => 'Filament\\Forms\\FormsServiceProvider',
-    15 => 'Filament\\Infolists\\InfolistsServiceProvider',
-    16 => 'Filament\\Notifications\\NotificationsServiceProvider',
-    17 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
-    18 => 'Filament\\Schemas\\SchemasServiceProvider',
-    19 => 'Filament\\Support\\SupportServiceProvider',
-    20 => 'Filament\\Tables\\TablesServiceProvider',
-    21 => 'Filament\\Widgets\\WidgetsServiceProvider',
-    22 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
-    23 => 'Laravel\\Pail\\PailServiceProvider',
-    24 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
-    25 => 'Livewire\\LivewireServiceProvider',
-    26 => 'Carbon\\Laravel\\ServiceProvider',
-    27 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
-    28 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    29 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
-    30 => 'App\\Providers\\AppServiceProvider',
-    31 => 'App\\Providers\\Filament\\DashboardPanelProvider',
+    10 => 'BezhanSalleh\\PluginEssentials\\PluginEssentialsServiceProvider',
+    11 => 'BezhanSalleh\\FilamentShield\\FilamentShieldServiceProvider',
+    12 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
+    13 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
+    14 => 'Filament\\Actions\\ActionsServiceProvider',
+    15 => 'Filament\\FilamentServiceProvider',
+    16 => 'Filament\\Forms\\FormsServiceProvider',
+    17 => 'Filament\\Infolists\\InfolistsServiceProvider',
+    18 => 'Filament\\Notifications\\NotificationsServiceProvider',
+    19 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
+    20 => 'Filament\\Schemas\\SchemasServiceProvider',
+    21 => 'Filament\\Support\\SupportServiceProvider',
+    22 => 'Filament\\Tables\\TablesServiceProvider',
+    23 => 'Filament\\Widgets\\WidgetsServiceProvider',
+    24 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
+    25 => 'Laravel\\Pail\\PailServiceProvider',
+    26 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
+    27 => 'Livewire\\LivewireServiceProvider',
+    28 => 'Carbon\\Laravel\\ServiceProvider',
+    29 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
+    30 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    31 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
+    32 => 'Spatie\\Permission\\PermissionServiceProvider',
+    33 => 'App\\Providers\\AppServiceProvider',
+    34 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
-  'deferred' => 
+  'deferred' =>
   array (
     'Illuminate\\Broadcasting\\BroadcastManager' => 'Illuminate\\Broadcasting\\BroadcastServiceProvider',
     'Illuminate\\Contracts\\Broadcasting\\Factory' => 'Illuminate\\Broadcasting\\BroadcastServiceProvider',
@@ -5872,54 +9189,54 @@ return Application::configure(basePath: dirname(__DIR__))
     'Blueprint\\Blueprint' => 'Blueprint\\BlueprintServiceProvider',
     'command.tinker' => 'Laravel\\Tinker\\TinkerServiceProvider',
   ),
-  'when' => 
+  'when' =>
   array (
-    'Illuminate\\Broadcasting\\BroadcastServiceProvider' => 
+    'Illuminate\\Broadcasting\\BroadcastServiceProvider' =>
     array (
     ),
-    'Illuminate\\Bus\\BusServiceProvider' => 
+    'Illuminate\\Bus\\BusServiceProvider' =>
     array (
     ),
-    'Illuminate\\Cache\\CacheServiceProvider' => 
+    'Illuminate\\Cache\\CacheServiceProvider' =>
     array (
     ),
-    'Illuminate\\Foundation\\Providers\\ConsoleSupportServiceProvider' => 
+    'Illuminate\\Foundation\\Providers\\ConsoleSupportServiceProvider' =>
     array (
     ),
-    'Illuminate\\Concurrency\\ConcurrencyServiceProvider' => 
+    'Illuminate\\Concurrency\\ConcurrencyServiceProvider' =>
     array (
     ),
-    'Illuminate\\Image\\ImageServiceProvider' => 
+    'Illuminate\\Image\\ImageServiceProvider' =>
     array (
     ),
-    'Illuminate\\Hashing\\HashServiceProvider' => 
+    'Illuminate\\Hashing\\HashServiceProvider' =>
     array (
     ),
-    'Illuminate\\Mail\\MailServiceProvider' => 
+    'Illuminate\\Mail\\MailServiceProvider' =>
     array (
     ),
-    'Illuminate\\Auth\\Passwords\\PasswordResetServiceProvider' => 
+    'Illuminate\\Auth\\Passwords\\PasswordResetServiceProvider' =>
     array (
     ),
-    'Illuminate\\Pipeline\\PipelineServiceProvider' => 
+    'Illuminate\\Pipeline\\PipelineServiceProvider' =>
     array (
     ),
-    'Illuminate\\Queue\\QueueServiceProvider' => 
+    'Illuminate\\Queue\\QueueServiceProvider' =>
     array (
     ),
-    'Illuminate\\Redis\\RedisServiceProvider' => 
+    'Illuminate\\Redis\\RedisServiceProvider' =>
     array (
     ),
-    'Illuminate\\Translation\\TranslationServiceProvider' => 
+    'Illuminate\\Translation\\TranslationServiceProvider' =>
     array (
     ),
-    'Illuminate\\Validation\\ValidationServiceProvider' => 
+    'Illuminate\\Validation\\ValidationServiceProvider' =>
     array (
     ),
-    'Blueprint\\BlueprintServiceProvider' => 
+    'Blueprint\\BlueprintServiceProvider' =>
     array (
     ),
-    'Laravel\\Tinker\\TinkerServiceProvider' => 
+    'Laravel\\Tinker\\TinkerServiceProvider' =>
     array (
     ),
   ),
@@ -5957,6 +9274,105 @@ return [
 ## resources/js/app.js
 ```js
 //
+
+```
+---
+
+## resources/views/filament/pages/auth/request-password-reset.blade.php
+```blade
+<x-filament-panels::page.simple>
+    <form wire:submit="kirim">
+        {{ $this->form }}
+
+        <div style="margin-top: 1.5rem;">
+            <x-filament::button type="submit" class="w-full">
+                Kirim OTP ke WhatsApp
+            </x-filament::button>
+        </div>
+    </form>
+</x-filament-panels::page.simple>
+
+```
+---
+
+## resources/views/filament/pages/auth/reset-password.blade.php
+```blade
+<x-filament-panels::page.simple>
+    <form wire:submit="prosesReset">
+        {{ $this->form }}
+
+        <div style="margin-top: 1.5rem;">
+            <x-filament::button type="submit" class="w-full">
+                Reset Password
+            </x-filament::button>
+        </div>
+    </form>
+</x-filament-panels::page.simple>
+
+```
+---
+
+## resources/views/filament/pages/transaksi-cepat.blade.php
+```blade
+<x-filament-panels::page>
+    @if (! $user)
+        <div class="rounded-xl border p-6 space-y-3" x-data x-init="$refs.kartu.focus()">
+            <label class="font-medium">Scan Kartu RFID</label>
+            <input
+                x-ref="kartu"
+                type="text"
+                wire:model="kartuInput"
+                wire:keydown.enter="scanKartu"
+                autofocus
+                class="fi-input w-full rounded-lg"
+                placeholder="Tempelkan/scan kartu..."
+            />
+        </div>
+    @else
+        <div class="rounded-xl border p-6 space-y-2">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-lg font-semibold">{{ $user->nama }}</p>
+                    <p class="text-sm text-gray-500">
+                        Status: {{ $user->status_suspend ? 'SUSPEND' : 'Aktif' }}
+                        &middot;
+                        {{ $bisaMeminjam ? 'Bisa meminjam' : 'Tidak bisa meminjam baru' }}
+                    </p>
+                </div>
+                <x-filament::button color="gray" wire:click="selesai">Selesai / Ganti User</x-filament::button>
+            </div>
+        </div>
+
+        <div class="rounded-xl border p-6 space-y-3 mt-4" x-data x-init="$refs.barcode.focus()">
+            <label class="font-medium">Scan Barcode Buku</label>
+            <input
+                x-ref="barcode"
+                type="text"
+                wire:model="barcodeInput"
+                wire:keydown.enter="scanBarcode"
+                autofocus
+                class="fi-input w-full rounded-lg"
+                placeholder="Scan barcode buku..."
+            />
+        </div>
+
+        <div class="mt-4 space-y-2">
+            @foreach ($riwayatScan as $item)
+                <div @class([
+                    'rounded-lg border p-3 flex items-center justify-between',
+                    'border-success-300 bg-success-50' => $item['sukses'],
+                    'border-danger-300 bg-danger-50' => ! $item['sukses'],
+                ])>
+                    <div>
+                        <p class="font-medium">{{ $item['judul'] }}</p>
+                        <p class="text-sm text-gray-600">{{ $item['pesan'] }}</p>
+                    </div>
+                    <span class="text-xs uppercase font-semibold">{{ $item['aksi'] }}</span>
+                </div>
+            @endforeach
+        </div>
+    @endif
+</x-filament-panels::page>
 
 ```
 ---
@@ -6139,7 +9555,7 @@ return [
                             <path d="M260.6 400.8C229.8 400.8 204.6 392.4 185 375.6C165.8 358.8 156.2 337 156.2 310.2H226.4C226.4 318.2 229.4 324.8 235.4 330C241.4 335.2 249.4 337.8 259.4 337.8C269 337.8 276.8 335 282.8 329.4C289.2 323.8 292.4 316.6 292.4 307.8C292.4 299.8 289.6 293.2 284 288C278.4 282.8 271.2 280.2 262.4 280.2H225.2V218.4H262.4C269.2 218.4 275 216 279.8 211.2C284.6 206.4 287 200.4 287 193.2C287 184.8 284.4 178.2 279.2 173.4C274 168.6 267.4 166.2 259.4 166.2C252.2 166.2 246 168.4 240.8 172.8C236 177.2 233.6 182.8 233.6 189.6H167C167 164.8 175.8 144.6 193.4 129C211 113 233.6 105 261.2 105C288.8 105 311.2 112.2 328.4 126.6C346 141 354.8 160 354.8 183.6C354.8 200.8 350.2 214.8 341 225.6C331.8 236 320 243.2 305.6 247.2C322.8 252 336.4 260.2 346.4 271.8C356.8 283.4 362 298 362 315.6C362 340.4 352.6 360.8 333.8 376.8C315 392.8 290.6 400.8 260.6 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-2-mask)"/>
                             <path d="M52.5357 167.6H27.3357V105.2H120.336V400.2H52.5357V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-2-mask)"/>
                         </g>
-                        
+
                         <g class="mix-blend-color dark:mix-blend-hard-light transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[51px] text-[#F8B803] dark:text-[#391800]">
                             <mask id="path-3-mask" maskUnits="userSpaceOnUse" x="51" y="103" width="338" height="299" fill="black">
                                 <rect fill="white" x="51" y="103" width="338" height="299"/>
@@ -6151,7 +9567,7 @@ return [
                             <path d="M286.264 400.8C255.464 400.8 230.264 392.4 210.664 375.6C191.464 358.8 181.864 337 181.864 310.2H252.064C252.064 318.2 255.064 324.8 261.064 330C267.064 335.2 275.064 337.8 285.064 337.8C294.664 337.8 302.464 335 308.464 329.4C314.864 323.8 318.064 316.6 318.064 307.8C318.064 299.8 315.264 293.2 309.664 288C304.064 282.8 296.864 280.2 288.064 280.2H250.864V218.4H288.064C294.864 218.4 300.664 216 305.464 211.2C310.264 206.4 312.664 200.4 312.664 193.2C312.664 184.8 310.064 178.2 304.864 173.4C299.664 168.6 293.064 166.2 285.064 166.2C277.864 166.2 271.664 168.4 266.464 172.8C261.664 177.2 259.264 182.8 259.264 189.6H192.664C192.664 164.8 201.464 144.6 219.064 129C236.664 113 259.264 105 286.864 105C314.464 105 336.864 112.2 354.064 126.6C371.664 141 380.464 160 380.464 183.6C380.464 200.8 375.864 214.8 366.664 225.6C357.464 236 345.664 243.2 331.264 247.2C348.464 252 362.064 260.2 372.064 271.8C382.464 283.4 387.664 298 387.664 315.6C387.664 340.4 378.264 360.8 359.464 376.8C340.664 392.8 316.264 400.8 286.264 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-3-mask)"/>
                             <path d="M78.2 167.6H53V105.2H146V400.2H78.2V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-3-mask)"/>
                         </g>
-                        
+
                         <g class="mix-blend-multiply dark:mix-blend-normal transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[78px] text-[#F3BEC7] dark:text-[#733000]">
                             <mask id="path-4-mask" maskUnits="userSpaceOnUse" x="76.6643" y="103" width="338" height="299" fill="black">
                                 <rect fill="white" x="76.6643" y="103" width="338" height="299"/>
@@ -6163,7 +9579,7 @@ return [
                             <path d="M311.929 400.8C281.129 400.8 255.929 392.4 236.329 375.6C217.129 358.8 207.529 337 207.529 310.2H277.729C277.729 318.2 280.729 324.8 286.729 330C292.729 335.2 300.729 337.8 310.729 337.8C320.329 337.8 328.129 335 334.129 329.4C340.529 323.8 343.729 316.6 343.729 307.8C343.729 299.8 340.929 293.2 335.329 288C329.729 282.8 322.529 280.2 313.729 280.2H276.529V218.4H313.729C320.529 218.4 326.329 216 331.129 211.2C335.929 206.4 338.329 200.4 338.329 193.2C338.329 184.8 335.729 178.2 330.529 173.4C325.329 168.6 318.729 166.2 310.729 166.2C303.529 166.2 297.329 168.4 292.129 172.8C287.329 177.2 284.929 182.8 284.929 189.6H218.329C218.329 164.8 227.129 144.6 244.729 129C262.329 113 284.929 105 312.529 105C340.129 105 362.529 112.2 379.729 126.6C397.329 141 406.129 160 406.129 183.6C406.129 200.8 401.529 214.8 392.329 225.6C383.129 236 371.329 243.2 356.929 247.2C374.129 252 387.729 260.2 397.729 271.8C408.129 283.4 413.329 298 413.329 315.6C413.329 340.4 403.929 360.8 385.129 376.8C366.329 392.8 341.929 400.8 311.929 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-4-mask)"/>
                             <path d="M103.864 167.6H78.6643V105.2H171.664V400.2H103.864V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-4-mask)"/>
                         </g>
-                        
+
                         <g class="mix-blend-hard-light transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[102px] text-[#F3BEC7] dark:text-[#4B0600]">
                             <mask id="path-5-mask" maskUnits="userSpaceOnUse" x="102.329" y="103" width="338" height="299" fill="black">
                                 <rect fill="white" x="102.329" y="103" width="338" height="299"/>

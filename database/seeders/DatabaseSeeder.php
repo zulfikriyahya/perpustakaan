@@ -11,18 +11,17 @@ class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
         $this->call(SettingSeeder::class);
 
         User::factory()->create([
             'nama' => 'Admin Perpustakaan',
-            'role' => 'admin',
-            'no_telepon' => '628123456789',
+            'role' => 'super_admin',
+            'no_telepon' => '62895351856267',
             'password' => Hash::make('password'),
         ]);
+
+        $this->call(ShieldSeeder::class);
     }
 }

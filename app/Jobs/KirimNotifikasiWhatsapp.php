@@ -21,6 +21,14 @@ use Illuminate\Support\Facades\Log;
  * di pemanggil supaya job tidak perlu query Setting berulang dan supaya
  * kegagalan "template belum dikonfigurasi" tetap terdeteksi segera (bukan
  * baru diketahui setelah job diproses worker).
+ *
+ * Idempotency: reference_id yang dikirim oleh WhatsappService::kirimEvent()
+ * bersifat stabil per event (bukan UUID acak untuk event terjadwal seperti
+ * reminder H-3/H-1/denda), sehingga retry job ini maupun eksekusi cron
+ * ganda di hari yang sama aman - gateway mendeteksi reference_id yang
+ * sama dan mengembalikan 200 (bukan mengirim ulang WA), sesuai kontrak API
+ * §2.2 & §9 (idempotency window 24 jam). Retry di sini hanya menghitung
+ * ulang signature/timestamp, TIDAK pernah mengirim signature lama.
  */
 class KirimNotifikasiWhatsapp implements ShouldQueue
 {
@@ -44,6 +52,21 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
      */
     public array $backoff = [5, 15, 30];
 
+    /**
+     * Status code gateway yang bersifat PERMANEN (retry tidak akan mengubah
+     * hasil, sesuai kontrak API §2.2):
+     * - 400: body/media/variabel tidak valid - kesalahan payload yang kita
+     *   kirim sendiri, tidak berubah walau di-retry.
+     * - 403: template_code tidak ditemukan/tidak terkait ke API key -
+     *   kesalahan konfigurasi Admin di panel gateway, bukan transient.
+     * - 409: reference_id sudah dipakai dengan payload BERBEDA - retry
+     *   dengan payload sama akan 409 lagi terus (lihat kontrak API §2.2).
+     *
+     * Di luar daftar ini (401 HMAC, 429 guard rail, 500 internal) dianggap
+     * transient dan tetap mengikuti siklus retry/backoff normal.
+     */
+    private const STATUS_PERMANEN = [400, 403, 409];
+
     public function __construct(
         protected string $templateCode,
         protected string $nomorTujuan,
@@ -61,23 +84,31 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
                 referenceId: $this->referenceId,
             );
         } catch (WhatsappGatewayException $e) {
+            if (in_array($e->statusCode, self::STATUS_PERMANEN, true)) {
+                Log::error("KirimNotifikasiWhatsapp: kegagalan permanen (status {$e->statusCode}), tidak di-retry. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$e->getMessage()}");
+
+                // fail() langsung memindahkan job ke failed_jobs tanpa
+                // menghabiskan sisa percobaan $tries - retry dipastikan
+                // sia-sia untuk status di STATUS_PERMANEN.
+                $this->fail($e);
+
+                return;
+            }
+
             Log::error("KirimNotifikasiWhatsapp: gagal mengirim template '{$this->templateCode}' ke {$this->nomorTujuan}: {$e->getMessage()}");
 
-            // TODO: GAP-SPEC - dilempar ulang supaya queue worker melakukan
-            // retry sesuai $tries/$backoff. Jika error bersifat permanen
-            // (mis. template_code tidak terhubung ke API key, lihat kontrak
-            // API §2.2 kode 403), retry tidak akan membantu dan job akan
-            // berakhir di failed_jobs setelah 3 percobaan - belum ada
-            // pembedaan error permanen vs transient di level job ini.
+            // Transient (401/429/500 dsb.) - lempar ulang supaya queue
+            // worker retry sesuai $tries/$backoff.
             throw $e;
         }
     }
 
     /**
-     * Dipanggil otomatis oleh queue setelah seluruh percobaan ($tries) habis.
+     * Dipanggil otomatis oleh queue setelah seluruh percobaan ($tries) habis
+     * ATAU setelah $this->fail() dipanggil eksplisit di handle().
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error("KirimNotifikasiWhatsapp: job gagal permanen setelah {$this->tries} percobaan. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$exception->getMessage()}");
+        Log::error("KirimNotifikasiWhatsapp: job gagal permanen. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$exception->getMessage()}");
     }
 }

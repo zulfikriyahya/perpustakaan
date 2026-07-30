@@ -21,6 +21,7 @@ class Denda extends Model
         'status_lunas',
         'tanggal_lunas',
         'keterangan',
+        'status_refund',
     ];
 
     protected function casts(): array
@@ -31,6 +32,7 @@ class Denda extends Model
             'nominal' => 'decimal:2',
             'status_lunas' => 'boolean',
             'tanggal_lunas' => 'datetime',
+            'status_refund' => \App\Enums\StatusRefund::class,
         ];
     }
 

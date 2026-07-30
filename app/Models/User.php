@@ -3,15 +3,20 @@
 namespace App\Models;
 
 use App\Enums\RoleUser;
+use BezhanSalleh\FilamentShield\Traits\HasPanelShield;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasName;
+use Filament\Panel;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements AuthenticatableContract
+class User extends Authenticatable implements AuthenticatableContract, HasName, FilamentUser
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasRoles;
 
     protected $fillable = [
         'avatar',
@@ -43,13 +48,27 @@ class User extends Authenticatable implements AuthenticatableContract
         ];
     }
 
+    public function getFilamentName(): string
+    {
+        return $this->nama;
+    }
+
+    /**
+     * Konfirmasi Aturan: SATU panel untuk semua role, pembatasan akses
+     * dilakukan lewat Policy per Resource (bukan di sini). Semua role yang
+     * berhasil login (termasuk yang status_suspend = true, karena mereka
+     * tetap perlu melihat Denda/Punishment miliknya sendiri untuk tahu
+     * alasan suspend) lolos ke panel. Guard sesungguhnya (Siswa tidak bisa
+     * CRUD Buku, Pustakawan tidak bisa ubah Setting, dst.) ditulis di
+     * masing-masing app/Policies/*Policy.php, di-enforce via Shield.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return true;
+    }
+
     public function levelBadge(): BelongsTo
     {
         return $this->belongsTo(LevelBadge::class);
     }
-
-    // TODO: GAP-SPEC - resolusi login multi-identifier (nisn/nip ATAU no_telepon) belum
-    // diimplementasikan. Filament default hanya support satu kolom username tetap.
-    // Butuh custom Login Page yang query:
-    //   User::where('nisn', $login)->orWhere('nip', $login)->orWhere('no_telepon', $login)->first()
 }

@@ -14,7 +14,7 @@ return new class extends Migration
             $table->id();
             $table->string('avatar')->nullable();
             $table->string('nama');
-            $table->enum('role', ['siswa', 'pegawai', 'pustakawan', 'admin'])->default('siswa');
+            $table->enum('role', ['siswa', 'pegawai', 'pustakawan', 'super_admin'])->default('siswa');
             $table->string('nis')->nullable()->unique();
             $table->string('nip')->nullable()->unique();
             $table->string('kelas')->nullable();

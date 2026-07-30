@@ -15,6 +15,8 @@ class Peminjaman extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
+    protected $table = 'peminjamans';
+
     protected $fillable = [
         'transaksi_id',
         'user_id',

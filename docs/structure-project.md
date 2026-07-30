@@ -11,9 +11,47 @@
 │   │   ├── RoleUser.php
 │   │   ├── SourceKunjungan.php
 │   │   ├── StatusPeminjaman.php
+│   │   ├── StatusRefund.php
 │   │   └── TipeDenda.php
 │   ├── Exceptions
 │   │   └── WhatsappGatewayException.php
+│   ├── Filament
+│   │   ├── Pages
+│   │   │   ├── Auth
+│   │   │   │   ├── Login.php
+│   │   │   │   ├── RequestPasswordReset.php
+│   │   │   │   └── ResetPassword.php
+│   │   │   └── TransaksiCepat.php
+│   │   └── Resources
+│   │       ├── BukuResource
+│   │       │   └── Pages
+│   │       │       ├── CreateBuku.php
+│   │       │       ├── EditBuku.php
+│   │       │       └── ListBukus.php
+│   │       ├── KategoriResource
+│   │       │   └── Pages
+│   │       │       ├── CreateKategori.php
+│   │       │       ├── EditKategori.php
+│   │       │       └── ListKategoris.php
+│   │       ├── PeminjamanResource
+│   │       │   └── Pages
+│   │       │       ├── CreatePeminjaman.php
+│   │       │       └── ListPeminjamans.php
+│   │       ├── PengembalianResource
+│   │       │   └── Pages
+│   │       │       └── ListPengembalians.php
+│   │       ├── RakResource
+│   │       │   ├── Pages
+│   │       │   │   ├── CreateRak.php
+│   │       │   │   ├── EditRak.php
+│   │       │   │   └── ListRaks.php
+│   │       │   └── RelationManagers
+│   │       │       └── BukusRelationManager.php
+│   │       ├── BukuResource.php
+│   │       ├── KategoriResource.php
+│   │       ├── PeminjamanResource.php
+│   │       ├── PengembalianResource.php
+│   │       └── RakResource.php
 │   ├── Http
 │   │   ├── Controllers
 │   │   │   ├── Api
@@ -31,6 +69,7 @@
 │   │   ├── Kategori.php
 │   │   ├── Kunjungan.php
 │   │   ├── LevelBadge.php
+│   │   ├── PasswordResetOtp.php
 │   │   ├── Peminjaman.php
 │   │   ├── Pengembalian.php
 │   │   ├── Point.php
@@ -44,12 +83,23 @@
 │   │   └── User.php
 │   ├── Observers
 │   │   ├── DendaObserver.php
+│   │   ├── SettingObserver.php
 │   │   └── UserObserver.php
+│   ├── Policies
+│   │   ├── BukuPolicy.php
+│   │   ├── KategoriPolicy.php
+│   │   ├── PeminjamanPolicy.php
+│   │   ├── PengembalianPolicy.php
+│   │   ├── RakPolicy.php
+│   │   └── RolePolicy.php
 │   ├── Providers
 │   │   ├── Filament
 │   │   │   └── DashboardPanelProvider.php
 │   │   └── AppServiceProvider.php
+│   ├── Rules
+│   │   └── FormatKartuRfid.php
 │   └── Services
+│       ├── PasswordResetOtpService.php
 │       ├── PeminjamanService.php
 │       ├── PointService.php
 │       ├── RfidResolverService.php
@@ -66,9 +116,11 @@
 │   ├── auth.php
 │   ├── cache.php
 │   ├── database.php
+│   ├── filament-shield.php
 │   ├── filesystems.php
 │   ├── logging.php
 │   ├── mail.php
+│   ├── permission.php
 │   ├── queue.php
 │   ├── services.php
 │   └── session.php
@@ -112,22 +164,36 @@
 │   │   ├── 2026_07_29_180511_create_buku_kategori_table.php
 │   │   ├── 2026_07_29_180512_create_kategori_rak_table.php
 │   │   ├── 2026_07_29_181943_add_level_badge_fk_to_users_table.php
+│   │   ├── 2026_07_29_222935_create_permission_tables.php
 │   │   ├── 2026_07_30_000001_add_unique_user_tanggal_to_kunjungans_table.php
 │   │   ├── 2026_07_30_000002_fix_unique_kunjungan_softdelete_aware.php
 │   │   ├── 2026_07_30_000003_rename_nis_to_nisn_in_users_table.php
 │   │   ├── 2026_07_30_000004_create_device_logs_table.php
-│   │   └── 2026_07_30_000005_create_firmware_releases_table.php
+│   │   ├── 2026_07_30_000005_create_firmware_releases_table.php
+│   │   ├── 2026_07_30_000006_create_password_reset_otps_table.php
+│   │   ├── 2026_07_30_000007_add_indexes_untuk_performa_query.php
+│   │   └── 2026_07_30_000008_add_status_refund_to_dendas_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
-│   │   └── SettingSeeder.php
+│   │   ├── SettingSeeder.php
+│   │   └── ShieldSeeder.php
 │   ├── database.sqlite
 │   └── .gitignore
+├── deploy
+│   └── supervisor
+│       └── perpustakaan-worker.conf
 ├── resources
 │   ├── css
 │   │   └── app.css
 │   ├── js
 │   │   └── app.js
 │   └── views
+│       ├── filament
+│       │   └── pages
+│       │       ├── auth
+│       │       │   ├── request-password-reset.blade.php
+│       │       │   └── reset-password.blade.php
+│       │       └── transaksi-cepat.blade.php
 │       └── welcome.blade.php
 ├── routes
 │   ├── api.php
@@ -151,6 +217,7 @@
 ├── package.json
 ├── phpunit.xml
 ├── README.md
-└── vite.config.js
+├── vite.config.js
+└── yarn.lock
 
-30 directories, 124 files
+52 directories, 169 files

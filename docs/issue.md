@@ -100,7 +100,8 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 - finalkan pondasi-pondasi, logic aplikasi, logic integrasi alat penghitung kunjungan, whatsapp gateway, dll. sebelum ke resource/FE
-
+- saya ingin ketika user scan kartu (menggunakan pembaca rfid yang terhubung ke komputer) lalu scan barcode itu otomatis mendeteksi apakah meminjam atau mengembalikan dalam satu halaman transaksi
+- finalkan resource atau page yang belum ada
 ---
 
 Lanjutkan/selesaikan implementasi proyek ini sesuai seluruh aturan di atas. Untuk setiap gap, jika penyelesaiannya memerlukan keputusan desain yang berdampak ke skema database, keamanan/otorisasi (Policy/Shield), atau kompatibilitas device RFID/firmware yang sudah terpasang di lapangan, **tanyakan secara eksplisit sebelum menulis kode** - jangan menebak lalu menyerahkan perubahan yang berisiko merusak data, akses user, atau koneksi device yang sudah berjalan di production.

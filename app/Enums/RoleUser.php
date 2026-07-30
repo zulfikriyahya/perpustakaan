@@ -7,5 +7,5 @@ enum RoleUser: string
     case Siswa = 'siswa';
     case Pegawai = 'pegawai';
     case Pustakawan = 'pustakawan';
-    case Admin = 'admin';
+    case Admin = 'super_admin';
 }

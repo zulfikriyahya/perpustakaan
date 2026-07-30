@@ -13,19 +13,16 @@ use Spatie\Permission\Models\Role;
  *
  * - super_admin (User.role = admin): akses penuh semua permission.
  * - pustakawan : full CRUD Buku/Kategori/Rak (master data) + Peminjaman/
- *                Pengembalian (proses pinjam-kembali, termasuk Action
- *                "Proses Pengembalian"/"Laporkan Hilang" - keduanya di-guard
- *                oleh ViewAny:Peminjaman, bukan permission terpisah, sesuai
- *                konfirmasi: hanya Admin & Pustakawan yang boleh akses sama
- *                sekali ke Resource ini).
+ *                Pengembalian (proses pinjam-kembali) + Denda (tandai
+ *                lunas - TODO: ASUMSI, lihat DendaResource) + lihat
+ *                Kunjungan/Transaksi (operasional harian, read-only).
  * - siswa/pegawai: TIDAK diberi permission Resource apa pun di panel ini.
- *   Kebutuhan "lihat point/badge/histori/denda pribadi" akan dipenuhi lewat
- *   halaman scoped-ke-user terpisah (bukan Resource CRUD Filament biasa) -
- *   BELUM dibuat di iterasi ini.
- *   TODO: GAP-SPEC - role Spatie 'siswa' dan 'pegawai' dibuat sebagai
- *   placeholder kosong sekarang supaya UserObserver/assignment role di masa
- *   depan tidak perlu migration ulang, tapi belum ada guna praktis sampai
- *   halaman "milik saya" dibuat dan permission-nya di-generate.
+ *
+ * ITERASI INI (Denda/Kunjungan/Transaksi/Setting): Delete/DeleteAny untuk
+ * ketiga Resource log (Denda/Kunjungan/Transaksi) SENGAJA tidak diberikan
+ * ke pustakawan - hanya super_admin (dikonfirmasi user: "read-only tapi
+ * Admin boleh hapus"). SettingResource sepenuhnya ditahan dulu (belum
+ * dibuat) sampai SettingObserver.php diverifikasi.
  */
 class ShieldSeeder extends Seeder
 {
@@ -83,33 +80,29 @@ class ShieldSeeder extends Seeder
                 'Replicate:Rak',
                 'Reorder:Rak',
 
-                // Peminjaman: create dipakai form manual fallback (lihat
-                // PeminjamanResource\Pages\CreatePeminjaman). Update/Delete
-                // TIDAK diberikan - status Peminjaman HANYA boleh berubah
-                // lewat PeminjamanService (Action Proses Pengembalian/
-                // Laporkan Hilang, atau cron harian), tidak ada halaman Edit
-                // di Resource ini sama sekali.
                 'ViewAny:Peminjaman',
                 'View:Peminjaman',
                 'Create:Peminjaman',
 
-                // Pengembalian: READ-ONLY di Resource (canCreate() => false),
-                // permission Create/Update/Delete tidak dipakai UI tapi tetap
-                // di-generate Shield - sengaja TIDAK diberikan ke pustakawan
-                // supaya tidak ada jalan lain mengubah data selain lewat
-                // PeminjamanService::prosesPengembalian().
                 'ViewAny:Pengembalian',
                 'View:Pengembalian',
+                'Update:Pengembalian',
+
+                // BARU iterasi ini - lihat catatan class di atas.
+                'ViewAny:Denda',
+                'View:Denda',
+                'Update:Denda',
+                'ViewAny:Kunjungan',
+                'View:Kunjungan',
+                'ViewAny:Transaksi',
+                'View:Transaksi',
             ])->get()
         );
 
-        // Placeholder kosong - lihat TODO: GAP-SPEC di atas class.
+        // Placeholder kosong - role belum punya guna praktis (lihat catatan lama).
         Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'pegawai', 'guard_name' => 'web']);
 
-        // Sinkronkan ulang semua user existing yang role App-nya 'admin'
-        // ke Spatie role 'super_admin', jaga-jaga kalau di-run setelah ada
-        // user baru sebelum Observer sempat jalan (mis. hasil import/seed).
         \App\Models\User::where('role', RoleUser::Admin)->each(
             fn($user) => $user->syncRoles(['super_admin'])
         );

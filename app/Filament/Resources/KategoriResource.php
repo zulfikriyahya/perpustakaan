@@ -33,7 +33,21 @@ class KategoriResource extends Resource
                 ->relationship('raks', 'nama')
                 ->multiple()
                 ->preload()
-                ->searchable(),
+                ->searchable()
+                ->createOptionForm([
+                    TextInput::make('nama')
+                        ->required()
+                        ->maxLength(255),
+                    TextInput::make('lokasi')
+                        ->maxLength(255),
+                    Select::make('kategoris')
+                        ->label('Kategori Terkait')
+                        ->relationship('kategoris', 'nama')
+                        ->multiple()
+                        ->preload()
+                        ->searchable(),
+                ])
+                ,
         ]);
     }
 

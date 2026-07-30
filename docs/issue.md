@@ -102,6 +102,123 @@ Ketentuan:
 - finalkan pondasi-pondasi, logic aplikasi, logic integrasi alat penghitung kunjungan, whatsapp gateway, dll. sebelum ke resource/FE
 - saya ingin ketika user scan kartu (menggunakan pembaca rfid yang terhubung ke komputer) lalu scan barcode itu otomatis mendeteksi apakah meminjam atau mengembalikan dalam satu halaman transaksi
 - finalkan resource atau page yang belum ada
+- import dan export -> master (xlsx file)
+- generate laporan bulanan (pdf file)
+- return redirect to index
+- 
+```
+# RuntimeException - Internal Server Error
+
+Tunggu 7 detik sebelum meminta OTP baru.
+
+PHP 8.4.14
+Laravel 13.23.0
+localhost:8000
+
+## Stack Trace
+
+0 - app/Services/PasswordResetOtpService.php:34
+1 - app/Filament/Pages/Auth/RequestPasswordReset.php:88
+2 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:36
+3 - vendor/laravel/framework/src/Illuminate/Container/Util.php:43
+4 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:96
+5 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:35
+6 - vendor/livewire/livewire/src/Wrapped.php:23
+7 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:708
+8 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:242
+9 - vendor/livewire/livewire/src/LivewireManager.php:131
+10 - vendor/livewire/livewire/src/Mechanisms/HandleRequests/HandleRequests.php:205
+11 - vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php:46
+12 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:276
+13 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:216
+14 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:822
+15 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
+16 - vendor/livewire/livewire/src/Mechanisms/HandleRequests/RequireLivewireHeaders.php:19
+17 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+18 - vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php:52
+19 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+20 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php:104
+21 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+22 - vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php:48
+23 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+24 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:120
+25 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:63
+26 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+27 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php:36
+28 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+29 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php:74
+30 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+31 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
+32 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:821
+33 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:800
+34 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:764
+35 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:753
+36 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:200
+37 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
+38 - vendor/livewire/livewire/src/Features/SupportDisablingBackButtonCache/DisableBackButtonCacheMiddleware.php:19
+39 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+40 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php:27
+41 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+42 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php:47
+43 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+44 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php:27
+45 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+46 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php:109
+47 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+48 - vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php:61
+49 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+50 - vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php:58
+51 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+52 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php:22
+53 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+54 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePathEncoding.php:28
+55 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+56 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
+57 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:175
+58 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:144
+59 - vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1227
+60 - public/index.php:20
+61 - vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php:23
+
+
+## Request
+
+POST /livewire-f8c356db/update
+
+## Headers
+
+* **host**: localhost:8000
+* **user-agent**: Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0
+* **accept**: */*
+* **accept-language**: id,en-US;q=0.7,en;q=0.3
+* **accept-encoding**: gzip, deflate, br, zstd
+* **referer**: http://localhost:8000/dashboard/password-reset/request
+* **content-type**: application/json
+* **x-livewire**: 1
+* **content-length**: 1011
+* **origin**: http://localhost:8000
+* **connection**: keep-alive
+* **cookie**: XSRF-TOKEN=eyJpdiI6IlQxWFdsOS93SDUvSmtBcmVkZDRZT3c9PSIsInZhbHVlIjoiQ3JOYUkvcDJYWjE5cEVpTlBtZTRMUEx3Q0R1N3ovTTVJM0s5R2VveEVmNUlKNlFVNEJaUkd1OTg1cXBIcVd1ZkNkYkgyeXF1NFhUZkVSMlpFU2lQYkUrRWM4cDh6QncxYldTdno2SG5WQWhNMWNzV1N6aEZKTnhkWXhKckFmVGYiLCJtYWMiOiI0MDY3NmMxZTYyNjAwMmNkYTY1MTM0NTJkMzMzMjc3ODk1ZTE0NjQyMTJmMmJmY2ViZWEzODM4ZTBhYjcxNzg1IiwidGFnIjoiIn0%3D; perpustakaan-session=eyJpdiI6InhOeFN2OXZFS0NoQjcxeU1qTks2SHc9PSIsInZhbHVlIjoic3VQNXI3TjZxemR2WDB1OWpsQkZOUEJVTGNMMGZPUXJBd2lHdXZhZ2dnbWMrb0NLZks5RG1PZTk1cXp2bngzQzFva0NQeVVuTmFIWEQ0UnQ2cmpnU3FLN2wrNFpjWld4bEpvOVBLK2t3eWZaSGpsRnRUOGw4Q3R4N1RwOGpBMmUiLCJtYWMiOiJiZDAwNzJhMDA0NmMwZmIxNWMwNjIwNGVkMDk0ZGNlOThhZmI1YjdlMWQyZTIzODBlNDA5NTU0OTY1N2U3MjVhIiwidGFnIjoiIn0%3D
+* **sec-fetch-dest**: empty
+* **sec-fetch-mode**: cors
+* **sec-fetch-site**: same-origin
+* **priority**: u=4
+
+## Route Context
+
+controller: Livewire\Mechanisms\HandleRequests\HandleRequests@handleUpdate
+route name: default-livewire.update
+middleware: web, Livewire\Mechanisms\HandleRequests\RequireLivewireHeaders
+
+## Route Parameters
+
+No route parameter data available.
+
+## Database Queries
+
+* mysql - select * from `users` where (`nisn` = '62895351856267' or `nip` = '62895351856267' or `no_telepon` = '62895351856267') and `users`.`deleted_at` is null limit 1 (1.28 ms)
+
+```
 ---
 
 Lanjutkan/selesaikan implementasi proyek ini sesuai seluruh aturan di atas. Untuk setiap gap, jika penyelesaiannya memerlukan keputusan desain yang berdampak ke skema database, keamanan/otorisasi (Policy/Shield), atau kompatibilitas device RFID/firmware yang sudah terpasang di lapangan, **tanyakan secara eksplisit sebelum menulis kode** - jangan menebak lalu menyerahkan perubahan yang berisiko merusak data, akses user, atau koneksi device yang sudah berjalan di production.

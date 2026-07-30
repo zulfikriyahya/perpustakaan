@@ -14,6 +14,10 @@ use RuntimeException;
 class CreatePeminjaman extends CreateRecord
 {
     protected static string $resource = PeminjamanResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 
     /**
      * Override total - TIDAK memakai Peminjaman::create($data) bawaan

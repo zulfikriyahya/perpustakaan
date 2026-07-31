@@ -41,6 +41,8 @@ class PengembalianResource extends Resource
 
     protected static ?string $navigationLabel = 'Pengembalian';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);

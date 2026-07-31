@@ -44,6 +44,8 @@ class DendaResource extends Resource
 
     protected static ?string $navigationLabel = 'Denda';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Keuangan';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);

@@ -33,6 +33,8 @@ class TransaksiResource extends Resource
 
     protected static ?string $navigationLabel = 'Transaksi';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Keuangan';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);

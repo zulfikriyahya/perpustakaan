@@ -28,8 +28,7 @@ class DashboardPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
-            // ->topNavigation()
-
+            ->topNavigation()
             ->globalSearch(false)
             ->default()
             ->databaseNotifications()
@@ -59,8 +58,10 @@ class DashboardPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
+                // \App\Filament\Widgets\PeminjamanStatsWidget::class,
+                // \App\Filament\Widgets\TrenKunjunganChartWidget::class,
+                // \App\Filament\Widgets\PeminjamanJatuhTempoWidget::class,
+                // \App\Filament\Widgets\DendaTerbaruWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

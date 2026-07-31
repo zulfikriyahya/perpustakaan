@@ -37,12 +37,11 @@ class PeminjamanResource extends Resource
 {
     protected static ?string $model = Peminjaman::class;
 
-    protected static ?string $slug = 'peminjaman';
+    protected static ?string $navigationLabel = 'Peminjaman';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-arrow-path-rounded-square';
-
-
-    protected static ?string $navigationLabel = 'Peminjaman';
 
     public static function form(Schema $schema): Schema
     {

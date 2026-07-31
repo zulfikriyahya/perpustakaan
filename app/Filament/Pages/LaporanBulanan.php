@@ -15,6 +15,8 @@ class LaporanBulanan extends Page
 
     protected static ?string $navigationLabel = 'Laporan Bulanan';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Laporan';
+
     protected string $view = 'filament.pages.laporan-bulanan';
 
     public ?array $data = [];

@@ -38,6 +38,8 @@ class TransaksiCepat extends Page
 
     protected static ?string $navigationLabel = 'Transaksi Cepat';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
+
     protected string $view = 'filament.pages.transaksi-cepat';
 
     public ?string $kartuInput = '';

@@ -38,6 +38,8 @@ class PengaturanSistem extends Page
 
     protected static ?string $navigationLabel = 'Pengaturan Sistem';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Sistem';
+
     protected string $view = 'filament.pages.pengaturan-sistem';
 
     public ?array $data = [];

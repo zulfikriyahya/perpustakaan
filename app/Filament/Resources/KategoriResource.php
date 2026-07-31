@@ -25,6 +25,8 @@ class KategoriResource extends Resource
 
     protected static ?string $navigationLabel = 'Kategori';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Master Data';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -51,8 +53,7 @@ class KategoriResource extends Resource
                         ->multiple()
                         ->preload()
                         ->searchable(),
-                ])
-                ,
+                ]),
         ]);
     }
 

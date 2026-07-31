@@ -29,6 +29,8 @@ class KunjunganResource extends Resource
 
     protected static ?string $navigationLabel = 'Kunjungan';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);

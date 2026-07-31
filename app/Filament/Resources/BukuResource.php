@@ -27,6 +27,8 @@ class BukuResource extends Resource
 
     protected static ?string $navigationLabel = 'Buku';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Master Data';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([

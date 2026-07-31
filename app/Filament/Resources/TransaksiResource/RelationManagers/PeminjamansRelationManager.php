@@ -22,7 +22,7 @@ class PeminjamansRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('id')
             ->columns([
-                TextColumn::make('buku.judul')
+                TextColumn::make('eksemplar.buku.judul')
                     ->label('Buku')
                     ->searchable(),
                 TextColumn::make('tanggal_jatuh_tempo')

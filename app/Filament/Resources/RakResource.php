@@ -5,7 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\RakExporter;
 use App\Filament\Imports\RakImporter;
 use App\Filament\Resources\RakResource\Pages;
-use App\Filament\Resources\RakResource\RelationManagers\BukusRelationManager;
+use App\Filament\Resources\RakResource\RelationManagers\EksemplarsRelationManager;
 use App\Models\Rak;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ImportAction;
@@ -60,9 +60,11 @@ class RakResource extends Resource
                     ->sortable(),
                 TextColumn::make('lokasi')
                     ->searchable(),
-                TextColumn::make('bukus_count')
-                    ->label('Jumlah Buku')
-                    ->counts('bukus')
+                // FIX: dulu counts('bukus') - kolom bukus.rak_id sudah tidak
+                // ada, jadi dihitung dari eksemplars (lihat Rak::eksemplars()).
+                TextColumn::make('eksemplars_count')
+                    ->label('Jumlah Eksemplar')
+                    ->counts('eksemplars')
                     ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -77,7 +79,7 @@ class RakResource extends Resource
     public static function getRelations(): array
     {
         return [
-            BukusRelationManager::class,
+            EksemplarsRelationManager::class,
         ];
     }
 

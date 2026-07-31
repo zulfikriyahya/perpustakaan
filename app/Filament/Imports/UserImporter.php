@@ -45,7 +45,7 @@ use Illuminate\Support\Str;
  * (lihat authorize() di UserResource) - JANGAN perluas permission
  * import ini ke role lain tanpa meninjau ulang dua risiko ini.
  *
- * Kolom 'avatar_path' (dikonfirmasi masuk ke import, menerima URL ATAU
+ * Kolom 'avatar' (dikonfirmasi masuk ke import, menerima URL ATAU
  * path - lihat resolveAvatar()):
  * - Diisi URL (http/https) -> file diunduh lalu disimpan ke disk 'public'
  *   folder 'user-avatar/' (SAMA dengan direktori FileUpload::make('avatar')
@@ -78,6 +78,21 @@ use Illuminate\Support\Str;
  *   LAMA DIHAPUS (di-null-kan). User tersebut TIDAK BISA tap RFID lagi
  *   sampai didaftarkan ulang. Jumlah kartu yang terhapus direkap di
  *   notifikasi selesai import supaya tidak terjadi diam-diam.
+ *
+ * BUG FIX (ditemukan iterasi ini, sama pola dengan KelasImporter):
+ * kolom 'kelas_nama', 'jurusan_kode', 'tahun_pelajaran_nama' adalah
+ * lookup-only murni (dipakai di resolveKtp(), lalu efeknya lewat
+ * KenaikanKelasService::assignKelas() di afterSave() - BUKAN kolom
+ * tabel 'users'). 'avatar' juga lookup/transform-only (hasil
+ * akhirnya ditulis ke kolom 'avatar', bukan 'avatar' - kolom
+ * 'avatar' sendiri tidak ada di tabel users). Keempatnya diberi
+ * ->fillRecordUsing() no-op supaya Filament tidak meng-assign atribut
+ * dinamis ini ke $record, yang akan memicu SQL error "Unknown column"
+ * saat save() - lihat detail penuh di docblock KelasImporter.
+ *
+ * 'no_kartu_rfid' dan 'password' TIDAK diberi fillRecordUsing() no-op -
+ * keduanya kolom ASLI tabel 'users', assignment akhirnya tetap lewat
+ * beforeSave()/resolvePassword() (override manual, aman dari bug ini).
  */
 class UserImporter extends Importer
 {
@@ -105,16 +120,22 @@ class UserImporter extends Importer
                 ->label('Nama kelas (opsional, khusus siswa)')
                 ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('VII A'),
+                ->example('VII A')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan (wajib jika kelas_nama diisi)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('Non_Jurusan'),
+                ->example('Non_Jurusan')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('2025/2026'),
+                ->example('2025/2026')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example(''),
@@ -125,7 +146,7 @@ class UserImporter extends Importer
                 ->example('081234567890'),
             ImportColumn::make('no_kartu_rfid')
                 ->label('No. kartu RFID (opsional)')
-                ->helperText('PERHATIAN: kosongkan HANYA jika memang ingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
+                ->helperText('PERHATIAN: kosongkan HANYA jika memang inginmenghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisatap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
                 ->rules(['nullable', new FormatKartuRfid])
                 ->example('1234567890'),
             ImportColumn::make('password')
@@ -133,11 +154,15 @@ class UserImporter extends Importer
                 ->helperText('Isi plaintext (otomatis di-hash saat disimpan). Kosongkan: user baru tetap dapat password random, user lama password TIDAK berubah.')
                 ->rules(['nullable', 'string', 'min:8', 'max:255'])
                 ->example(''),
-            ImportColumn::make('avatar_path')
+            ImportColumn::make('avatar')
                 ->label('Avatar - URL atau path (opsional)')
                 ->helperText('Isi URL gambar (https://...) atau path file yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
                 ->rules(['nullable', 'string', 'max:2048'])
-                ->example('https://contoh-sekolah.id/foto/siswa1.jpg'),
+                ->example('https://contoh-sekolah.id/foto/siswa1.jpg')
+                // BUG FIX - lookup/transform-only, hasil akhir ditulis ke
+                // kolom 'avatar' (beda nama) lewat resolveAvatar(), lihat
+                // docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -190,7 +215,7 @@ class UserImporter extends Importer
 
         $dipakaiUserLain = User::query()
             ->where('no_kartu_rfid', $nomorBaru)
-            ->when($this->record->exists, fn($q) => $q->whereKeyNot($this->record->id))
+            ->when($this->record->exists, fn ($q) => $q->whereKeyNot($this->record->id))
             ->exists();
 
         if ($dipakaiUserLain) {
@@ -216,7 +241,7 @@ class UserImporter extends Importer
         }
 
         if (! $this->record->exists) {
-            $this->record->password = Str::random(12); // di-hash otomatis via cast 'hashed'
+            $this->record->password = Str::random(12); // di-hash otomatisvia cast 'hashed'
         }
     }
 
@@ -225,28 +250,39 @@ class UserImporter extends Importer
      * Urutan resolusi: (1) URL http/https -> unduh, (2) sudah ada di disk
      * 'public' -> pakai langsung, (3) path absolut di filesystem server ->
      * salin ke disk 'public'. Kosong -> avatar lama tidak diubah.
+     *
+     * BUG FIX (ditemukan iterasi ini): nama file SEBELUMNYA selalu
+     * Str::uuid() - re-import avatar yang sama terus-menerus menumpuk
+     * file baru di disk tanpa pernah menghapus yang lama (kebocoran
+     * storage). Diubah jadi nama deterministik berbasis identitas user
+     * (NISN, fallback NIP - konsisten dengan kunci upsert di
+     * resolveRecord()): re-import MENIMPA file lama dengan nama sama,
+     * sama pola dengan upsert barcode di BukuImporter (Aturan poin 3).
+     * Ekstensi TETAP mengikuti sumber asli (bukan dipaksa .png) - konversi
+     * format gambar butuh library tambahan (GD/Imagick) yang belum
+     * diverifikasi terpasang di composer.json, lihat Aturan poin 7/15.
      */
     protected function resolveAvatar(): void
     {
-        $nilai = trim((string) ($this->data['avatar_path'] ?? ''));
+        $nilai = trim((string) ($this->data['avatar'] ?? ''));
 
         if ($nilai === '') {
             return;
         }
 
+        $namaFile = $this->namaFileAvatar($nilai);
+
         if (Str::startsWith($nilai, ['http://', 'https://'])) {
             try {
                 $response = Http::timeout(15)->get($nilai);
             } catch (\Throwable $e) {
-                throw new RowImportFailedException("Gagal mengunduh avatar dari URL \"{$nilai}\": {$e->getMessage()}");
+                throw new RowImportFailedException("Gagal mengunduh avatardari URL \"{$nilai}\": {$e->getMessage()}");
             }
 
             if (! $response->successful()) {
                 throw new RowImportFailedException("URL avatar \"{$nilai}\" tidak bisa diakses (HTTP {$response->status()}).");
             }
 
-            $ekstensi = pathinfo(parse_url($nilai, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION) ?: 'jpg';
-            $namaFile = 'user-avatar/' . Str::uuid() . '.' . $ekstensi;
             Storage::disk('public')->put($namaFile, $response->body());
             $this->record->avatar = $namaFile;
 
@@ -254,14 +290,16 @@ class UserImporter extends Importer
         }
 
         if (Storage::disk('public')->exists($nilai)) {
-            $this->record->avatar = $nilai;
+            // Sudah berupa path di disk 'public' - salin/rename ke nama
+            // deterministik supaya konsisten dengan dua kasus lain di
+            // bawah (bukan dipakai langsung dengan nama aslinya).
+            Storage::disk('public')->copy($nilai, $namaFile);
+            $this->record->avatar = $namaFile;
 
             return;
         }
 
         if (is_file($nilai)) {
-            $ekstensi = pathinfo($nilai, PATHINFO_EXTENSION) ?: 'jpg';
-            $namaFile = 'user-avatar/' . Str::uuid() . '.' . $ekstensi;
             Storage::disk('public')->put($namaFile, file_get_contents($nilai));
             $this->record->avatar = $namaFile;
 
@@ -269,6 +307,21 @@ class UserImporter extends Importer
         }
 
         throw new RowImportFailedException("Avatar \"{$nilai}\" tidak ditemukan (bukan URL valid, bukan file di storage, bukan path lokal di server).");
+    }
+
+    /**
+     * Nama file deterministik: '{nisn_atau_nip}.{ekstensi_sumber}'.
+     * NISN diprioritaskan (konsisten dengan resolveRecord()), fallback
+     * NIP jika NISN kosong - salah satu dijamin ada karena validasi
+     * 'required_without' di getColumns().
+     */
+    protected function namaFileAvatar(string $sumber): string
+    {
+        $identitas = trim((string) ($this->data['nisn'] ?? '')) ?: trim((string) ($this->data['nip'] ?? ''));
+
+        $ekstensi = pathinfo(parse_url($sumber, PHP_URL_PATH) ?? $sumber, PATHINFO_EXTENSION) ?: 'jpg';
+
+        return 'user-avatar/'.$identitas.'.'.$ekstensi;
     }
 
     protected function afterSave(): void
@@ -319,16 +372,16 @@ class UserImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import User selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal- buka riwayat import untuk lihat alasannya per baris.';
         }
 
         $kartuDihapus = (int) Cache::get("import-{$import->id}-kartu-dihapus", 0);
 
         if ($kartuDihapus > 0) {
-            $body .= " PERHATIAN: {$kartuDihapus} kartu RFID dihapus dari user (kolom dikosongkan di file) - user tersebut tidak bisa tap RFID sampai didaftarkan ulang.";
+            $body .= " PERHATIAN: {$kartuDihapus} kartu RFID dihapus dari user (kolom dikosongkan di file) - user tersebut tidak bisa tap RFID sampaididaftarkan ulang.";
         }
 
         Cache::forget("import-{$import->id}-kartu-dihapus");

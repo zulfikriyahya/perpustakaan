@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\Rak;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class BukuFactory extends Factory
@@ -18,10 +17,7 @@ class BukuFactory extends Factory
             'penulis' => fake()->name(),
             'penerbit' => fake()->company(),
             'isbn' => fake()->unique()->isbn13(),
-            'barcode' => fake()->unique()->ean13(),
-            'rak_id' => Rak::factory(),
             'harga_ganti' => fake()->randomFloat(2, 0, 500000),
-            'stok' => fake()->numberBetween(0, 20),
             'deskripsi' => fake()->text(),
         ];
     }

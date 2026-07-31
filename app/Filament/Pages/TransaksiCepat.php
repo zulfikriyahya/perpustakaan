@@ -3,8 +3,9 @@
 namespace App\Filament\Pages;
 
 use App\Enums\KondisiBuku;
+use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
-use App\Models\Buku;
+use App\Models\Eksemplar;
 use App\Models\Peminjaman;
 use App\Models\User;
 use App\Services\PeminjamanService;
@@ -16,10 +17,18 @@ use RuntimeException;
 
 /**
  * Halaman transaksi cepat: scan kartu (identifikasi user) -> scan barcode
- * buku satu per satu -> sistem OTOMATIS deteksi pinjam/kembali per buku,
- * diproses langsung tiap scan (TIDAK dikumpulkan dulu, sesuai keputusan
- * QA). Seluruh logic bisnis (limit, stok, Denda, Point, WA) tetap lewat
- * PeminjamanService - halaman ini murni orkestrasi UI (Aturan poin 3).
+ * EKSEMPLAR satu per satu -> sistem OTOMATIS deteksi pinjam/kembali per
+ * eksemplar, diproses langsung tiap scan (TIDAK dikumpulkan dulu, sesuai
+ * keputusan QA). Seluruh logic bisnis (limit, stok, Denda, Point, WA) tetap
+ * lewat PeminjamanService - halaman ini murni orkestrasi UI (Aturan poin 3).
+ *
+ * BUG FIX (iterasi ini): sebelumnya scan barcode query ke Buku.barcode dan
+ * Peminjaman.buku_id - keduanya sudah tidak ada lagi sejak migration
+ * 2026_08_02_000002-000004 (barcode & relasi pinjam kini per Eksemplar,
+ * bukan per judul Buku). Diganti total ke Eksemplar.barcode dan
+ * Peminjaman.eksemplar_id. Parameter ke PeminjamanService::pinjamBuku()
+ * juga diperbaiki dari 'bukuIds' (tidak sesuai signature) jadi
+ * 'eksemplarIds'.
  *
  * Reader RFID di komputer = USB keyboard-wedge (ketik ke input fokus,
  * seperti barcode scanner), BUKAN endpoint device Attendance Machine -
@@ -30,16 +39,16 @@ use RuntimeException;
  *
  * Rate limit anti-scan-ganda: barcode yang sama untuk user aktif yang
  * sama tidak boleh diproses ulang dalam window RATE_LIMIT_DETIK detik
- * (mencegah pinjam->kembali->pinjam tidak sengaja akibat buku ter-scan
- * 2x, mis. scanner bouncing atau operator tidak sadar sudah masuk).
- * Diguard via Cache (bukan DB), TTL pendek, tidak butuh migration.
+ * (mencegah pinjam->kembali->pinjam tidak sengaja akibat eksemplar
+ * ter-scan 2x, mis. scanner bouncing atau operator tidak sadar sudah
+ * masuk). Diguard via Cache (bukan DB), TTL pendek, tidak butuh migration.
  *
- * TODO: GAP-SPEC - window rate limit di-key per (user_id, buku_id), BUKAN
- * global per buku - asumsi: 2 user berbeda scan buku yang sama beruntun
- * (mis. serah terima cepat) tetap valid, hanya user yang SAMA scan buku
- * yang SAMA berulang yang di-block. Jika ternyata yang diinginkan adalah
- * block global per buku (siapapun operatornya), sesuaikan cache key di
- * bawah (buang bagian user->id).
+ * TODO: GAP-SPEC - window rate limit di-key per (user_id, eksemplar_id),
+ * BUKAN global per eksemplar - asumsi: 2 user berbeda scan eksemplar yang
+ * sama beruntun (mis. serah terima cepat) tetap valid, hanya user yang
+ * SAMA scan eksemplar yang SAMA berulang yang di-block. Jika ternyata
+ * yang diinginkan adalah block global per eksemplar (siapapun
+ * operatornya), sesuaikan cache key di bawah (buang bagian user->id).
  *
  * TODO: verifikasi signature terhadap versi package yang terpasang
  * (filament/filament versi sesuai composer.json) - properti $view dan
@@ -70,7 +79,7 @@ class TransaksiCepat extends Page
     public bool $bisaMeminjam = false;
 
     /**
-     * @var array<int, array{barcode: string, judul: string, aksi: string,pesan: string, sukses: bool}>
+     * @var array<int, array{barcode: string, judul: string, aksi: string, pesan: string, sukses: bool}>
      */
     public array $riwayatScan = [];
 
@@ -117,25 +126,25 @@ class TransaksiCepat extends Page
             return;
         }
 
-        $buku = Buku::query()->where('barcode', $barcode)->first();
+        $eksemplar = Eksemplar::query()->where('barcode', $barcode)->with('buku')->first();
 
-        if (! $buku) {
+        if (! $eksemplar) {
             $this->tambahRiwayat($barcode, '-', 'error', 'Barcode tidak ditemukan.', false);
 
             return;
         }
 
         // Rate limit anti-scan-ganda - dicek SEBELUM logic pinjam/kembali,
-        // supaya buku yang sama ter-scan 2x dalam window tidak memicu
+        // supaya eksemplar yang sama ter-scan 2x dalam window tidak memicu
         // toggle pinjam->kembali->pinjam yang tidak diinginkan.
-        $rateLimitKey = "transaksi-cepat-scan:{$this->user->id}:{$buku->id}";
+        $rateLimitKey = "transaksi-cepat-scan:{$this->user->id}:{$eksemplar->id}";
 
         if (Cache::has($rateLimitKey)) {
             $this->tambahRiwayat(
                 $barcode,
-                $buku->judul,
+                $eksemplar->buku->judul,
                 'ditolak',
-                'Buku ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
+                'Eksemplar ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
                 false,
             );
 
@@ -145,9 +154,9 @@ class TransaksiCepat extends Page
         Cache::put($rateLimitKey, true, self::RATE_LIMIT_DETIK);
 
         // Deteksi otomatis: ada Peminjaman aktif/terlambat milik user ini
-        // untuk buku ini -> kembalikan. Kalau tidak -> pinjam baru.
+        // untuk eksemplar ini -> kembalikan. Kalau tidak -> pinjam baru.
         $peminjamanAktif = Peminjaman::query()
-            ->where('buku_id', $buku->id)
+            ->where('eksemplar_id', $eksemplar->id)
             ->where('user_id', $this->user->id)
             ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat])
             ->first();
@@ -158,23 +167,27 @@ class TransaksiCepat extends Page
             if ($peminjamanAktif) {
                 $service->prosesPengembalian(
                     peminjaman: $peminjamanAktif,
-                    kondisi: KondisiBuku::Baik, // default, koreksi manuallewat PengembalianResource jika perlu
+                    kondisi: KondisiBuku::Baik, // default, koreksi manual lewat PengembalianResource jika perlu
                     diprosesOleh: auth()->user(),
                 );
-                $this->tambahRiwayat($barcode, $buku->judul, 'dikembalikan', 'Berhasil dikembalikan (kondisi: baik).', true);
+                $this->tambahRiwayat($barcode, $eksemplar->buku->judul, 'dikembalikan', 'Berhasil dikembalikan (kondisi: baik).', true);
             } else {
+                if ($eksemplar->status !== StatusEksemplar::Tersedia) {
+                    throw new RuntimeException("Eksemplar barcode '{$eksemplar->barcode}' tidak tersedia (status: {$eksemplar->status->value}).");
+                }
+
                 $service->pinjamBuku(
                     user: $this->user,
-                    bukuIds: [$buku->id],
+                    eksemplarIds: [$eksemplar->id],
                     diprosesOleh: auth()->user(),
                 );
-                $this->tambahRiwayat($barcode, $buku->judul, 'dipinjamkan', 'Berhasil dipinjamkan.', true);
+                $this->tambahRiwayat($barcode, $eksemplar->buku->judul, 'dipinjamkan', 'Berhasil dipinjamkan.', true);
             }
         } catch (RuntimeException $e) {
             // Gagal diproses - buka kembali rate limit supaya operator bisa
             // langsung retry tanpa perlu menunggu window habis.
             Cache::forget($rateLimitKey);
-            $this->tambahRiwayat($barcode, $buku->judul, 'error', $e->getMessage(), false);
+            $this->tambahRiwayat($barcode, $eksemplar->buku->judul, 'error', $e->getMessage(), false);
         }
 
         $this->bisaMeminjam = app(PeminjamanService::class)->bisaMeminjam($this->user->fresh());

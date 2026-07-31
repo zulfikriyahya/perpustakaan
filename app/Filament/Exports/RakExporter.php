@@ -28,16 +28,16 @@ class RakExporter extends Exporter
              */
             ExportColumn::make('kategoris')
                 ->label('Kategori Terkait')
-                ->formatStateUsing(fn(Rak $record) => $record->kategoris->pluck('nama')->implode('; ')),
+                ->formatStateUsing(fn (Rak $record) => $record->kategoris->pluck('nama')->implode('; ')),
         ];
     }
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Rak selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+        $body = 'Export Rak selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
         }
 
         return $body;

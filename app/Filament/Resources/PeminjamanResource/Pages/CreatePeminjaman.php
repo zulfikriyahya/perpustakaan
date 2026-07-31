@@ -33,12 +33,10 @@ class CreatePeminjaman extends CreateRecord
         try {
             $transaksi = app(PeminjamanService::class)->pinjamBuku(
                 user: User::findOrFail($data['user_id']),
-                bukuIds: $data['buku_ids'],
+                eksemplarIds: $data['eksemplar_ids'],
                 diprosesOleh: auth()->user(),
             );
 
-            // Filament expects instance dari $this->getModel() (Peminjaman) -
-            // kembalikan salah satu baris hasil transaksi (bisa multi-buku).
             return $transaksi->peminjamans->first();
         } catch (RuntimeException $e) {
             Notification::make()

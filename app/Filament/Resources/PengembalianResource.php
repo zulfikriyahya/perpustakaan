@@ -63,7 +63,7 @@ class PengembalianResource extends Resource
                     ->label('Peminjam')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('peminjaman.buku.judul')
+                TextColumn::make('peminjaman.eksemplar.buku.judul')
                     ->label('Buku')
                     ->searchable()
                     ->sortable(),

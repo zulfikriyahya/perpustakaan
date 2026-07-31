@@ -7,6 +7,21 @@ use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
 
+/**
+ * BUG FIX (iterasi ini, pola sama dengan bug 'kategoris' sebelumnya):
+ * kolom 'rak.nama' dan 'stok' sudah tidak ada lagi di tabel/model Buku
+ * sejak migration 2026_08_02_000002-000004 (rak & stok pindah jadi
+ * per-Eksemplar, bukan per-judul-buku) - keduanya dihapus dari sini.
+ *
+ * TODO: GAP-SPEC - kolom 'rak' hasil export sekarang menampilkan daftar
+ * nama Rak DISTINCT dari semua eksemplar buku ini (bisa lebih dari satu
+ * kalau eksemplar tersebar di rak berbeda), dipisah '; ' sama seperti
+ * 'kategori'. TAPI ini informasional saja - BukuImporter hanya menerima
+ * SATU nama rak per baris (dipakaikan ke SEMUA eksemplar baru dari
+ * selisih stok import itu), jadi hasil export TIDAK bisa diimpor ulang
+ * mentah-mentah kalau satu judul buku punya eksemplar di rak berbeda-beda.
+ * Admin perlu edit manual jadi satu nama rak sebelum import ulang.
+ */
 class BukuExporter extends Exporter
 {
     protected static ?string $model = Buku::class;
@@ -18,39 +33,33 @@ class BukuExporter extends Exporter
             ExportColumn::make('penulis'),
             ExportColumn::make('penerbit'),
             ExportColumn::make('isbn')->label('ISBN'),
-            ExportColumn::make('barcode'),
-            ExportColumn::make('rak.nama')->label('Rak'),
-            /**
-             * TODO: verifikasi signature formatStateUsing() terhadap versi
-             * filament/filament yang terpasang (composer.json: ^5.7).
-             *
-             * BUG FIX (ditemukan iterasi ini): sebelumnya kolom ini memakai
-             * dot-notation 'kategoris.nama' polos, yang oleh Filament
-             * digabung dengan pemisah default (', ') untuk relasi many.
-             * BukuImporter mem-parse kolom 'kategori' dengan pemisah ';'
-             * (Aturan poin 3, satu sumber kebenaran kontrak data) - hasil
-             * export TIDAK bisa langsung diimpor ulang tanpa admin sadar
-             * harus mengganti koma jadi titik-koma manual, dan jika lolos
-             * tanpa diedit, seluruh kategori buku akan ter-sync KOSONG
-             * (hilang diam-diam) karena string gabungan tidak cocok nama
-             * kategori manapun. Dipaksa pakai ';' di sini supaya alur
-             * export -> edit -> import ulang aman untuk admin pemula.
-             */
+            ExportColumn::make('tahun_terbit')->label('Tahun Terbit'),
+            ExportColumn::make('eksemplars')
+                ->label('Jumlah Eksemplar')
+                ->formatStateUsing(fn (Buku $record) => (string) $record->eksemplars()->count()),
+            ExportColumn::make('rak')
+                ->label('Rak (distinct, lihat catatan)')
+                ->formatStateUsing(fn (Buku $record) => $record->eksemplars()
+                    ->with('rak')
+                    ->get()
+                    ->pluck('rak.nama')
+                    ->filter()
+                    ->unique()
+                    ->implode('; ')),
             ExportColumn::make('kategoris')
                 ->label('Kategori')
-                ->formatStateUsing(fn(Buku $record) => $record->kategoris->pluck('nama')->implode('; ')),
+                ->formatStateUsing(fn (Buku $record) => $record->kategoris->pluck('nama')->implode('; ')),
             ExportColumn::make('harga_ganti')->label('Harga Ganti'),
-            ExportColumn::make('stok'),
             ExportColumn::make('deskripsi'),
         ];
     }
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Buku selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+        $body = 'Export Buku selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
         }
 
         return $body;

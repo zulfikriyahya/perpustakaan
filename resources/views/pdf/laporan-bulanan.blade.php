@@ -44,7 +44,7 @@
                     <tr>
                         <td>{{ $p->tanggal_pinjam->format('d-m-Y') }}</td>
                         <td>{{ $p->user->nama }}</td>
-                        <td>{{ $p->buku->judul }}</td>
+                        <td>{{ $p->eksemplar->buku->judul }}</td>
                         <td>{{ $p->tanggal_jatuh_tempo->format('d-m-Y') }}</td>
                         <td>{{ ucfirst($p->status->value) }}</td>
                     </tr>
@@ -78,7 +78,7 @@
                     <tr>
                         <td>{{ $p->tanggal_kembali->format('d-m-Y') }}</td>
                         <td>{{ $p->peminjaman->user->nama }}</td>
-                        <td>{{ $p->peminjaman->buku->judul }}</td>
+                        <td>{{ $p->peminjaman->eksemplar->buku->judul }}</td>
                         <td>{{ ucfirst($p->kondisi->value) }}</td>
                     </tr>
                 @empty

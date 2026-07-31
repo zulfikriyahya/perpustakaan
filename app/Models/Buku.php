@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\StatusEksemplar;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -20,10 +20,8 @@ class Buku extends Model
         'penulis',
         'penerbit',
         'isbn',
-        'barcode',
-        'rak_id',
+        'tahun_terbit',
         'harga_ganti',
-        'stok',
         'deskripsi',
     ];
 
@@ -31,12 +29,8 @@ class Buku extends Model
     {
         return [
             'harga_ganti' => 'decimal:2',
+            'tahun_terbit' => 'integer',
         ];
-    }
-
-    public function rak(): BelongsTo
-    {
-        return $this->belongsTo(Rak::class);
     }
 
     public function kategoris(): BelongsToMany
@@ -44,8 +38,14 @@ class Buku extends Model
         return $this->belongsToMany(Kategori::class);
     }
 
-    public function peminjamans(): HasMany
+    public function eksemplars(): HasMany
     {
-        return $this->hasMany(Peminjaman::class);
+        return $this->hasMany(Eksemplar::class);
+    }
+
+    // dihitung on-the-fly, bukan field statis lagi
+    public function stokTersedia(): int
+    {
+        return $this->eksemplars()->where('status', StatusEksemplar::Tersedia)->count();
     }
 }

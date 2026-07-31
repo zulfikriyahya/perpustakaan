@@ -3,10 +3,11 @@
 namespace App\Filament\Resources;
 
 use App\Enums\KondisiBuku;
+use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\PeminjamanExporter;
 use App\Filament\Resources\PeminjamanResource\Pages;
-use App\Models\Buku;
+use App\Models\Eksemplar;
 use App\Models\Peminjaman;
 use App\Services\PeminjamanService;
 use Filament\Actions\Action;
@@ -54,13 +55,17 @@ class PeminjamanResource extends Resource
                 ->searchable()
                 ->preload()
                 ->required(),
-            Select::make('buku_ids')
-                ->label('Buku')
+            Select::make('eksemplar_ids')
+                ->label('Eksemplar (scan barcode / pilih)')
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->options(fn () => Buku::query()->where('stok', '>', 0)->pluck('judul', 'id'))
-                ->helperText('Hanya menampilkan buku dengan stok tersedia. Validasi limit peminjaman aktif & status suspend dicek otomatis saat submit.')
+                ->options(fn () => Eksemplar::query()
+                    ->where('status', StatusEksemplar::Tersedia)
+                    ->with('buku')
+                    ->get()
+                    ->mapWithKeys(fn ($e) => [$e->id => "{$e->buku->judul} — {$e->barcode}"]))
+                ->helperText('Hanya menampilkan eksemplar berstatus tersedia. Validasi limit peminjaman aktif & status suspend dicek otomatis saat submit.')
                 ->required(),
         ]);
     }
@@ -78,7 +83,7 @@ class PeminjamanResource extends Resource
                     ->label('Peminjam')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('buku.judul')
+                TextColumn::make('eksemplar.buku.judul')
                     ->label('Buku')
                     ->searchable()
                     ->sortable(),

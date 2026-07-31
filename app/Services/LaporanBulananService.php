@@ -41,7 +41,7 @@ class LaporanBulananService
     protected function dataPeminjaman(Carbon $awal, Carbon $akhir): array
     {
         $records = Peminjaman::query()
-            ->with(['user', 'buku'])
+            ->with(['user', 'eksemplar.buku'])
             ->whereBetween('tanggal_pinjam', [$awal->toDateString(), $akhir->toDateString()])
             ->orderBy('tanggal_pinjam')
             ->get();
@@ -56,7 +56,7 @@ class LaporanBulananService
     protected function dataPengembalian(Carbon $awal, Carbon $akhir): array
     {
         $records = Pengembalian::query()
-            ->with(['peminjaman.user', 'peminjaman.buku'])
+            ->with(['peminjaman.user', 'peminjaman.eksemplar.buku'])
             ->whereBetween('tanggal_kembali', [$awal->toDateString(), $akhir->toDateString()])
             ->orderBy('tanggal_kembali')
             ->get();

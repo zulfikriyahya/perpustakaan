@@ -14,6 +14,10 @@ use Filament\Actions\Imports\Models\Import;
  * dan "rak a" dianggap Rak yang sama. Jika sudah ada baris cocok,
  * ejaan/kapitalisasi LAMA di database yang dipertahankan - hanya kolom
  * lain (lokasi, kategori) yang ter-update.
+ *
+ * BUG FIX (ditemukan iterasi ini, sama pola dengan KelasImporter): kolom
+ * 'kategori' lookup-only, lihat docblock BukuImporter/KelasImporter
+ * untuk detail penuh.
  */
 class RakImporter extends Importer
 {
@@ -21,10 +25,10 @@ class RakImporter extends Importer
 
     /**
      * @var array<int, string>|null ID Kategori hasil resolve nama di
-     *     beforeSave() - null berarti kolom 'kategori' kosong. Divalidasi
-     *     SEBELUM save() supaya baris dengan nama kategori tidak
-     *     ditemukan GAGAL TOTAL (dikonfirmasi, sama pola dengan
-     *     BukuImporter) - bukan diam-diam melepas kategori yang salah.
+     *                              beforeSave() - null berarti kolom 'kategori' kosong. Divalidasi
+     *                              SEBELUM save() supaya baris dengan nama kategori tidak
+     *                              ditemukan GAGAL TOTAL (dikonfirmasi, sama pola dengan
+     *                              BukuImporter) - bukan diam-diam melepas kategori yang salah.
      */
     protected ?array $kategoriIdsTerresolve = null;
 
@@ -40,9 +44,11 @@ class RakImporter extends Importer
                 ->example('Lantai 1, dekat pintu masuk'),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
-                ->helperText('Isi persis sesuai nama Kategori yang sudah ada di Master Data > Kategori. Jika salah satu nama tidak ditemukan, seluruh baris ini akan GAGAL diimpor (tidak sebagian tersimpan).')
+                ->helperText('Isi persis sesuai nama Kategori yang sudah ada di Master Data > Kategori. Jika salah satu nama tidak ditemukan, seluruhbaris ini akan GAGAL diimpor (tidak sebagian tersimpan).')
                 ->rules(['nullable', 'string'])
-                ->example('Fiksi;Sains'),
+                ->example('Fiksi;Sains')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -63,7 +69,7 @@ class RakImporter extends Importer
             $namaTidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
 
             if (! empty($namaTidakDitemukan)) {
-                throw new RowImportFailedException('Kategori tidak ditemukan: "' . implode('", "', $namaTidakDitemukan) . '". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
+                throw new RowImportFailedException('Kategori tidak ditemukan: "'.implode('", "', $namaTidakDitemukan).'". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
             }
 
             $this->kategoriIdsTerresolve = $kategoris->pluck('id')->all();
@@ -79,10 +85,10 @@ class RakImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Rak selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Rak selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal- buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;

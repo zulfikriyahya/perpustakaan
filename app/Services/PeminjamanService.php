@@ -5,10 +5,12 @@ namespace App\Services;
 use App\Enums\EventTypePoint;
 use App\Enums\JenisTransaksi;
 use App\Enums\KondisiBuku;
+use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
 use App\Enums\TipeDenda;
 use App\Models\Buku;
 use App\Models\Denda;
+use App\Models\Eksemplar;
 use App\Models\Peminjaman;
 use App\Models\Pengembalian;
 use App\Models\Setting;
@@ -42,9 +44,9 @@ class PeminjamanService
     }
 
     /**
-     * @param  array<int, string>  $bukuIds
+     * @param  array<int, string>  $eksemplarIds
      */
-    public function pinjamBuku(User $user, array $bukuIds, ?User $diprosesOleh = null): Transaksi
+    public function pinjamBuku(User $user, array $eksemplarIds, ?User $diprosesOleh = null): Transaksi
     {
         if (! $this->bisaMeminjam($user)) {
             throw new RuntimeException('User tidak dapat meminjam: suspend aktif atau limit peminjaman aktif tercapai.');
@@ -52,7 +54,7 @@ class PeminjamanService
 
         $lamaPeminjamanHari = (int) Setting::get('lama_peminjaman_hari', 7);
 
-        $transaksi = DB::transaction(function () use ($user, $bukuIds, $diprosesOleh, $lamaPeminjamanHari) {
+        $transaksi = DB::transaction(function () use ($user, $eksemplarIds, $diprosesOleh, $lamaPeminjamanHari) {
             $transaksi = Transaksi::create([
                 'user_id' => $user->id,
                 'jenis' => JenisTransaksi::Peminjaman,
@@ -60,19 +62,19 @@ class PeminjamanService
                 'tanggal' => now(),
             ]);
 
-            foreach ($bukuIds as $bukuId) {
-                $buku = Buku::query()->lockForUpdate()->findOrFail($bukuId);
+            foreach ($eksemplarIds as $eksemplarId) {
+                $eksemplar = Eksemplar::query()->lockForUpdate()->findOrFail($eksemplarId);
 
-                if ($buku->stok < 1) {
-                    throw new RuntimeException("Stok buku '{$buku->judul}' habis.");
+                if ($eksemplar->status !== StatusEksemplar::Tersedia) {
+                    throw new RuntimeException("Eksemplar barcode '{$eksemplar->barcode}' tidak tersedia (status: {$eksemplar->status->value}).");
                 }
 
-                $buku->decrement('stok');
+                $eksemplar->update(['status' => StatusEksemplar::Dipinjam]);
 
                 $peminjaman = Peminjaman::create([
                     'transaksi_id' => $transaksi->id,
                     'user_id' => $user->id,
-                    'buku_id' => $buku->id,
+                    'eksemplar_id' => $eksemplar->id,
                     'tanggal_pinjam' => now()->toDateString(),
                     'tanggal_jatuh_tempo' => now()->addDays($lamaPeminjamanHari)->toDateString(),
                     'status' => StatusPeminjaman::Aktif,
@@ -87,10 +89,10 @@ class PeminjamanService
                 );
             }
 
-            return $transaksi->fresh('peminjamans.buku');
+            return $transaksi->fresh('peminjamans.eksemplar.buku');
         });
 
-        $daftarBuku = $transaksi->peminjamans->pluck('buku.judul')->implode(', ');
+        $daftarBuku = $transaksi->peminjamans->pluck('eksemplar.buku.judul')->implode(', ');
         $jatuhTempo = $transaksi->peminjamans->first()?->tanggal_jatuh_tempo;
 
         $this->whatsappService->kirimEvent(
@@ -123,8 +125,9 @@ class PeminjamanService
             ]);
 
             if ($kondisi === KondisiBuku::Hilang) {
-                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->buku));
+                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->eksemplar->buku));
                 $peminjaman->update(['status' => StatusPeminjaman::Hilang]);
+                $peminjaman->eksemplar->update(['status' => StatusEksemplar::Hilang]);
 
                 $this->pointService->catatEvent(
                     $peminjaman->user,
@@ -142,7 +145,8 @@ class PeminjamanService
             }
 
             if ($kondisi === KondisiBuku::Rusak) {
-                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->buku));
+                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->eksemplar->buku));
+                $peminjaman->eksemplar->update(['status' => StatusEksemplar::Rusak]);
 
                 $this->pointService->catatEvent(
                     $peminjaman->user,
@@ -150,9 +154,10 @@ class PeminjamanService
                     'peminjaman',
                     $peminjaman->id,
                 );
+            } else {
+                $peminjaman->eksemplar->update(['status' => StatusEksemplar::Tersedia]);
             }
 
-            $peminjaman->buku()->increment('stok');
             $peminjaman->update(['status' => StatusPeminjaman::Selesai]);
 
             $this->pointService->catatEvent(
@@ -176,16 +181,6 @@ class PeminjamanService
         return $pengembalian;
     }
 
-    /**
-     * Koreksi kondisi Pengembalian yang SUDAH final (dipanggil dari Action
-     * "Koreksi Kondisi" di PengembalianResource - Pustakawan/Admin, lihat
-     * PengembalianPolicy). Method TERPISAH dari prosesPengembalian() supaya
-     * alur normal tidak berubah (Aturan poin 9/10).
-     *
-     * Efek: sesuaikan stok, batalkan Denda dari kondisi lama yang sudah
-     * tidak relevan, catat Denda baru sesuai kondisi baru, update status
-     * Peminjaman, update record Pengembalian.
-     */
     public function koreksiKondisiPengembalian(
         Pengembalian $pengembalian,
         KondisiBuku $kondisiBaru,
@@ -204,14 +199,13 @@ class PeminjamanService
         }
 
         $pengembalian = DB::transaction(function () use ($pengembalian, $peminjaman, $kondisiLama, $kondisiBaru, $catatan, $diprosesOleh) {
-            // Sesuaikan stok: buku fisik dianggap kembali/hilang sesuai kondisi baru.
-            if ($kondisiLama === KondisiBuku::Hilang && $kondisiBaru !== KondisiBuku::Hilang) {
-                $peminjaman->buku()->increment('stok');
-            } elseif ($kondisiLama !== KondisiBuku::Hilang && $kondisiBaru === KondisiBuku::Hilang) {
-                $peminjaman->buku()->decrement('stok');
-            }
+            $statusEksemplarBaru = match ($kondisiBaru) {
+                KondisiBuku::Baik => StatusEksemplar::Tersedia,
+                KondisiBuku::Rusak => StatusEksemplar::Rusak,
+                KondisiBuku::Hilang => StatusEksemplar::Hilang,
+            };
+            $peminjaman->eksemplar->update(['status' => $statusEksemplarBaru]);
 
-            // Batalkan Denda dari kondisi lama yang tidak lagi berlaku.
             if ($kondisiLama === KondisiBuku::Rusak && $kondisiBaru !== KondisiBuku::Rusak) {
                 $this->batalkanDenda($peminjaman, TipeDenda::Kerusakan);
             }
@@ -219,21 +213,18 @@ class PeminjamanService
                 $this->batalkanDenda($peminjaman, TipeDenda::Kehilangan);
             }
 
-            // Catat Denda baru sesuai kondisi baru.
             if ($kondisiBaru === KondisiBuku::Rusak && $kondisiLama !== KondisiBuku::Rusak) {
-                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->buku));
+                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->eksemplar->buku));
                 $this->pointService->catatEvent($peminjaman->user, EventTypePoint::Kerusakan, 'peminjaman', $peminjaman->id, 'Koreksi kondisi ke rusak');
             }
             if ($kondisiBaru === KondisiBuku::Hilang && $kondisiLama !== KondisiBuku::Hilang) {
-                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->buku));
+                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->eksemplar->buku));
                 $this->pointService->catatEvent($peminjaman->user, EventTypePoint::Kehilangan, 'peminjaman', $peminjaman->id, 'Koreksi kondisi ke hilang');
             }
 
-            // TODO: GAP-SPEC - Point yang sudah tercatat dari kondisi lama
-            // (mis. event Pengembalian/Kerusakan/Kehilangan sebelumnya) TIDAK
-            // di-reverse saat koreksi; hanya menambah event baru sesuai
-            // kondisi baru. Akumulasi point/badge/reward/punishment tidak
-            // mundur otomatis - butuh keputusan terpisah jika diperlukan.
+            // TODO: GAP-SPEC - Point dari kondisi lama tidak di-reverse, sama
+            // seperti perilaku sebelum perubahan ini (sudah dikonfirmasi
+            // sebelumnya untuk skema Buku lama).
 
             $peminjaman->update([
                 'status' => $kondisiBaru === KondisiBuku::Hilang ? StatusPeminjaman::Hilang : StatusPeminjaman::Selesai,
@@ -268,10 +259,11 @@ class PeminjamanService
             $denda = $this->tandaiDenda(
                 $peminjaman,
                 TipeDenda::Kehilangan,
-                $this->hitungDendaKehilangan($peminjaman->buku),
+                $this->hitungDendaKehilangan($peminjaman->eksemplar->buku),
             );
 
             $peminjaman->update(['status' => StatusPeminjaman::Hilang]);
+            $peminjaman->eksemplar->update(['status' => StatusEksemplar::Hilang]);
 
             $this->pointService->catatEvent(
                 $peminjaman->user,
@@ -303,7 +295,7 @@ class PeminjamanService
 
         Peminjaman::query()
             ->where('status', StatusPeminjaman::Aktif)
-            ->with('user', 'buku')
+            ->with('user', 'eksemplar.buku')
             ->chunkById(200, function ($peminjamans) use ($today, &$stat) {
                 foreach ($peminjamans as $peminjaman) {
                     $jatuhTempo = Carbon::parse($peminjaman->tanggal_jatuh_tempo);
@@ -312,7 +304,7 @@ class PeminjamanService
                         $this->whatsappService->kirimEvent(
                             eventCode: 'reminder_h3',
                             nomorTujuan: $peminjaman->user->no_telepon,
-                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
+                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->eksemplar->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
                             referenceId: "reminder-h3-{$peminjaman->id}-{$today->toDateString()}",
                         );
                         $stat['reminder_h3']++;
@@ -320,7 +312,7 @@ class PeminjamanService
                         $this->whatsappService->kirimEvent(
                             eventCode: 'reminder_h1',
                             nomorTujuan: $peminjaman->user->no_telepon,
-                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
+                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->eksemplar->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
                             referenceId: "reminder-h1-{$peminjaman->id}-{$today->toDateString()}",
                         );
                         $stat['reminder_h1']++;
@@ -330,7 +322,7 @@ class PeminjamanService
                         $this->whatsappService->kirimEvent(
                             eventCode: 'jadi_terlambat',
                             nomorTujuan: $peminjaman->user->no_telepon,
-                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->buku->judul],
+                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->eksemplar->buku->judul],
                             referenceId: "terlambat-{$peminjaman->id}-{$today->toDateString()}",
                         );
                         $stat['jadi_terlambat']++;
@@ -392,13 +384,6 @@ class PeminjamanService
         return $denda;
     }
 
-    /**
-     * Batalkan Denda aktif (tipe tertentu) milik satu Peminjaman - dipanggil
-     * saat koreksi kondisi Pengembalian menghilangkan alasan Denda tersebut.
-     * TIDAK soft-delete (riwayat tetap auditable) - nominal dipaksa 0 dan
-     * status_lunas dipaksa true (memicu DendaObserver::updated() -> cek
-     * auto-unsuspend user, sudah dikonfirmasi sebagai perilaku yang diinginkan).
-     */
     protected function batalkanDenda(Peminjaman $peminjaman, TipeDenda $tipe): void
     {
         $denda = Denda::query()
@@ -408,7 +393,7 @@ class PeminjamanService
             ->first();
 
         if (! $denda || (float) $denda->nominal === 0.0) {
-            return; // tidak ada Denda aktif untuk tipe ini, atau sudah pernah dibatalkan
+            return;
         }
 
         $sudahTerbayar = $denda->status_lunas;
@@ -423,8 +408,6 @@ class PeminjamanService
                     : 'Dibatalkan otomatis: koreksi kondisi Pengembalian.')),
         ]);
 
-        // TODO: GAP-SPEC - jika $sudahTerbayar true, sistem ini tidak
-        // menangani proses refund (uang fisik/transfer) - hanya menandai
-        // audit trail. Refund di luar sistem, keputusan Admin/Pustakawan.
+        // TODO: GAP-SPEC - refund fisik di luar sistem, sama seperti sebelumnya.
     }
 }

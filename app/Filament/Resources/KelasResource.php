@@ -60,10 +60,10 @@ class KelasResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(KelasImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Kelas::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Kelas::class) ?? false),
                 ExportAction::make()
                     ->exporter(KelasExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Kelas::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Kelas::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),

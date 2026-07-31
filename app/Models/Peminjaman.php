@@ -20,7 +20,7 @@ class Peminjaman extends Model
     protected $fillable = [
         'transaksi_id',
         'user_id',
-        'buku_id',
+        'eksemplar_id',
         'tanggal_pinjam',
         'tanggal_jatuh_tempo',
         'status',
@@ -48,9 +48,9 @@ class Peminjaman extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function buku(): BelongsTo
+    public function eksemplar(): BelongsTo
     {
-        return $this->belongsTo(Buku::class);
+        return $this->belongsTo(Eksemplar::class);
     }
 
     public function diprosesOleh(): BelongsTo

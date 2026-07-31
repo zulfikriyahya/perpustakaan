@@ -11,6 +11,7 @@
 │   │   ├── RoleUser.php
 │   │   ├── SourceKunjungan.php
 │   │   ├── StatusAkademik.php
+│   │   ├── StatusEksemplar.php
 │   │   ├── StatusPeminjaman.php
 │   │   ├── StatusRefund.php
 │   │   ├── StatusRiwayatKelas.php
@@ -60,10 +61,12 @@
 │   │   │   └── TransaksiCepat.php
 │   │   ├── Resources
 │   │   │   ├── BukuResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreateBuku.php
-│   │   │   │       ├── EditBuku.php
-│   │   │   │       └── ListBukus.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateBuku.php
+│   │   │   │   │   ├── EditBuku.php
+│   │   │   │   │   └── ListBukus.php
+│   │   │   │   └── RelationManagers
+│   │   │   │       └── EksemplarsRelationManager.php
 │   │   │   ├── DendaResource
 │   │   │   │   └── Pages
 │   │   │   │       └── ListDendas.php
@@ -118,7 +121,7 @@
 │   │   │   │   │   ├── EditRak.php
 │   │   │   │   │   └── ListRaks.php
 │   │   │   │   └── RelationManagers
-│   │   │   │       └── BukusRelationManager.php
+│   │   │   │       └── EksemplarsRelationManager.php
 │   │   │   ├── RewardLogResource
 │   │   │   │   └── Pages
 │   │   │   │       └── ListRewardLogs.php
@@ -183,6 +186,7 @@
 │   │   ├── Buku.php
 │   │   ├── Denda.php
 │   │   ├── DeviceLog.php
+│   │   ├── Eksemplar.php
 │   │   ├── FirmwareRelease.php
 │   │   ├── Jurusan.php
 │   │   ├── Kategori.php
@@ -267,6 +271,7 @@
 │   ├── factories
 │   │   ├── BukuFactory.php
 │   │   ├── DendaFactory.php
+│   │   ├── EksemplarFactory.php
 │   │   ├── KategoriFactory.php
 │   │   ├── KunjunganFactory.php
 │   │   ├── LevelBadgeFactory.php
@@ -322,7 +327,12 @@
 │   │   ├── 2026_08_01_000004_create_kelas_tahun_pelajarans_table.php
 │   │   ├── 2026_08_01_000005_create_riwayat_kelas_siswas_table.php
 │   │   ├── 2026_08_01_000006_replace_kelas_column_in_users_table.php
-│   │   └── 2026_08_01_000007_drop_unique_riwayat_kelas_siswas.php
+│   │   ├── 2026_08_01_000007_drop_unique_riwayat_kelas_siswas.php
+│   │   ├── 2026_08_02_000001_add_unique_nama_to_kelas_table.php
+│   │   ├── 2026_08_02_000002_create_eksemplars_table.php
+│   │   ├── 2026_08_02_000003_alter_bukus_table_drop_barcode_rak_stok.php
+│   │   ├── 2026_08_02_000004_alter_peminjamans_table_buku_to_eksemplar.php
+│   │   └── 2026_08_02_000005_add_tahun_terbit_to_bukus_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
@@ -380,4 +390,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-87 directories, 294 files
+88 directories, 303 files

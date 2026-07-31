@@ -168,6 +168,23 @@ enum StatusAkademik: string
 ```
 ---
 
+## app/Enums/StatusEksemplar.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum StatusEksemplar: string
+{
+    case Tersedia = 'tersedia';
+    case Dipinjam = 'dipinjam';
+    case Rusak = 'rusak';
+    case Hilang = 'hilang';
+}
+
+```
+---
+
 ## app/Enums/StatusPeminjaman.php
 ```php
 <?php
@@ -267,6 +284,21 @@ use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
 
+/**
+ * BUG FIX (iterasi ini, pola sama dengan bug 'kategoris' sebelumnya):
+ * kolom 'rak.nama' dan 'stok' sudah tidak ada lagi di tabel/model Buku
+ * sejak migration 2026_08_02_000002-000004 (rak & stok pindah jadi
+ * per-Eksemplar, bukan per-judul-buku) - keduanya dihapus dari sini.
+ *
+ * TODO: GAP-SPEC - kolom 'rak' hasil export sekarang menampilkan daftar
+ * nama Rak DISTINCT dari semua eksemplar buku ini (bisa lebih dari satu
+ * kalau eksemplar tersebar di rak berbeda), dipisah '; ' sama seperti
+ * 'kategori'. TAPI ini informasional saja - BukuImporter hanya menerima
+ * SATU nama rak per baris (dipakaikan ke SEMUA eksemplar baru dari
+ * selisih stok import itu), jadi hasil export TIDAK bisa diimpor ulang
+ * mentah-mentah kalau satu judul buku punya eksemplar di rak berbeda-beda.
+ * Admin perlu edit manual jadi satu nama rak sebelum import ulang.
+ */
 class BukuExporter extends Exporter
 {
     protected static ?string $model = Buku::class;
@@ -278,11 +310,23 @@ class BukuExporter extends Exporter
             ExportColumn::make('penulis'),
             ExportColumn::make('penerbit'),
             ExportColumn::make('isbn')->label('ISBN'),
-            ExportColumn::make('barcode'),
-            ExportColumn::make('rak.nama')->label('Rak'),
-            ExportColumn::make('kategoris.nama')->label('Kategori'), // dipisah koma otomatis oleh Filament untuk relasi many
+            ExportColumn::make('tahun_terbit')->label('Tahun Terbit'),
+            ExportColumn::make('eksemplars')
+                ->label('Jumlah Eksemplar')
+                ->formatStateUsing(fn (Buku $record) => (string) $record->eksemplars()->count()),
+            ExportColumn::make('rak')
+                ->label('Rak (distinct, lihat catatan)')
+                ->formatStateUsing(fn (Buku $record) => $record->eksemplars()
+                    ->with('rak')
+                    ->get()
+                    ->pluck('rak.nama')
+                    ->filter()
+                    ->unique()
+                    ->implode('; ')),
+            ExportColumn::make('kategoris')
+                ->label('Kategori')
+                ->formatStateUsing(fn (Buku $record) => $record->kategoris->pluck('nama')->implode('; ')),
             ExportColumn::make('harga_ganti')->label('Harga Ganti'),
-            ExportColumn::make('stok'),
             ExportColumn::make('deskripsi'),
         ];
     }
@@ -480,6 +524,12 @@ class KelasTahunPelajaranExporter extends Exporter
     {
         return [
             ExportColumn::make('kelas.nama')->label('Kelas'),
+            // BARU iterasi ini - KelasTahunPelajaranImporter MEWAJIBKAN
+            // kolom jurusan_kode (lihat catatan "PERUBAHAN KONTRAK" di
+            // Importer). Tanpa kolom ini di hasil export, admin tidak
+            // bisa langsung mengimpor ulang file yang sama - harus
+            // mencari kode jurusan secara manual dulu di resource lain.
+            ExportColumn::make('kelas.jurusan.kode')->label('Kode Jurusan'),
             ExportColumn::make('tahunPelajaran.nama')->label('Tahun Pelajaran'),
             ExportColumn::make('waliKelas.nama')->label('Wali Kelas'),
             ExportColumn::make('waliKelas.nip')->label('NIP Wali Kelas'),
@@ -600,7 +650,7 @@ class PeminjamanExporter extends Exporter
     {
         return [
             ExportColumn::make('user.nama')->label('Peminjam'),
-            ExportColumn::make('buku.judul')->label('Buku'),
+            ExportColumn::make('eksemplar.buku.judul')->label('Buku'),
             ExportColumn::make('tanggal_pinjam'),
             ExportColumn::make('tanggal_jatuh_tempo'),
             ExportColumn::make('status'),
@@ -642,7 +692,7 @@ class PengembalianExporter extends Exporter
     {
         return [
             ExportColumn::make('peminjaman.user.nama')->label('Peminjam'),
-            ExportColumn::make('peminjaman.buku.judul')->label('Buku'),
+            ExportColumn::make('peminjaman.eksemplar.buku.judul')->label('Buku'),
             ExportColumn::make('tanggal_kembali'),
             ExportColumn::make('kondisi'),
             ExportColumn::make('catatan'),
@@ -766,7 +816,19 @@ class RakExporter extends Exporter
         return [
             ExportColumn::make('nama'),
             ExportColumn::make('lokasi'),
-            ExportColumn::make('kategoris.nama')->label('Kategori Terkait'),
+            /**
+             * TODO: verifikasi signature formatStateUsing() terhadap versi
+             * filament/filament yang terpasang (composer.json: ^5.7).
+             *
+             * BUG FIX (ditemukan iterasi ini): sama kasus dengan
+             * BukuExporter::kategoris - dipaksa pemisah ';' supaya cocok
+             * dengan parser RakImporter (kolom 'kategori', Aturan poin 3),
+             * mencegah kategori rak ter-sync kosong diam-diam saat file
+             * hasil export diimpor ulang tanpa diedit.
+             */
+            ExportColumn::make('kategoris')
+                ->label('Kategori Terkait')
+                ->formatStateUsing(fn (Rak $record) => $record->kategoris->pluck('nama')->implode('; ')),
         ];
     }
 
@@ -962,6 +1024,14 @@ use Filament\Actions\Exports\Models\Export;
  *
  * Kolom 'kelas' (string bebas) diganti relasi kelasTahunPelajaran sejak
  * migration 2026_08_01_000006 - lihat kolom di bawah.
+ *
+ * BUG FIX (ditemukan iterasi ini): sebelumnya export tidak menyertakan
+ * kode Jurusan. UserImporter::resolveKtp() MEWAJIBKAN 'jurusan_kode'
+ * setiap kali 'kelas_nama' diisi (Aturan poin 3, satu sumber kebenaran
+ * kontrak data) - tanpa kolom ini, hasil export TIDAK bisa diimpor ulang
+ * untuk siswa manapun yang sudah punya kelas: seluruh baris tersebut akan
+ * GAGAL dengan pesan "jurusan_kode kosong", sama pola dengan bug
+ * kategori yang sudah diperbaiki di BukuExporter/RakExporter.
  */
 class UserExporter extends Exporter
 {
@@ -975,6 +1045,8 @@ class UserExporter extends Exporter
             ExportColumn::make('nisn')->label('NISN'),
             ExportColumn::make('nip')->label('NIP'),
             ExportColumn::make('kelasTahunPelajaran.kelas.nama')->label('Kelas'),
+            // BARU iterasi ini - lihat BUG FIX di atas.
+            ExportColumn::make('kelasTahunPelajaran.kelas.jurusan.kode')->label('Kode Jurusan'),
             ExportColumn::make('kelasTahunPelajaran.tahunPelajaran.nama')->label('Tahun Pelajaran'),
             ExportColumn::make('status_akademik')->label('Status Akademik'),
             ExportColumn::make('jabatan'),
@@ -1006,60 +1078,115 @@ class UserExporter extends Exporter
 
 namespace App\Filament\Imports;
 
+use App\Enums\StatusEksemplar;
 use App\Models\Buku;
 use App\Models\Kategori;
 use App\Models\Rak;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
+use Illuminate\Support\Str;
 
 /**
- * TODO: GAP-SPEC - resolveRecord() upsert berdasarkan 'barcode' (create
- * jika tidak ada, update jika sudah ada). Belum dikonfirmasi apakah
- * perilaku yang diinginkan justru reject baris dengan barcode duplikat.
+ * resolveRecord() upsert berdasarkan 'isbn' (barcode kini per eksemplar,
+ * bukan per judul buku - lihat migration 2026_08_02_000003/000004).
+ * Baris tanpa ISBN selalu jadi Buku baru.
+ *
+ * BUG FIX (iterasi ini): kolom 'barcode' SEBELUMNYA requiredMapping tanpa
+ * fillRecordUsing no-op, padahal kolom 'barcode' sudah di-drop dari tabel
+ * bukus - Filament akan mencoba assign $record->barcode sebelum save()
+ * dan menyebabkan SQL error "Unknown column". Kolom 'barcode' dihapus
+ * total dari sini; barcode eksemplar HANYA digenerate otomatis di
+ * afterSave() (lihat TODO: GAP-SPEC di bawah), tidak lagi diambil dari
+ * file import.
+ *
+ * BUG FIX (pola sama, ditemukan sebelumnya): kolom 'rak' dan 'kategori'
+ * adalah lookup-only (bukan kolom asli tabel 'bukus') - tetap pakai
+ * ->fillRecordUsing() no-op supaya tidak di-assign ke $record sebelum
+ * save().
+ *
+ * KEPUTUSAN dikonfirmasi:
+ * - harga_ganti WAJIB diisi manual di file - baris kosong GAGAL TOTAL
+ *   (bukan default 0).
+ * - Duplikasi ISBN antar baris/antar import: STOK diakumulasi (tambah
+ *   eksemplar baru sejumlah selisih), eksemplar existing tidak dikurangi
+ *   meski stok di file diturunkan.
  */
 class BukuImporter extends Importer
 {
     protected static ?string $model = Buku::class;
+
+    /**
+     * @var array<int, string>|null ID Kategori hasil resolve nama di
+     *                              beforeSave() - null berarti kolom 'kategori' kosong (tidak
+     *                              ada perubahan relasi). Divalidasi SEBELUM save() supaya baris
+     *                              dengan nama kategori typo/tidak ditemukan GAGAL TOTAL
+     *                              (dikonfirmasi) - bukan tersimpan sebagian dengan kategori
+     *                              yang salah/hilang diam-diam.
+     */
+    protected ?array $kategoriIdsTerresolve = null;
 
     public static function getColumns(): array
     {
         return [
             ImportColumn::make('judul')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Laskar Pelangi'),
             ImportColumn::make('penulis')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('Andrea Hirata'),
             ImportColumn::make('penerbit')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('Bentang Pustaka'),
             ImportColumn::make('isbn')
                 ->label('ISBN')
-                ->rules(['nullable', 'string', 'max:255']),
-            ImportColumn::make('barcode')
-                ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('9789793062792'),
+            ImportColumn::make('tahun_terbit')
+                ->label('Tahun Terbit')
+                ->numeric()
+                ->rules(['nullable', 'integer', 'digits:4'])
+                ->example('2008'),
             ImportColumn::make('rak')
-                ->label('Rak (nama)')
-                ->rules(['nullable', 'string']),
+                ->label('Rak (nama, opsional)')
+                ->helperText('Isi persis sesuai nama Rak yang sudah ada di Master Data > Rak. Jika tidak ditemukan, buku diimpor tanpa lokasi rak (bukan dibuatkan Rak baru otomatis).')
+                ->rules(['nullable', 'string'])
+                ->example('Rak A')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
-                ->rules(['nullable', 'string']),
+                ->helperText('Isi persis sesuai nama Kategori yang sudah ada di Master Data > Kategori. Contoh 2 kategori: "Fiksi;Sains". Kategori yang tidak ditemukan namanya akan membuat baris GAGAL.')
+                ->rules(['nullable', 'string'])
+                ->example('Fiksi;Sastra Indonesia')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('harga_ganti')
                 ->label('Harga Ganti')
+                ->helperText('WAJIB diisi manual - dipakai sebagai basis perhitungan Denda kerusakan/kehilangan. Baris tanpa nilai ini akan GAGAL, tidak ada default otomatis.')
                 ->numeric()
-                ->rules(['required', 'numeric', 'min:0']),
+                ->rules(['required', 'numeric', 'min:0'])
+                ->example('75000'),
             ImportColumn::make('stok')
+                ->helperText('Jumlah eksemplar fisik untuk ISBN ini. Import ulang ISBN yang sama akan MENAMBAH eksemplar sejumlah selisih (stok baru - jumlah eksemplar existing), tidak pernah mengurangi eksemplar yang sudah ada.')
                 ->numeric()
-                ->rules(['required', 'integer', 'min:0']),
+                ->rules(['required', 'integer', 'min:0'])
+                ->example('3'),
             ImportColumn::make('deskripsi')
-                ->rules(['nullable', 'string']),
+                ->rules(['nullable', 'string'])
+                ->example('Novel tentang perjuangan anak-anak Belitung mengejar pendidikan.'),
         ];
     }
 
     public function resolveRecord(): ?Buku
     {
-        // upsert - lihat TODO: GAP-SPEC di atas class.
-        return Buku::query()->firstOrNew(['barcode' => $this->data['barcode']]);
+        if (empty($this->data['isbn'])) {
+            return new Buku;
+        }
+
+        return Buku::query()->firstOrNew(['isbn' => $this->data['isbn']]);
     }
 
     /**
@@ -1069,18 +1196,48 @@ class BukuImporter extends Importer
      */
     protected function beforeSave(): void
     {
-        if (! empty($this->data['rak'])) {
-            $rak = Rak::query()->where('nama', trim($this->data['rak']))->first();
-            $this->record->rak_id = $rak?->id;
+        // FIX: baris "$this->record->rak_id = ..." DIHAPUS. Buku tidak lagi
+        // punya kolom rak_id (migration 2026_08_02_000003) - rak hanya
+        // relevan di level Eksemplar, ditangani di afterSave().
+        if (! empty($this->data['kategori'])) {
+            $namaKategoris = array_values(array_filter(array_map('trim', explode(';', $this->data['kategori']))));
+            $kategoris = Kategori::query()->whereIn('nama', $namaKategoris)->get(['id', 'nama']);
+
+            $namaTidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
+
+            if (! empty($namaTidakDitemukan)) {
+                throw new RowImportFailedException('Kategori tidak ditemukan: "'.implode('", "', $namaTidakDitemukan).'". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
+            }
+
+            $this->kategoriIdsTerresolve = $kategoris->pluck('id')->all();
         }
     }
 
     protected function afterSave(): void
     {
-        if (! empty($this->data['kategori'])) {
-            $namaKategoris = array_filter(array_map('trim', explode(';', $this->data['kategori'])));
-            $kategoriIds = Kategori::query()->whereIn('nama', $namaKategoris)->pluck('id');
-            $this->record->kategoris()->sync($kategoriIds);
+        if ($this->kategoriIdsTerresolve !== null) {
+            $this->record->kategoris()->sync($this->kategoriIdsTerresolve);
+        }
+
+        // TODO: GAP-SPEC - strategi generate barcode otomatis saat import
+        // belum dikonfirmasi selain format dasar ini. Format:
+        // "{ISBN-or-JUDULSLUG}-{urutan}". Konfirmasi sebelumnya: stok
+        // diakumulasi (tambah eksemplar sejumlah selisih), tidak pernah
+        // mengurangi eksemplar existing meski stok di file diturunkan.
+        $rak = ! empty($this->data['rak'])
+            ? Rak::query()->where('nama', trim($this->data['rak']))->first()
+            : null;
+
+        $stokDiminta = (int) ($this->data['stok'] ?? 0);
+        $eksemplarSaatIni = $this->record->eksemplars()->count();
+        $selisih = $stokDiminta - $eksemplarSaatIni;
+
+        for ($i = 0; $i < $selisih; $i++) {
+            $this->record->eksemplars()->create([
+                'barcode' => strtoupper(($this->record->isbn ?: Str::slug($this->record->judul)).'-'.($eksemplarSaatIni + $i + 1)),
+                'rak_id' => $rak?->id,
+                'status' => StatusEksemplar::Tersedia,
+            ]);
         }
     }
 
@@ -1120,10 +1277,13 @@ class JurusanImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Ilmu Pengetahuan Alam'),
             ImportColumn::make('kode')
+                ->helperText('Kode unik jurusan, dipakai sebagai acuan di import Kelas & Kelas per Tahun Pelajaran. Jika kode sudah ada, data Jurusan tersebut akan diperbarui.')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('IPA'),
         ];
     }
 
@@ -1193,10 +1353,10 @@ class KategoriImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Kategori selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Kategori selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1220,14 +1380,23 @@ use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
 /**
- * TODO: ASUMSI - upsert berdasarkan kombinasi ('nama', 'jurusan_id'),
- * BUKAN 'nama' saja, karena migration tidak memberi unique constraint
- * pada Kelas.nama sendiri (dua Kelas beda jurusan bisa punya nama sama).
- * Jika sumber data ternyata menjamin nama Kelas unik global, upsert key
- * ini bisa disederhanakan - konfirmasi dulu sebelum dianggap final.
+ * Upsert berdasarkan 'nama' SAJA (dikonfirmasi: nama Kelas unik secara
+ * global lintas Jurusan - lihat migration
+ * 2026_08_02_000001_add_unique_nama_to_kelas_table). Sebelumnya upsert
+ * key adalah kombinasi (nama, jurusan_id) - DIUBAH sesuai konfirmasi ini.
  *
- * TODO: ASUMSI - referensi Jurusan dari kolom 'jurusan_kode' (via kode
- * unik Jurusan), bukan nama Jurusan, untuk menghindari ambiguitas nama.
+ * 'jurusan_kode' tetap direferensikan via kode unik Jurusan (bukan nama)
+ * untuk menghindari ambiguitas nama Jurusan.
+ *
+ * BUG FIX (ditemukan iterasi ini): 'jurusan_kode' adalah kolom
+ * lookup-only (bukan kolom asli tabel 'kelas' - lihat Schema kelas: id,
+ * nama, tingkat, jurusan_id, timestamps). Tanpa ->fillRecordUsing(),
+ * Filament otomatis meng-assign $record->jurusan_kode = state SEBELUM
+ * save(), yang lolos dari validasi Eloquent (properti dinamis tetap
+ * dianggap dirty attribute) dan menyebabkan SQLSTATE[42S22] "Unknown
+ * column 'jurusan_kode'" saat INSERT/UPDATE - baris gagal total dengan
+ * pesan generik "Terjadi kesalahan sistem". fillRecordUsing() no-op
+ * memastikan resolusi HANYA lewat resolveRecord() (Aturan poin 3, DRY).
  */
 class KelasImporter extends Importer
 {
@@ -1237,21 +1406,31 @@ class KelasImporter extends Importer
     {
         return [
             ImportColumn::make('nama')
+                ->label('Nama kelas (mis. X IPA 1)')
+                ->helperText('Harus unik secara global - tidak boleh ada 2Kelas dengan nama sama meski beda Jurusan.')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('X IPA 1'),
             ImportColumn::make('tingkat')
+                ->helperText('Angka tingkat, mis. 10, 11, 12 - dipakai untuk urutan proses Kenaikan Kelas.')
                 ->requiredMapping()
                 ->numeric()
-                ->rules(['required', 'integer', 'min:1']),
+                ->rules(['required', 'integer', 'min:1'])
+                ->example('10'),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode Jurusan (opsional)')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->helperText('Lihat daftar kode di menu Master Data > Jurusan. Kosongkan jika kelas ini tidak terikat jurusan tertentu.')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('IPA')
+                // BUG FIX - lihat docblock class. Kolom ini bukan kolom
+                // asli tabel 'kelas', jangan biarkan Filament auto-assign.
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
     public function resolveRecord(): ?Kelas
     {
-        $jurusanId = null;
+        $record = Kelas::query()->firstOrNew(['nama' => trim($this->data['nama'])]);
 
         if (! empty($this->data['jurusan_kode'])) {
             $jurusan = Jurusan::query()->where('kode', $this->data['jurusan_kode'])->first();
@@ -1260,13 +1439,18 @@ class KelasImporter extends Importer
                 throw new RowImportFailedException("Jurusan dengan kode \"{$this->data['jurusan_kode']}\" tidak ditemukan.");
             }
 
-            $jurusanId = $jurusan->id;
+            $record->jurusan_id = $jurusan->id;
+        } else {
+            // DIKONFIRMASI: kolom jurusan_kode dikosongkan (baik saat
+            // create maupun UPDATE Kelas existing) -> jurusan_id
+            // di-null-kan/dilepas, BUKAN dibiarkan tidak berubah. Admin
+            // yang re-import Kelas untuk update field lain (mis. hanya
+            // 'tingkat') WAJIB tetap mengisi jurusan_kode di file jika
+            // tidak ingin assignment Jurusan-nya ikut terhapus.
+            $record->jurusan_id = null;
         }
 
-        return Kelas::query()->firstOrNew([
-            'nama' => $this->data['nama'],
-            'jurusan_id' => $jurusanId,
-        ]);
+        return $record;
     }
 
     public static function getCompletedNotificationBody(Import $import): string
@@ -1315,6 +1499,14 @@ use Filament\Actions\Imports\Models\Import;
  * memperbarui diri lewat ->example() di bawah).
  *
  * Wali kelas direferensikan via NIP, WAJIB bukan role super_admin.
+ *
+ * BUG FIX (ditemukan iterasi ini, sama pola dengan KelasImporter): SEMUA
+ * kolom di sini (kelas_nama, jurusan_kode, tahun_pelajaran_nama,
+ * wali_kelas_nip) adalah lookup-only - tabel 'kelas_tahun_pelajarans'
+ * hanya punya kelas_id/tahun_pelajaran_id/wali_kelas_id. Tanpa
+ * ->fillRecordUsing() no-op, Filament berisiko meng-assign atribut
+ * dinamis ini ke $record dan menyebabkan SQL error "Unknown column"
+ * saat save() - lihat detail penuh di docblock KelasImporter.
  */
 class KelasTahunPelajaranImporter extends Importer
 {
@@ -1327,23 +1519,27 @@ class KelasTahunPelajaranImporter extends Importer
                 ->label('Nama kelas')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
-                ->example('X-1'),
+                ->example('X-1')
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan')
                 ->helperText('Wajib diisi - lihat daftar kode di menu Master Data > Jurusan, supaya kelas dengan nama yang sama di jurusan berbeda tidak tertukar.')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
-                ->example('IPA'),
+                ->example('IPA')
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
-                ->example('2025/2026'),
+                ->example('2025/2026')
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('wali_kelas_nip')
                 ->label('NIP wali kelas (opsional)')
                 ->helperText('Kosongkan jika belum ada wali kelas yang ditunjuk.')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('198501012010011001'),
+                ->example('198501012010011001')
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -1385,7 +1581,7 @@ class KelasTahunPelajaranImporter extends Importer
         $waliKelas = User::query()->where('nip', trim($this->data['wali_kelas_nip']))->first();
 
         if (! $waliKelas) {
-            throw new RowImportFailedException("NIP wali kelas \"{$this->data['wali_kelas_nip']}\" tidak ditemukan. Pastikan user dengan NIP tersebut sudah terdaftar.");
+            throw new RowImportFailedException("NIP wali kelas \"{$this->data['wali_kelas_nip']}\" tidak ditemukan. Pastikan user dengan NIP tersebutsudah terdaftar.");
         }
 
         if ($waliKelas->role === RoleUser::Admin) {
@@ -1397,10 +1593,10 @@ class KelasTahunPelajaranImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Kelas per Tahun Pelajaran selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Kelas per Tahun Pelajaran selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1466,10 +1662,10 @@ class LevelBadgeImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Level Badge selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Level Badge selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1536,10 +1732,10 @@ class PunishmentImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Punishment selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Punishment selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1557,6 +1753,7 @@ namespace App\Filament\Imports;
 
 use App\Models\Kategori;
 use App\Models\Rak;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -1566,10 +1763,23 @@ use Filament\Actions\Imports\Models\Import;
  * dan "rak a" dianggap Rak yang sama. Jika sudah ada baris cocok,
  * ejaan/kapitalisasi LAMA di database yang dipertahankan - hanya kolom
  * lain (lokasi, kategori) yang ter-update.
+ *
+ * BUG FIX (ditemukan iterasi ini, sama pola dengan KelasImporter): kolom
+ * 'kategori' lookup-only, lihat docblock BukuImporter/KelasImporter
+ * untuk detail penuh.
  */
 class RakImporter extends Importer
 {
     protected static ?string $model = Rak::class;
+
+    /**
+     * @var array<int, string>|null ID Kategori hasil resolve nama di
+     *                              beforeSave() - null berarti kolom 'kategori' kosong. Divalidasi
+     *                              SEBELUM save() supaya baris dengan nama kategori tidak
+     *                              ditemukan GAGAL TOTAL (dikonfirmasi, sama pola dengan
+     *                              BukuImporter) - bukan diam-diam melepas kategori yang salah.
+     */
+    protected ?array $kategoriIdsTerresolve = null;
 
     public static function getColumns(): array
     {
@@ -1583,8 +1793,11 @@ class RakImporter extends Importer
                 ->example('Lantai 1, dekat pintu masuk'),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
+                ->helperText('Isi persis sesuai nama Kategori yang sudah ada di Master Data > Kategori. Jika salah satu nama tidak ditemukan, seluruhbaris ini akan GAGAL diimpor (tidak sebagian tersimpan).')
                 ->rules(['nullable', 'string'])
-                ->example('Fiksi;Sains'),
+                ->example('Fiksi;Sains')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -1596,21 +1809,35 @@ class RakImporter extends Importer
             ?? new Rak(['nama' => $nama]);
     }
 
-    protected function afterSave(): void
+    protected function beforeSave(): void
     {
         if (! empty($this->data['kategori'])) {
-            $namaKategoris = array_filter(array_map('trim', explode(';', $this->data['kategori'])));
-            $kategoriIds = Kategori::query()->whereIn('nama', $namaKategoris)->pluck('id');
-            $this->record->kategoris()->sync($kategoriIds);
+            $namaKategoris = array_values(array_filter(array_map('trim', explode(';', $this->data['kategori']))));
+            $kategoris = Kategori::query()->whereIn('nama', $namaKategoris)->get(['id', 'nama']);
+
+            $namaTidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
+
+            if (! empty($namaTidakDitemukan)) {
+                throw new RowImportFailedException('Kategori tidak ditemukan: "'.implode('", "', $namaTidakDitemukan).'". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
+            }
+
+            $this->kategoriIdsTerresolve = $kategoris->pluck('id')->all();
+        }
+    }
+
+    protected function afterSave(): void
+    {
+        if ($this->kategoriIdsTerresolve !== null) {
+            $this->record->kategoris()->sync($this->kategoriIdsTerresolve);
         }
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Rak selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Rak selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal- buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1671,10 +1898,10 @@ class RewardImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Reward selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Reward selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1704,14 +1931,20 @@ class TahunPelajaranImporter extends Importer
     {
         return [
             ImportColumn::make('nama')
+                ->label('Nama (mis. 2025/2026)')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('2025/2026'),
             ImportColumn::make('tanggal_mulai')
+                ->helperText('Gunakan format tanggal YYYY-MM-DD (mis. 2025-07-14) supaya tidak salah baca oleh Excel/Google Sheets di komputer dengan format regional berbeda.')
                 ->requiredMapping()
-                ->rules(['required', 'date']),
+                ->rules(['required', 'date'])
+                ->example('2025-07-14'),
             ImportColumn::make('tanggal_selesai')
+                ->helperText('Format sama dengan Tanggal Mulai (YYYY-MM-DD), harus sama atau setelah Tanggal Mulai.')
                 ->requiredMapping()
-                ->rules(['required', 'date', 'after_or_equal:tanggal_mulai']),
+                ->rules(['required', 'date', 'after_or_equal:tanggal_mulai'])
+                ->example('2026-06-30'),
         ];
     }
 
@@ -1758,6 +1991,8 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -1768,8 +2003,42 @@ use Illuminate\Support\Str;
  * Upsert berdasarkan 'nisn' jika ada, fallback 'nip' - baris tanpa
  * keduanya akan gagal (lihat rules 'required_without').
  *
- * Password digenerate random - TIDAK ada mekanisme kirim WA/email
- * notifikasi password ke user baru dalam iterasi ini.
+ * Kolom 'password' (dikonfirmasi masuk ke import, plaintext, di-hash
+ * bcrypt otomatis lewat cast 'hashed' di Model User):
+ * - Diisi -> password user (baru maupun existing) diganti sesuai isian.
+ * - Dikosongkan, user BARU -> tetap auto-generate random 12 karakter
+ *   (perilaku lama dipertahankan, TIDAK ada mekanisme kirim WA/email
+ *   notifikasi password ke user baru dalam iterasi ini).
+ * - Dikosongkan, user EXISTING -> password lama TIDAK diubah sama sekali.
+ *
+ * PERINGATAN KEAMANAN (dikonfirmasi, RISIKO DITERIMA SADAR - bukan
+ * kealpaan): resolveAvatar() di bawah bisa (a) menyalin FILE APA PUN
+ * yang bisa dibaca proses PHP di server ke folder publik jika diisi
+ * path absolut (risiko path traversal / kebocoran file sensitif mis.
+ * .env), dan (b) melakukan HTTP request ke alamat mana pun termasuk
+ * jaringan internal jika diisi URL (risiko SSRF). Fitur ini SENGAJA
+ * tidak dibatasi karena hanya super_admin yang punya akses Import User
+ * (lihat authorize() di UserResource) - JANGAN perluas permission
+ * import ini ke role lain tanpa meninjau ulang dua risiko ini.
+ *
+ * Kolom 'avatar' (dikonfirmasi masuk ke import, menerima URL ATAU
+ * path - lihat resolveAvatar()):
+ * - Diisi URL (http/https) -> file diunduh lalu disimpan ke disk 'public'
+ *   folder 'user-avatar/' (SAMA dengan direktori FileUpload::make('avatar')
+ *   di UserResource, Aturan poin 3 - satu sumber kebenaran lokasi file).
+ * - Diisi path yang SUDAH ada di disk 'public' (mis. hasil upload manual
+ *   sebelumnya) -> dipakai langsung sebagai nilai kolom avatar.
+ * - Diisi path absolut yang ada di filesystem server (mis. hasil transfer
+ *   file massal oleh admin sebelum import) -> disalin ke disk 'public'
+ *   folder 'user-avatar/'.
+ * - Tidak ditemukan di ketiga kemungkinan di atas -> baris GAGAL
+ *   (RowImportFailedException), bukan diam-diam dilewati.
+ * - Dikosongkan -> avatar lama (jika ada) TIDAK diubah.
+ * TODO: GAP-SPEC - algoritma resolusi "path" di atas (cek disk 'public'
+ * dulu, baru cek filesystem absolut) adalah ASUMSI untuk memudahkan admin
+ * pemula (cukup isi nama file atau URL, tidak perlu tahu detail storage
+ * disk). Perlu dikonfirmasi apakah ini sudah cukup atau butuh dukungan
+ * sumber lain (mis. path relatif ke disk selain 'public').
  *
  * Kolom 'no_kartu_rfid' (dikonfirmasi masuk ke import, sebelumnya
  * sengaja dikeluarkan demi keamanan) - aturan MENGIKAT kontrak firmware
@@ -1785,6 +2054,21 @@ use Illuminate\Support\Str;
  *   LAMA DIHAPUS (di-null-kan). User tersebut TIDAK BISA tap RFID lagi
  *   sampai didaftarkan ulang. Jumlah kartu yang terhapus direkap di
  *   notifikasi selesai import supaya tidak terjadi diam-diam.
+ *
+ * BUG FIX (ditemukan iterasi ini, sama pola dengan KelasImporter):
+ * kolom 'kelas_nama', 'jurusan_kode', 'tahun_pelajaran_nama' adalah
+ * lookup-only murni (dipakai di resolveKtp(), lalu efeknya lewat
+ * KenaikanKelasService::assignKelas() di afterSave() - BUKAN kolom
+ * tabel 'users'). 'avatar' juga lookup/transform-only (hasil
+ * akhirnya ditulis ke kolom 'avatar', bukan 'avatar' - kolom
+ * 'avatar' sendiri tidak ada di tabel users). Keempatnya diberi
+ * ->fillRecordUsing() no-op supaya Filament tidak meng-assign atribut
+ * dinamis ini ke $record, yang akan memicu SQL error "Unknown column"
+ * saat save() - lihat detail penuh di docblock KelasImporter.
+ *
+ * 'no_kartu_rfid' dan 'password' TIDAK diberi fillRecordUsing() no-op -
+ * keduanya kolom ASLI tabel 'users', assignment akhirnya tetap lewat
+ * beforeSave()/resolvePassword() (override manual, aman dari bug ini).
  */
 class UserImporter extends Importer
 {
@@ -1812,16 +2096,22 @@ class UserImporter extends Importer
                 ->label('Nama kelas (opsional, khusus siswa)')
                 ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('VII A'),
+                ->example('VII A')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan (wajib jika kelas_nama diisi)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('Non_Jurusan'),
+                ->example('Non_Jurusan')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('2025/2026'),
+                ->example('2025/2026')
+                // BUG FIX - lookup-only, lihat docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example(''),
@@ -1832,9 +2122,23 @@ class UserImporter extends Importer
                 ->example('081234567890'),
             ImportColumn::make('no_kartu_rfid')
                 ->label('No. kartu RFID (opsional)')
-                ->helperText('PERHATIAN: kosongkan HANYA jika memang ingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
+                ->helperText('PERHATIAN: kosongkan HANYA jika memang inginmenghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisatap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
                 ->rules(['nullable', new FormatKartuRfid])
                 ->example('1234567890'),
+            ImportColumn::make('password')
+                ->label('Password (opsional)')
+                ->helperText('Isi plaintext (otomatis di-hash saat disimpan). Kosongkan: user baru tetap dapat password random, user lama password TIDAK berubah.')
+                ->rules(['nullable', 'string', 'min:8', 'max:255'])
+                ->example(''),
+            ImportColumn::make('avatar')
+                ->label('Avatar - URL atau path (opsional)')
+                ->helperText('Isi URL gambar (https://...) atau path file yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
+                ->rules(['nullable', 'string', 'max:2048'])
+                ->example('https://contoh-sekolah.id/foto/siswa1.jpg')
+                // BUG FIX - lookup/transform-only, hasil akhir ditulis ke
+                // kolom 'avatar' (beda nama) lewat resolveAvatar(), lihat
+                // docblock class.
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -1858,7 +2162,6 @@ class UserImporter extends Importer
 
         if (! $record->exists) {
             $record->role = RoleUser::Siswa;
-            $record->password = Str::random(12); // di-hash otomatis via cast 'hashed'
         }
 
         return $record;
@@ -1872,6 +2175,9 @@ class UserImporter extends Importer
      */
     protected function beforeSave(): void
     {
+        $this->resolvePassword();
+        $this->resolveAvatar();
+
         $nomorBaru = trim((string) ($this->data['no_kartu_rfid'] ?? ''));
 
         if ($nomorBaru === '') {
@@ -1885,7 +2191,7 @@ class UserImporter extends Importer
 
         $dipakaiUserLain = User::query()
             ->where('no_kartu_rfid', $nomorBaru)
-            ->when($this->record->exists, fn($q) => $q->whereKeyNot($this->record->id))
+            ->when($this->record->exists, fn ($q) => $q->whereKeyNot($this->record->id))
             ->exists();
 
         if ($dipakaiUserLain) {
@@ -1893,6 +2199,105 @@ class UserImporter extends Importer
         }
 
         $this->record->no_kartu_rfid = $nomorBaru;
+    }
+
+    /**
+     * Password diisi -> dipakai apa adanya (di-hash otomatis via cast
+     * 'hashed' saat $record->save()). Kosong & user baru -> random 12
+     * karakter (perilaku lama). Kosong & user existing -> tidak disentuh.
+     */
+    protected function resolvePassword(): void
+    {
+        $passwordBaru = trim((string) ($this->data['password'] ?? ''));
+
+        if ($passwordBaru !== '') {
+            $this->record->password = $passwordBaru; // di-hash otomatis via cast 'hashed'
+
+            return;
+        }
+
+        if (! $this->record->exists) {
+            $this->record->password = Str::random(12); // di-hash otomatisvia cast 'hashed'
+        }
+    }
+
+    /**
+     * TODO: GAP-SPEC - lihat catatan algoritma resolusi di docblock class.
+     * Urutan resolusi: (1) URL http/https -> unduh, (2) sudah ada di disk
+     * 'public' -> pakai langsung, (3) path absolut di filesystem server ->
+     * salin ke disk 'public'. Kosong -> avatar lama tidak diubah.
+     *
+     * BUG FIX (ditemukan iterasi ini): nama file SEBELUMNYA selalu
+     * Str::uuid() - re-import avatar yang sama terus-menerus menumpuk
+     * file baru di disk tanpa pernah menghapus yang lama (kebocoran
+     * storage). Diubah jadi nama deterministik berbasis identitas user
+     * (NISN, fallback NIP - konsisten dengan kunci upsert di
+     * resolveRecord()): re-import MENIMPA file lama dengan nama sama,
+     * sama pola dengan upsert barcode di BukuImporter (Aturan poin 3).
+     * Ekstensi TETAP mengikuti sumber asli (bukan dipaksa .png) - konversi
+     * format gambar butuh library tambahan (GD/Imagick) yang belum
+     * diverifikasi terpasang di composer.json, lihat Aturan poin 7/15.
+     */
+    protected function resolveAvatar(): void
+    {
+        $nilai = trim((string) ($this->data['avatar'] ?? ''));
+
+        if ($nilai === '') {
+            return;
+        }
+
+        $namaFile = $this->namaFileAvatar($nilai);
+
+        if (Str::startsWith($nilai, ['http://', 'https://'])) {
+            try {
+                $response = Http::timeout(15)->get($nilai);
+            } catch (\Throwable $e) {
+                throw new RowImportFailedException("Gagal mengunduh avatardari URL \"{$nilai}\": {$e->getMessage()}");
+            }
+
+            if (! $response->successful()) {
+                throw new RowImportFailedException("URL avatar \"{$nilai}\" tidak bisa diakses (HTTP {$response->status()}).");
+            }
+
+            Storage::disk('public')->put($namaFile, $response->body());
+            $this->record->avatar = $namaFile;
+
+            return;
+        }
+
+        if (Storage::disk('public')->exists($nilai)) {
+            // Sudah berupa path di disk 'public' - salin/rename ke nama
+            // deterministik supaya konsisten dengan dua kasus lain di
+            // bawah (bukan dipakai langsung dengan nama aslinya).
+            Storage::disk('public')->copy($nilai, $namaFile);
+            $this->record->avatar = $namaFile;
+
+            return;
+        }
+
+        if (is_file($nilai)) {
+            Storage::disk('public')->put($namaFile, file_get_contents($nilai));
+            $this->record->avatar = $namaFile;
+
+            return;
+        }
+
+        throw new RowImportFailedException("Avatar \"{$nilai}\" tidak ditemukan (bukan URL valid, bukan file di storage, bukan path lokal di server).");
+    }
+
+    /**
+     * Nama file deterministik: '{nisn_atau_nip}.{ekstensi_sumber}'.
+     * NISN diprioritaskan (konsisten dengan resolveRecord()), fallback
+     * NIP jika NISN kosong - salah satu dijamin ada karena validasi
+     * 'required_without' di getColumns().
+     */
+    protected function namaFileAvatar(string $sumber): string
+    {
+        $identitas = trim((string) ($this->data['nisn'] ?? '')) ?: trim((string) ($this->data['nip'] ?? ''));
+
+        $ekstensi = pathinfo(parse_url($sumber, PHP_URL_PATH) ?? $sumber, PATHINFO_EXTENSION) ?: 'jpg';
+
+        return 'user-avatar/'.$identitas.'.'.$ekstensi;
     }
 
     protected function afterSave(): void
@@ -1943,16 +2348,16 @@ class UserImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import User selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal- buka riwayat import untuk lihat alasannya per baris.';
         }
 
         $kartuDihapus = (int) Cache::get("import-{$import->id}-kartu-dihapus", 0);
 
         if ($kartuDihapus > 0) {
-            $body .= " PERHATIAN: {$kartuDihapus} kartu RFID dihapus dari user (kolom dikosongkan di file) - user tersebut tidak bisa tap RFID sampai didaftarkan ulang.";
+            $body .= " PERHATIAN: {$kartuDihapus} kartu RFID dihapus dari user (kolom dikosongkan di file) - user tersebut tidak bisa tap RFID sampaididaftarkan ulang.";
         }
 
         Cache::forget("import-{$import->id}-kartu-dihapus");
@@ -2690,8 +3095,9 @@ class ProsesKenaikanKelas extends Page
 namespace App\Filament\Pages;
 
 use App\Enums\KondisiBuku;
+use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
-use App\Models\Buku;
+use App\Models\Eksemplar;
 use App\Models\Peminjaman;
 use App\Models\User;
 use App\Services\PeminjamanService;
@@ -2703,10 +3109,18 @@ use RuntimeException;
 
 /**
  * Halaman transaksi cepat: scan kartu (identifikasi user) -> scan barcode
- * buku satu per satu -> sistem OTOMATIS deteksi pinjam/kembali per buku,
- * diproses langsung tiap scan (TIDAK dikumpulkan dulu, sesuai keputusan
- * QA). Seluruh logic bisnis (limit, stok, Denda, Point, WA) tetap lewat
- * PeminjamanService - halaman ini murni orkestrasi UI (Aturan poin 3).
+ * EKSEMPLAR satu per satu -> sistem OTOMATIS deteksi pinjam/kembali per
+ * eksemplar, diproses langsung tiap scan (TIDAK dikumpulkan dulu, sesuai
+ * keputusan QA). Seluruh logic bisnis (limit, stok, Denda, Point, WA) tetap
+ * lewat PeminjamanService - halaman ini murni orkestrasi UI (Aturan poin 3).
+ *
+ * BUG FIX (iterasi ini): sebelumnya scan barcode query ke Buku.barcode dan
+ * Peminjaman.buku_id - keduanya sudah tidak ada lagi sejak migration
+ * 2026_08_02_000002-000004 (barcode & relasi pinjam kini per Eksemplar,
+ * bukan per judul Buku). Diganti total ke Eksemplar.barcode dan
+ * Peminjaman.eksemplar_id. Parameter ke PeminjamanService::pinjamBuku()
+ * juga diperbaiki dari 'bukuIds' (tidak sesuai signature) jadi
+ * 'eksemplarIds'.
  *
  * Reader RFID di komputer = USB keyboard-wedge (ketik ke input fokus,
  * seperti barcode scanner), BUKAN endpoint device Attendance Machine -
@@ -2717,16 +3131,16 @@ use RuntimeException;
  *
  * Rate limit anti-scan-ganda: barcode yang sama untuk user aktif yang
  * sama tidak boleh diproses ulang dalam window RATE_LIMIT_DETIK detik
- * (mencegah pinjam->kembali->pinjam tidak sengaja akibat buku ter-scan
- * 2x, mis. scanner bouncing atau operator tidak sadar sudah masuk).
- * Diguard via Cache (bukan DB), TTL pendek, tidak butuh migration.
+ * (mencegah pinjam->kembali->pinjam tidak sengaja akibat eksemplar
+ * ter-scan 2x, mis. scanner bouncing atau operator tidak sadar sudah
+ * masuk). Diguard via Cache (bukan DB), TTL pendek, tidak butuh migration.
  *
- * TODO: GAP-SPEC - window rate limit di-key per (user_id, buku_id), BUKAN
- * global per buku - asumsi: 2 user berbeda scan buku yang sama beruntun
- * (mis. serah terima cepat) tetap valid, hanya user yang SAMA scan buku
- * yang SAMA berulang yang di-block. Jika ternyata yang diinginkan adalah
- * block global per buku (siapapun operatornya), sesuaikan cache key di
- * bawah (buang bagian user->id).
+ * TODO: GAP-SPEC - window rate limit di-key per (user_id, eksemplar_id),
+ * BUKAN global per eksemplar - asumsi: 2 user berbeda scan eksemplar yang
+ * sama beruntun (mis. serah terima cepat) tetap valid, hanya user yang
+ * SAMA scan eksemplar yang SAMA berulang yang di-block. Jika ternyata
+ * yang diinginkan adalah block global per eksemplar (siapapun
+ * operatornya), sesuaikan cache key di bawah (buang bagian user->id).
  *
  * TODO: verifikasi signature terhadap versi package yang terpasang
  * (filament/filament versi sesuai composer.json) - properti $view dan
@@ -2757,7 +3171,7 @@ class TransaksiCepat extends Page
     public bool $bisaMeminjam = false;
 
     /**
-     * @var array<int, array{barcode: string, judul: string, aksi: string,pesan: string, sukses: bool}>
+     * @var array<int, array{barcode: string, judul: string, aksi: string, pesan: string, sukses: bool}>
      */
     public array $riwayatScan = [];
 
@@ -2804,25 +3218,25 @@ class TransaksiCepat extends Page
             return;
         }
 
-        $buku = Buku::query()->where('barcode', $barcode)->first();
+        $eksemplar = Eksemplar::query()->where('barcode', $barcode)->with('buku')->first();
 
-        if (! $buku) {
+        if (! $eksemplar) {
             $this->tambahRiwayat($barcode, '-', 'error', 'Barcode tidak ditemukan.', false);
 
             return;
         }
 
         // Rate limit anti-scan-ganda - dicek SEBELUM logic pinjam/kembali,
-        // supaya buku yang sama ter-scan 2x dalam window tidak memicu
+        // supaya eksemplar yang sama ter-scan 2x dalam window tidak memicu
         // toggle pinjam->kembali->pinjam yang tidak diinginkan.
-        $rateLimitKey = "transaksi-cepat-scan:{$this->user->id}:{$buku->id}";
+        $rateLimitKey = "transaksi-cepat-scan:{$this->user->id}:{$eksemplar->id}";
 
         if (Cache::has($rateLimitKey)) {
             $this->tambahRiwayat(
                 $barcode,
-                $buku->judul,
+                $eksemplar->buku->judul,
                 'ditolak',
-                'Buku ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
+                'Eksemplar ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
                 false,
             );
 
@@ -2832,9 +3246,9 @@ class TransaksiCepat extends Page
         Cache::put($rateLimitKey, true, self::RATE_LIMIT_DETIK);
 
         // Deteksi otomatis: ada Peminjaman aktif/terlambat milik user ini
-        // untuk buku ini -> kembalikan. Kalau tidak -> pinjam baru.
+        // untuk eksemplar ini -> kembalikan. Kalau tidak -> pinjam baru.
         $peminjamanAktif = Peminjaman::query()
-            ->where('buku_id', $buku->id)
+            ->where('eksemplar_id', $eksemplar->id)
             ->where('user_id', $this->user->id)
             ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat])
             ->first();
@@ -2845,23 +3259,27 @@ class TransaksiCepat extends Page
             if ($peminjamanAktif) {
                 $service->prosesPengembalian(
                     peminjaman: $peminjamanAktif,
-                    kondisi: KondisiBuku::Baik, // default, koreksi manuallewat PengembalianResource jika perlu
+                    kondisi: KondisiBuku::Baik, // default, koreksi manual lewat PengembalianResource jika perlu
                     diprosesOleh: auth()->user(),
                 );
-                $this->tambahRiwayat($barcode, $buku->judul, 'dikembalikan', 'Berhasil dikembalikan (kondisi: baik).', true);
+                $this->tambahRiwayat($barcode, $eksemplar->buku->judul, 'dikembalikan', 'Berhasil dikembalikan (kondisi: baik).', true);
             } else {
+                if ($eksemplar->status !== StatusEksemplar::Tersedia) {
+                    throw new RuntimeException("Eksemplar barcode '{$eksemplar->barcode}' tidak tersedia (status: {$eksemplar->status->value}).");
+                }
+
                 $service->pinjamBuku(
                     user: $this->user,
-                    bukuIds: [$buku->id],
+                    eksemplarIds: [$eksemplar->id],
                     diprosesOleh: auth()->user(),
                 );
-                $this->tambahRiwayat($barcode, $buku->judul, 'dipinjamkan', 'Berhasil dipinjamkan.', true);
+                $this->tambahRiwayat($barcode, $eksemplar->buku->judul, 'dipinjamkan', 'Berhasil dipinjamkan.', true);
             }
         } catch (RuntimeException $e) {
             // Gagal diproses - buka kembali rate limit supaya operator bisa
             // langsung retry tanpa perlu menunggu window habis.
             Cache::forget($rateLimitKey);
-            $this->tambahRiwayat($barcode, $buku->judul, 'error', $e->getMessage(), false);
+            $this->tambahRiwayat($barcode, $eksemplar->buku->judul, 'error', $e->getMessage(), false);
         }
 
         $this->bisaMeminjam = app(PeminjamanService::class)->bisaMeminjam($this->user->fresh());
@@ -2977,6 +3395,7 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\BukuExporter;
 use App\Filament\Imports\BukuImporter;
 use App\Filament\Resources\BukuResource\Pages;
+use App\Filament\Resources\BukuResource\RelationManagers\EksemplarsRelationManager;
 use App\Models\Buku;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ImportAction;
@@ -3018,16 +3437,14 @@ class BukuResource extends Resource
             TextInput::make('isbn')
                 ->label('ISBN')
                 ->unique(ignoreRecord: true)
-                ->maxLength(255),
-            TextInput::make('barcode')
-                ->required()
-                ->unique(ignoreRecord: true)
-                ->maxLength(255),
-            Select::make('rak_id')
-                ->label('Rak')
-                ->relationship('rak', 'nama')
-                ->searchable()
-                ->preload(),
+                ->maxLength(255)
+                ->helperText('1 ISBN = 1 judul. Jumlah eksemplar fisik dikelola di tab Eksemplar setelah buku disimpan.'),
+            TextInput::make('tahun_terbit')
+                ->label('Tahun Terbit')
+                ->numeric()
+                ->minValue(1000)
+                ->maxValue((int) date('Y'))
+                ->maxLength(4),
             Select::make('kategoris')
                 ->label('Kategori')
                 ->relationship('kategoris', 'nama')
@@ -3039,15 +3456,7 @@ class BukuResource extends Resource
                 ->numeric()
                 ->prefix('Rp')
                 ->required()
-                // TODO: GAP-SPEC - dipakai sebagai basis Denda.kerusakan (persentase
-                // dari Setting persentase_denda_kerusakan) dan Denda.kehilangan
-                // (penuh) - lihat PeminjamanService::hitungDendaKerusakan/Kehilangan.
-                // Wajib diisi akurat oleh Pustakawan/Admin saat input buku baru.
-                ->helperText('Dipakai sebagai basis perhitungan Denda kerusakan/kehilangan.'),
-            TextInput::make('stok')
-                ->numeric()
-                ->required()
-                ->default(1),
+                ->helperText('Dipakai sebagai basis perhitungan Denda kerusakan/kehilangan untuk semua eksemplar judul ini.'),
             Textarea::make('deskripsi')
                 ->columnSpanFull(),
         ]);
@@ -3070,13 +3479,16 @@ class BukuResource extends Resource
                 TextColumn::make('judul')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('barcode')
+                TextColumn::make('isbn')
+                    ->label('ISBN')
                     ->searchable(),
-                TextColumn::make('rak.nama')
-                    ->label('Rak')
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('stok')
+                TextColumn::make('tahun_terbit')
+                    ->label('Tahun')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('eksemplars_count')
+                    ->label('Total Eksemplar')
+                    ->counts('eksemplars')
                     ->sortable(),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
@@ -3088,13 +3500,17 @@ class BukuResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('rak_id')
-                    ->label('Rak')
-                    ->relationship('rak', 'nama'),
                 SelectFilter::make('kategoris')
                     ->label('Kategori')
                     ->relationship('kategoris', 'nama'),
             ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            EksemplarsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
@@ -3104,6 +3520,70 @@ class BukuResource extends Resource
             'create' => Pages\CreateBuku::route('/create'),
             'edit' => Pages\EditBuku::route('/{record}/edit'),
         ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/BukuResource/RelationManagers/EksemplarsRelationManager.php
+```php
+<?php
+
+namespace App\Filament\Resources\BukuResource\RelationManagers;
+
+use App\Enums\StatusEksemplar;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+class EksemplarsRelationManager extends RelationManager
+{
+    protected static string $relationship = 'eksemplars';
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('barcode')
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            Select::make('rak_id')
+                ->label('Rak')
+                ->relationship('rak', 'nama')
+                ->searchable()
+                ->preload(),
+            Select::make('status')
+                ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)]))
+                ->required()
+                ->default(StatusEksemplar::Tersedia->value)
+                ->helperText('Ubah manual hanya untuk koreksi data - alur normal status diubah otomatis oleh PeminjamanService.'),
+        ]);
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->recordTitleAttribute('barcode')
+            ->columns([
+                TextColumn::make('barcode')->searchable(),
+                TextColumn::make('rak.nama')->label('Rak'),
+                TextColumn::make('status')
+                    ->badge()
+                    ->color(fn (StatusEksemplar $state) => match ($state) {
+                        StatusEksemplar::Tersedia => 'success',
+                        StatusEksemplar::Dipinjam => 'warning',
+                        StatusEksemplar::Rusak, StatusEksemplar::Hilang => 'danger',
+                    }),
+            ])
+            ->filters([
+                SelectFilter::make('status')
+                    ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+            ]);
     }
 }
 
@@ -3763,6 +4243,11 @@ class KelasResource extends Resource
         return $schema->components([
             TextInput::make('nama')
                 ->label('Nama Kelas (mis. X IPA 1)')
+                // BARU iterasi ini - unik secara global (dikonfirmasi),
+                // lihat migration 2026_08_02_000001_add_unique_nama_to_kelas_table
+                // dan KelasImporter (Aturan poin 3/11 - validasi
+                // konsisten antara form manual dan import).
+                ->unique(ignoreRecord: true)
                 ->required()
                 ->maxLength(255),
             TextInput::make('tingkat')
@@ -4411,12 +4896,10 @@ class CreatePeminjaman extends CreateRecord
         try {
             $transaksi = app(PeminjamanService::class)->pinjamBuku(
                 user: User::findOrFail($data['user_id']),
-                bukuIds: $data['buku_ids'],
+                eksemplarIds: $data['eksemplar_ids'],
                 diprosesOleh: auth()->user(),
             );
 
-            // Filament expects instance dari $this->getModel() (Peminjaman) -
-            // kembalikan salah satu baris hasil transaksi (bisa multi-buku).
             return $transaksi->peminjamans->first();
         } catch (RuntimeException $e) {
             Notification::make()
@@ -4466,10 +4949,11 @@ class ListPeminjamans extends ListRecords
 namespace App\Filament\Resources;
 
 use App\Enums\KondisiBuku;
+use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\PeminjamanExporter;
 use App\Filament\Resources\PeminjamanResource\Pages;
-use App\Models\Buku;
+use App\Models\Eksemplar;
 use App\Models\Peminjaman;
 use App\Services\PeminjamanService;
 use Filament\Actions\Action;
@@ -4517,13 +5001,17 @@ class PeminjamanResource extends Resource
                 ->searchable()
                 ->preload()
                 ->required(),
-            Select::make('buku_ids')
-                ->label('Buku')
+            Select::make('eksemplar_ids')
+                ->label('Eksemplar (scan barcode / pilih)')
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->options(fn () => Buku::query()->where('stok', '>', 0)->pluck('judul', 'id'))
-                ->helperText('Hanya menampilkan buku dengan stok tersedia. Validasi limit peminjaman aktif & status suspend dicek otomatis saat submit.')
+                ->options(fn () => Eksemplar::query()
+                    ->where('status', StatusEksemplar::Tersedia)
+                    ->with('buku')
+                    ->get()
+                    ->mapWithKeys(fn ($e) => [$e->id => "{$e->buku->judul} — {$e->barcode}"]))
+                ->helperText('Hanya menampilkan eksemplar berstatus tersedia. Validasi limit peminjaman aktif & status suspend dicek otomatis saat submit.')
                 ->required(),
         ]);
     }
@@ -4541,7 +5029,7 @@ class PeminjamanResource extends Resource
                     ->label('Peminjam')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('buku.judul')
+                TextColumn::make('eksemplar.buku.judul')
                     ->label('Buku')
                     ->searchable()
                     ->sortable(),
@@ -4735,7 +5223,7 @@ class PengembalianResource extends Resource
                     ->label('Peminjam')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('peminjaman.buku.judul')
+                TextColumn::make('peminjaman.eksemplar.buku.judul')
                     ->label('Buku')
                     ->searchable()
                     ->sortable(),
@@ -5150,7 +5638,7 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\RakExporter;
 use App\Filament\Imports\RakImporter;
 use App\Filament\Resources\RakResource\Pages;
-use App\Filament\Resources\RakResource\RelationManagers\BukusRelationManager;
+use App\Filament\Resources\RakResource\RelationManagers\EksemplarsRelationManager;
 use App\Models\Rak;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ImportAction;
@@ -5205,9 +5693,11 @@ class RakResource extends Resource
                     ->sortable(),
                 TextColumn::make('lokasi')
                     ->searchable(),
-                TextColumn::make('bukus_count')
-                    ->label('Jumlah Buku')
-                    ->counts('bukus')
+                // FIX: dulu counts('bukus') - kolom bukus.rak_id sudah tidak
+                // ada, jadi dihitung dari eksemplars (lihat Rak::eksemplars()).
+                TextColumn::make('eksemplars_count')
+                    ->label('Jumlah Eksemplar')
+                    ->counts('eksemplars')
                     ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -5222,7 +5712,7 @@ class RakResource extends Resource
     public static function getRelations(): array
     {
         return [
-            BukusRelationManager::class,
+            EksemplarsRelationManager::class,
         ];
     }
 
@@ -5239,37 +5729,46 @@ class RakResource extends Resource
 ```
 ---
 
-## app/Filament/Resources/RakResource/RelationManagers/BukusRelationManager.php
+## app/Filament/Resources/RakResource/RelationManagers/EksemplarsRelationManager.php
 ```php
 <?php
 
 namespace App\Filament\Resources\RakResource\RelationManagers;
 
+use App\Enums\StatusEksemplar;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 /**
- * Rak -> Buku adalah relasi one-to-many ASLI (Buku.rak_id), bukan pivot -
- * jadi RelationManager ini murni untuk LIHAT buku yang ada di rak ini.
- * Create/Edit/Delete Buku tetap lewat BukuResource langsung (di sana Admin/
- * Pustakawan bisa ganti rak_id-nya) - supaya tidak ada dua tempat berbeda
- * yang bisa mengubah data Buku yang sama (Aturan poin 3, DRY).
+ * Rak -> Eksemplar adalah relasi one-to-many ASLI (Eksemplar.rak_id).
+ * Rak TIDAK lagi berelasi langsung ke Buku (lihat migration
+ * 2026_08_02_000003 dan 2026_08_02_000002) - satu judul Buku bisa punya
+ * banyak Eksemplar tersebar di rak berbeda.
+ *
+ * RelationManager ini murni untuk LIHAT eksemplar yang ada di rak ini -
+ * pindah rak / ubah status eksemplar tetap lewat BukuResource >
+ * EksemplarsRelationManager langsung (satu sumber kebenaran, Aturan
+ * poin 3 - DRY), supaya tidak ada dua tempat berbeda yang bisa mengubah
+ * data Eksemplar yang sama.
  */
-class BukusRelationManager extends RelationManager
+class EksemplarsRelationManager extends RelationManager
 {
-    protected static string $relationship = 'bukus';
+    protected static string $relationship = 'eksemplars';
 
     public function table(Table $table): Table
     {
         return $table
-            ->recordTitleAttribute('judul')
+            ->recordTitleAttribute('barcode')
             ->columns([
-                TextColumn::make('judul')
+                TextColumn::make('buku.judul')
+                    ->label('Judul Buku')
                     ->searchable(),
                 TextColumn::make('barcode')
                     ->searchable(),
-                TextColumn::make('stok'),
+                TextColumn::make('status')
+                    ->badge()
+                    ->formatStateUsing(fn (StatusEksemplar $state) => $state->value),
             ])
             ->headerActions([
                 //
@@ -5969,7 +6468,7 @@ class PeminjamansRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('id')
             ->columns([
-                TextColumn::make('buku.judul')
+                TextColumn::make('eksemplar.buku.judul')
                     ->label('Buku')
                     ->searchable(),
                 TextColumn::make('tanggal_jatuh_tempo')
@@ -7098,10 +7597,10 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
 
 namespace App\Models;
 
+use App\Enums\StatusEksemplar;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -7116,10 +7615,8 @@ class Buku extends Model
         'penulis',
         'penerbit',
         'isbn',
-        'barcode',
-        'rak_id',
+        'tahun_terbit',
         'harga_ganti',
-        'stok',
         'deskripsi',
     ];
 
@@ -7127,12 +7624,8 @@ class Buku extends Model
     {
         return [
             'harga_ganti' => 'decimal:2',
+            'tahun_terbit' => 'integer',
         ];
-    }
-
-    public function rak(): BelongsTo
-    {
-        return $this->belongsTo(Rak::class);
     }
 
     public function kategoris(): BelongsToMany
@@ -7140,9 +7633,15 @@ class Buku extends Model
         return $this->belongsToMany(Kategori::class);
     }
 
-    public function peminjamans(): HasMany
+    public function eksemplars(): HasMany
     {
-        return $this->hasMany(Peminjaman::class);
+        return $this->hasMany(Eksemplar::class);
+    }
+
+    // dihitung on-the-fly, bukan field statis lagi
+    public function stokTersedia(): int
+    {
+        return $this->eksemplars()->where('status', StatusEksemplar::Tersedia)->count();
     }
 }
 
@@ -7239,6 +7738,57 @@ class DeviceLog extends Model
             'online' => 'boolean',
             'last_seen_at' => 'datetime',
         ];
+    }
+}
+
+```
+---
+
+## app/Models/Eksemplar.php
+```php
+<?php
+
+namespace App\Models;
+
+use App\Enums\StatusEksemplar;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Eksemplar extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $fillable = [
+        'buku_id',
+        'barcode',
+        'rak_id',
+        'status',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'status' => StatusEksemplar::class,
+        ];
+    }
+
+    public function buku(): BelongsTo
+    {
+        return $this->belongsTo(Buku::class);
+    }
+
+    public function rak(): BelongsTo
+    {
+        return $this->belongsTo(Rak::class);
+    }
+
+    public function peminjamans(): HasMany
+    {
+        return $this->hasMany(Peminjaman::class);
     }
 }
 
@@ -7571,7 +8121,7 @@ class Peminjaman extends Model
     protected $fillable = [
         'transaksi_id',
         'user_id',
-        'buku_id',
+        'eksemplar_id',
         'tanggal_pinjam',
         'tanggal_jatuh_tempo',
         'status',
@@ -7599,9 +8149,9 @@ class Peminjaman extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function buku(): BelongsTo
+    public function eksemplar(): BelongsTo
     {
-        return $this->belongsTo(Buku::class);
+        return $this->belongsTo(Eksemplar::class);
     }
 
     public function diprosesOleh(): BelongsTo
@@ -7829,11 +8379,6 @@ class Rak extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'nama',
         'lokasi',
@@ -7844,10 +8389,19 @@ class Rak extends Model
         return $this->belongsToMany(Kategori::class);
     }
 
-    public function bukus(): HasMany
+    // FIX: Rak tidak lagi punya relasi langsung ke Buku sejak migration
+    // 2026_08_02_000003 (bukus.rak_id di-drop). Rak sekarang berelasi ke
+    // Eksemplar (kopi fisik), bukan ke Buku (judul).
+    public function eksemplars(): HasMany
     {
-        return $this->hasMany(Buku::class);
+        return $this->hasMany(Eksemplar::class);
     }
+
+    // TODO: GAP-SPEC - belum dikonfirmasi apakah Rak butuh hitungan "jumlah
+    // judul buku unik" (distinct Buku) selain "jumlah eksemplar". Kalau ya,
+    // tambahkan accessor terpisah pakai hasManyThrough(Buku::class,
+    // Eksemplar::class)->distinct('bukus.id') - belum ditambahkan di sini
+    // supaya tidak menebak kebutuhan tampilan.
 }
 
 ```
@@ -8447,14 +9001,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -8514,8 +9068,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-
 }
+
 ```
 ---
 
@@ -8527,14 +9081,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -8594,8 +9148,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-
 }
+
 ```
 ---
 
@@ -8607,14 +9161,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -8674,8 +9228,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-
 }
+
 ```
 ---
 
@@ -8687,14 +9241,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -8754,8 +9308,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-
 }
+
 ```
 ---
 
@@ -8767,14 +9321,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -8834,8 +9388,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-
 }
+
 ```
 ---
 
@@ -8847,14 +9401,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -8914,8 +9468,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -8927,14 +9481,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -8994,8 +9548,8 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-
 }
+
 ```
 ---
 
@@ -9007,14 +9561,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -9074,8 +9628,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-
 }
+
 ```
 ---
 
@@ -9087,14 +9641,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -9154,8 +9708,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-
 }
+
 ```
 ---
 
@@ -9167,14 +9721,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -9234,8 +9788,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-
 }
+
 ```
 ---
 
@@ -9247,14 +9801,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -9314,8 +9868,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-
 }
+
 ```
 ---
 
@@ -9327,14 +9881,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -9394,8 +9948,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-
 }
+
 ```
 ---
 
@@ -9407,14 +9961,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -9474,8 +10028,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-
 }
+
 ```
 ---
 
@@ -9487,14 +10041,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -9554,8 +10108,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-
 }
+
 ```
 ---
 
@@ -9567,14 +10121,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -9634,8 +10188,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-
 }
+
 ```
 ---
 
@@ -9647,14 +10201,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -9714,8 +10268,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-
 }
+
 ```
 ---
 
@@ -9727,14 +10281,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
-use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -9794,8 +10348,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-
 }
+
 ```
 ---
 
@@ -9807,14 +10361,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -9874,8 +10428,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -9887,14 +10441,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -9954,8 +10508,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-
 }
+
 ```
 ---
 
@@ -9965,13 +10519,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -10031,8 +10585,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-
 }
+
 ```
 ---
 
@@ -10446,7 +11000,7 @@ class LaporanBulananService
     protected function dataPeminjaman(Carbon $awal, Carbon $akhir): array
     {
         $records = Peminjaman::query()
-            ->with(['user', 'buku'])
+            ->with(['user', 'eksemplar.buku'])
             ->whereBetween('tanggal_pinjam', [$awal->toDateString(), $akhir->toDateString()])
             ->orderBy('tanggal_pinjam')
             ->get();
@@ -10461,7 +11015,7 @@ class LaporanBulananService
     protected function dataPengembalian(Carbon $awal, Carbon $akhir): array
     {
         $records = Pengembalian::query()
-            ->with(['peminjaman.user', 'peminjaman.buku'])
+            ->with(['peminjaman.user', 'peminjaman.eksemplar.buku'])
             ->whereBetween('tanggal_kembali', [$awal->toDateString(), $akhir->toDateString()])
             ->orderBy('tanggal_kembali')
             ->get();
@@ -10626,10 +11180,12 @@ namespace App\Services;
 use App\Enums\EventTypePoint;
 use App\Enums\JenisTransaksi;
 use App\Enums\KondisiBuku;
+use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
 use App\Enums\TipeDenda;
 use App\Models\Buku;
 use App\Models\Denda;
+use App\Models\Eksemplar;
 use App\Models\Peminjaman;
 use App\Models\Pengembalian;
 use App\Models\Setting;
@@ -10663,9 +11219,9 @@ class PeminjamanService
     }
 
     /**
-     * @param  array<int, string>  $bukuIds
+     * @param  array<int, string>  $eksemplarIds
      */
-    public function pinjamBuku(User $user, array $bukuIds, ?User $diprosesOleh = null): Transaksi
+    public function pinjamBuku(User $user, array $eksemplarIds, ?User $diprosesOleh = null): Transaksi
     {
         if (! $this->bisaMeminjam($user)) {
             throw new RuntimeException('User tidak dapat meminjam: suspend aktif atau limit peminjaman aktif tercapai.');
@@ -10673,7 +11229,7 @@ class PeminjamanService
 
         $lamaPeminjamanHari = (int) Setting::get('lama_peminjaman_hari', 7);
 
-        $transaksi = DB::transaction(function () use ($user, $bukuIds, $diprosesOleh, $lamaPeminjamanHari) {
+        $transaksi = DB::transaction(function () use ($user, $eksemplarIds, $diprosesOleh, $lamaPeminjamanHari) {
             $transaksi = Transaksi::create([
                 'user_id' => $user->id,
                 'jenis' => JenisTransaksi::Peminjaman,
@@ -10681,19 +11237,19 @@ class PeminjamanService
                 'tanggal' => now(),
             ]);
 
-            foreach ($bukuIds as $bukuId) {
-                $buku = Buku::query()->lockForUpdate()->findOrFail($bukuId);
+            foreach ($eksemplarIds as $eksemplarId) {
+                $eksemplar = Eksemplar::query()->lockForUpdate()->findOrFail($eksemplarId);
 
-                if ($buku->stok < 1) {
-                    throw new RuntimeException("Stok buku '{$buku->judul}' habis.");
+                if ($eksemplar->status !== StatusEksemplar::Tersedia) {
+                    throw new RuntimeException("Eksemplar barcode '{$eksemplar->barcode}' tidak tersedia (status: {$eksemplar->status->value}).");
                 }
 
-                $buku->decrement('stok');
+                $eksemplar->update(['status' => StatusEksemplar::Dipinjam]);
 
                 $peminjaman = Peminjaman::create([
                     'transaksi_id' => $transaksi->id,
                     'user_id' => $user->id,
-                    'buku_id' => $buku->id,
+                    'eksemplar_id' => $eksemplar->id,
                     'tanggal_pinjam' => now()->toDateString(),
                     'tanggal_jatuh_tempo' => now()->addDays($lamaPeminjamanHari)->toDateString(),
                     'status' => StatusPeminjaman::Aktif,
@@ -10708,10 +11264,10 @@ class PeminjamanService
                 );
             }
 
-            return $transaksi->fresh('peminjamans.buku');
+            return $transaksi->fresh('peminjamans.eksemplar.buku');
         });
 
-        $daftarBuku = $transaksi->peminjamans->pluck('buku.judul')->implode(', ');
+        $daftarBuku = $transaksi->peminjamans->pluck('eksemplar.buku.judul')->implode(', ');
         $jatuhTempo = $transaksi->peminjamans->first()?->tanggal_jatuh_tempo;
 
         $this->whatsappService->kirimEvent(
@@ -10744,8 +11300,9 @@ class PeminjamanService
             ]);
 
             if ($kondisi === KondisiBuku::Hilang) {
-                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->buku));
+                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->eksemplar->buku));
                 $peminjaman->update(['status' => StatusPeminjaman::Hilang]);
+                $peminjaman->eksemplar->update(['status' => StatusEksemplar::Hilang]);
 
                 $this->pointService->catatEvent(
                     $peminjaman->user,
@@ -10763,7 +11320,8 @@ class PeminjamanService
             }
 
             if ($kondisi === KondisiBuku::Rusak) {
-                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->buku));
+                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->eksemplar->buku));
+                $peminjaman->eksemplar->update(['status' => StatusEksemplar::Rusak]);
 
                 $this->pointService->catatEvent(
                     $peminjaman->user,
@@ -10771,9 +11329,10 @@ class PeminjamanService
                     'peminjaman',
                     $peminjaman->id,
                 );
+            } else {
+                $peminjaman->eksemplar->update(['status' => StatusEksemplar::Tersedia]);
             }
 
-            $peminjaman->buku()->increment('stok');
             $peminjaman->update(['status' => StatusPeminjaman::Selesai]);
 
             $this->pointService->catatEvent(
@@ -10797,16 +11356,6 @@ class PeminjamanService
         return $pengembalian;
     }
 
-    /**
-     * Koreksi kondisi Pengembalian yang SUDAH final (dipanggil dari Action
-     * "Koreksi Kondisi" di PengembalianResource - Pustakawan/Admin, lihat
-     * PengembalianPolicy). Method TERPISAH dari prosesPengembalian() supaya
-     * alur normal tidak berubah (Aturan poin 9/10).
-     *
-     * Efek: sesuaikan stok, batalkan Denda dari kondisi lama yang sudah
-     * tidak relevan, catat Denda baru sesuai kondisi baru, update status
-     * Peminjaman, update record Pengembalian.
-     */
     public function koreksiKondisiPengembalian(
         Pengembalian $pengembalian,
         KondisiBuku $kondisiBaru,
@@ -10825,14 +11374,13 @@ class PeminjamanService
         }
 
         $pengembalian = DB::transaction(function () use ($pengembalian, $peminjaman, $kondisiLama, $kondisiBaru, $catatan, $diprosesOleh) {
-            // Sesuaikan stok: buku fisik dianggap kembali/hilang sesuai kondisi baru.
-            if ($kondisiLama === KondisiBuku::Hilang && $kondisiBaru !== KondisiBuku::Hilang) {
-                $peminjaman->buku()->increment('stok');
-            } elseif ($kondisiLama !== KondisiBuku::Hilang && $kondisiBaru === KondisiBuku::Hilang) {
-                $peminjaman->buku()->decrement('stok');
-            }
+            $statusEksemplarBaru = match ($kondisiBaru) {
+                KondisiBuku::Baik => StatusEksemplar::Tersedia,
+                KondisiBuku::Rusak => StatusEksemplar::Rusak,
+                KondisiBuku::Hilang => StatusEksemplar::Hilang,
+            };
+            $peminjaman->eksemplar->update(['status' => $statusEksemplarBaru]);
 
-            // Batalkan Denda dari kondisi lama yang tidak lagi berlaku.
             if ($kondisiLama === KondisiBuku::Rusak && $kondisiBaru !== KondisiBuku::Rusak) {
                 $this->batalkanDenda($peminjaman, TipeDenda::Kerusakan);
             }
@@ -10840,21 +11388,18 @@ class PeminjamanService
                 $this->batalkanDenda($peminjaman, TipeDenda::Kehilangan);
             }
 
-            // Catat Denda baru sesuai kondisi baru.
             if ($kondisiBaru === KondisiBuku::Rusak && $kondisiLama !== KondisiBuku::Rusak) {
-                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->buku));
+                $this->tandaiDenda($peminjaman, TipeDenda::Kerusakan, $this->hitungDendaKerusakan($peminjaman->eksemplar->buku));
                 $this->pointService->catatEvent($peminjaman->user, EventTypePoint::Kerusakan, 'peminjaman', $peminjaman->id, 'Koreksi kondisi ke rusak');
             }
             if ($kondisiBaru === KondisiBuku::Hilang && $kondisiLama !== KondisiBuku::Hilang) {
-                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->buku));
+                $this->tandaiDenda($peminjaman, TipeDenda::Kehilangan, $this->hitungDendaKehilangan($peminjaman->eksemplar->buku));
                 $this->pointService->catatEvent($peminjaman->user, EventTypePoint::Kehilangan, 'peminjaman', $peminjaman->id, 'Koreksi kondisi ke hilang');
             }
 
-            // TODO: GAP-SPEC - Point yang sudah tercatat dari kondisi lama
-            // (mis. event Pengembalian/Kerusakan/Kehilangan sebelumnya) TIDAK
-            // di-reverse saat koreksi; hanya menambah event baru sesuai
-            // kondisi baru. Akumulasi point/badge/reward/punishment tidak
-            // mundur otomatis - butuh keputusan terpisah jika diperlukan.
+            // TODO: GAP-SPEC - Point dari kondisi lama tidak di-reverse, sama
+            // seperti perilaku sebelum perubahan ini (sudah dikonfirmasi
+            // sebelumnya untuk skema Buku lama).
 
             $peminjaman->update([
                 'status' => $kondisiBaru === KondisiBuku::Hilang ? StatusPeminjaman::Hilang : StatusPeminjaman::Selesai,
@@ -10889,10 +11434,11 @@ class PeminjamanService
             $denda = $this->tandaiDenda(
                 $peminjaman,
                 TipeDenda::Kehilangan,
-                $this->hitungDendaKehilangan($peminjaman->buku),
+                $this->hitungDendaKehilangan($peminjaman->eksemplar->buku),
             );
 
             $peminjaman->update(['status' => StatusPeminjaman::Hilang]);
+            $peminjaman->eksemplar->update(['status' => StatusEksemplar::Hilang]);
 
             $this->pointService->catatEvent(
                 $peminjaman->user,
@@ -10924,7 +11470,7 @@ class PeminjamanService
 
         Peminjaman::query()
             ->where('status', StatusPeminjaman::Aktif)
-            ->with('user', 'buku')
+            ->with('user', 'eksemplar.buku')
             ->chunkById(200, function ($peminjamans) use ($today, &$stat) {
                 foreach ($peminjamans as $peminjaman) {
                     $jatuhTempo = Carbon::parse($peminjaman->tanggal_jatuh_tempo);
@@ -10933,7 +11479,7 @@ class PeminjamanService
                         $this->whatsappService->kirimEvent(
                             eventCode: 'reminder_h3',
                             nomorTujuan: $peminjaman->user->no_telepon,
-                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
+                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->eksemplar->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
                             referenceId: "reminder-h3-{$peminjaman->id}-{$today->toDateString()}",
                         );
                         $stat['reminder_h3']++;
@@ -10941,7 +11487,7 @@ class PeminjamanService
                         $this->whatsappService->kirimEvent(
                             eventCode: 'reminder_h1',
                             nomorTujuan: $peminjaman->user->no_telepon,
-                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
+                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->eksemplar->buku->judul, 'jatuh_tempo' => (string) $peminjaman->tanggal_jatuh_tempo],
                             referenceId: "reminder-h1-{$peminjaman->id}-{$today->toDateString()}",
                         );
                         $stat['reminder_h1']++;
@@ -10951,7 +11497,7 @@ class PeminjamanService
                         $this->whatsappService->kirimEvent(
                             eventCode: 'jadi_terlambat',
                             nomorTujuan: $peminjaman->user->no_telepon,
-                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->buku->judul],
+                            variables: ['nama' => $peminjaman->user->nama, 'buku' => $peminjaman->eksemplar->buku->judul],
                             referenceId: "terlambat-{$peminjaman->id}-{$today->toDateString()}",
                         );
                         $stat['jadi_terlambat']++;
@@ -11013,13 +11559,6 @@ class PeminjamanService
         return $denda;
     }
 
-    /**
-     * Batalkan Denda aktif (tipe tertentu) milik satu Peminjaman - dipanggil
-     * saat koreksi kondisi Pengembalian menghilangkan alasan Denda tersebut.
-     * TIDAK soft-delete (riwayat tetap auditable) - nominal dipaksa 0 dan
-     * status_lunas dipaksa true (memicu DendaObserver::updated() -> cek
-     * auto-unsuspend user, sudah dikonfirmasi sebagai perilaku yang diinginkan).
-     */
     protected function batalkanDenda(Peminjaman $peminjaman, TipeDenda $tipe): void
     {
         $denda = Denda::query()
@@ -11029,7 +11568,7 @@ class PeminjamanService
             ->first();
 
         if (! $denda || (float) $denda->nominal === 0.0) {
-            return; // tidak ada Denda aktif untuk tipe ini, atau sudah pernah dibatalkan
+            return;
         }
 
         $sudahTerbayar = $denda->status_lunas;
@@ -11044,9 +11583,7 @@ class PeminjamanService
                     : 'Dibatalkan otomatis: koreksi kondisi Pengembalian.')),
         ]);
 
-        // TODO: GAP-SPEC - jika $sudahTerbayar true, sistem ini tidak
-        // menangani proses refund (uang fisik/transfer) - hanya menandai
-        // audit trail. Refund di luar sistem, keputusan Admin/Pustakawan.
+        // TODO: GAP-SPEC - refund fisik di luar sistem, sama seperti sebelumnya.
     }
 }
 
@@ -13492,7 +14029,6 @@ return [
 
 namespace Database\Factories;
 
-use App\Models\Rak;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class BukuFactory extends Factory
@@ -13508,10 +14044,7 @@ class BukuFactory extends Factory
             'penulis' => fake()->name(),
             'penerbit' => fake()->company(),
             'isbn' => fake()->unique()->isbn13(),
-            'barcode' => fake()->unique()->ean13(),
-            'rak_id' => Rak::factory(),
             'harga_ganti' => fake()->randomFloat(2, 0, 500000),
-            'stok' => fake()->numberBetween(0, 20),
             'deskripsi' => fake()->text(),
         ];
     }
@@ -13548,6 +14081,33 @@ class DendaFactory extends Factory
             'status_lunas' => $statusLunas,
             'tanggal_lunas' => $statusLunas ? fake()->dateTime() : null,
             'keterangan' => fake()->text(),
+        ];
+    }
+}
+
+```
+---
+
+## database/factories/EksemplarFactory.php
+```php
+<?php
+
+namespace Database\Factories;
+
+use App\Enums\StatusEksemplar;
+use App\Models\Buku;
+use App\Models\Rak;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+class EksemplarFactory extends Factory
+{
+    public function definition(): array
+    {
+        return [
+            'buku_id' => Buku::factory(),
+            'barcode' => fake()->unique()->ean13(),
+            'rak_id' => Rak::factory(),
+            'status' => StatusEksemplar::Tersedia,
         ];
     }
 }
@@ -13647,22 +14207,19 @@ class LevelBadgeFactory extends Factory
 namespace Database\Factories;
 
 use App\Enums\StatusPeminjaman;
-use App\Models\Buku;
+use App\Models\Eksemplar;
 use App\Models\Transaksi;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class PeminjamanFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     */
     public function definition(): array
     {
         return [
             'transaksi_id' => Transaksi::factory(),
             'user_id' => User::factory(),
-            'buku_id' => Buku::factory(),
+            'eksemplar_id' => Eksemplar::factory(),
             'tanggal_pinjam' => fake()->date(),
             'tanggal_jatuh_tempo' => fake()->date(),
             'status' => fake()->randomElement(StatusPeminjaman::cases()),
@@ -15649,6 +16206,182 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_08_02_000001_add_unique_nama_to_kelas_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * MENGUBAH SKEMA kelas - dampak ke data existing (Aturan poin 16).
+ * 'nama' dibuat unik secara global (dikonfirmasi) - sebelumnya dua Kelas
+ * beda Jurusan boleh punya nama sama (mis. "X-1" di IPA dan "X-1" di
+ * IPS). VERIFIKASI SEBELUM MIGRATE: dicek via tinker pada tanggal
+ * pembuatan migration ini, hasil 0 baris nama Kelas duplikat - AMAN
+ * dijalankan saat itu. Jika ada Kelas baru ditambahkan antara saat
+ * verifikasi dan saat migration ini benar-benar dijalankan di
+ * production, migration akan GAGAL (bukan menghapus/mengubah data
+ * diam-diam) - cek ulang duplikat sebelum migrate jika jeda waktunya
+ * lama.
+ *
+ * TODO: GAP-SPEC - unique index standar TIDAK soft-delete aware (mirip
+ * kasus yang sudah ditangani untuk Kunjungan di migration
+ * 2026_07_30_000002_fix_unique_kunjungan_softdelete_aware.php). Artinya
+ * Kelas yang sudah di-soft-delete tetap "menahan" nama-nya - admin
+ * tidak akan bisa membuat Kelas baru dengan nama yang sama sampai
+ * Kelas lama di-restore atau di-force-delete. BELUM dikonfirmasi apakah
+ * perilaku ini bisa diterima atau perlu unique index partial/composite
+ * dengan deleted_at seperti pola Kunjungan - dibiarkan standar dulu
+ * sampai ada keputusan eksplisit.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('kelas', function (Blueprint $table) {
+            $table->unique('nama', 'kelas_nama_unique');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('kelas', function (Blueprint $table) {
+            $table->dropUnique('kelas_nama_unique');
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_02_000002_create_eksemplars_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('eksemplars', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('buku_id')->constrained('bukus');
+            $table->string('barcode')->unique();
+            $table->foreignUuid('rak_id')->nullable()->constrained('raks');
+            $table->enum('status', ['tersedia', 'dipinjam', 'rusak', 'hilang'])->default('tersedia');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('eksemplars');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_02_000003_alter_bukus_table_drop_barcode_rak_stok.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    // TODO: verifikasi driver DB (sqlite dev vs mysql prod) sebelum jalan -
+    // dropColumn multi-kolom + foreign key butuh doctrine/dbal di SQLite
+    // pada beberapa versi Laravel. Cek composer.json dulu.
+    public function up(): void
+    {
+        Schema::table('bukus', function (Blueprint $table) {
+            $table->dropForeign(['rak_id']);
+            $table->dropColumn(['barcode', 'rak_id', 'stok']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('bukus', function (Blueprint $table) {
+            $table->string('barcode')->unique()->nullable();
+            $table->foreignUuid('rak_id')->nullable()->constrained('raks');
+            $table->integer('stok')->default(1);
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_02_000004_alter_peminjamans_table_buku_to_eksemplar.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->dropForeign(['buku_id']);
+            $table->dropColumn('buku_id');
+            $table->foreignUuid('eksemplar_id')->after('transaksi_id')->constrained('eksemplars');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->dropForeign(['eksemplar_id']);
+            $table->dropColumn('eksemplar_id');
+            $table->foreignUuid('buku_id')->constrained('bukus');
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_02_000005_add_tahun_terbit_to_bukus_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('bukus', function (Blueprint $table) {
+            $table->unsignedSmallInteger('tahun_terbit')->nullable()->after('isbn');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('bukus', function (Blueprint $table) {
+            $table->dropColumn('tahun_terbit');
+        });
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -16844,7 +17577,7 @@ return [
                     <tr>
                         <td>{{ $p->tanggal_pinjam->format('d-m-Y') }}</td>
                         <td>{{ $p->user->nama }}</td>
-                        <td>{{ $p->buku->judul }}</td>
+                        <td>{{ $p->eksemplar->buku->judul }}</td>
                         <td>{{ $p->tanggal_jatuh_tempo->format('d-m-Y') }}</td>
                         <td>{{ ucfirst($p->status->value) }}</td>
                     </tr>
@@ -16878,7 +17611,7 @@ return [
                     <tr>
                         <td>{{ $p->tanggal_kembali->format('d-m-Y') }}</td>
                         <td>{{ $p->peminjaman->user->nama }}</td>
-                        <td>{{ $p->peminjaman->buku->judul }}</td>
+                        <td>{{ $p->peminjaman->eksemplar->buku->judul }}</td>
                         <td>{{ ucfirst($p->kondisi->value) }}</td>
                     </tr>
                 @empty

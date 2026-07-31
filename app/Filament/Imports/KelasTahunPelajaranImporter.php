@@ -27,6 +27,14 @@ use Filament\Actions\Imports\Models\Import;
  * memperbarui diri lewat ->example() di bawah).
  *
  * Wali kelas direferensikan via NIP, WAJIB bukan role super_admin.
+ *
+ * BUG FIX (ditemukan iterasi ini, sama pola dengan KelasImporter): SEMUA
+ * kolom di sini (kelas_nama, jurusan_kode, tahun_pelajaran_nama,
+ * wali_kelas_nip) adalah lookup-only - tabel 'kelas_tahun_pelajarans'
+ * hanya punya kelas_id/tahun_pelajaran_id/wali_kelas_id. Tanpa
+ * ->fillRecordUsing() no-op, Filament berisiko meng-assign atribut
+ * dinamis ini ke $record dan menyebabkan SQL error "Unknown column"
+ * saat save() - lihat detail penuh di docblock KelasImporter.
  */
 class KelasTahunPelajaranImporter extends Importer
 {
@@ -39,23 +47,27 @@ class KelasTahunPelajaranImporter extends Importer
                 ->label('Nama kelas')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
-                ->example('X-1'),
+                ->example('X-1')
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan')
                 ->helperText('Wajib diisi - lihat daftar kode di menu Master Data > Jurusan, supaya kelas dengan nama yang sama di jurusan berbeda tidak tertukar.')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
-                ->example('IPA'),
+                ->example('IPA')
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
-                ->example('2025/2026'),
+                ->example('2025/2026')
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('wali_kelas_nip')
                 ->label('NIP wali kelas (opsional)')
                 ->helperText('Kosongkan jika belum ada wali kelas yang ditunjuk.')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('198501012010011001'),
+                ->example('198501012010011001')
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -97,7 +109,7 @@ class KelasTahunPelajaranImporter extends Importer
         $waliKelas = User::query()->where('nip', trim($this->data['wali_kelas_nip']))->first();
 
         if (! $waliKelas) {
-            throw new RowImportFailedException("NIP wali kelas \"{$this->data['wali_kelas_nip']}\" tidak ditemukan. Pastikan user dengan NIP tersebut sudah terdaftar.");
+            throw new RowImportFailedException("NIP wali kelas \"{$this->data['wali_kelas_nip']}\" tidak ditemukan. Pastikan user dengan NIP tersebutsudah terdaftar.");
         }
 
         if ($waliKelas->role === RoleUser::Admin) {

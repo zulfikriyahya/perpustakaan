@@ -17,6 +17,16 @@ use Filament\Actions\Imports\Models\Import;
  *
  * 'jurusan_kode' tetap direferensikan via kode unik Jurusan (bukan nama)
  * untuk menghindari ambiguitas nama Jurusan.
+ *
+ * BUG FIX (ditemukan iterasi ini): 'jurusan_kode' adalah kolom
+ * lookup-only (bukan kolom asli tabel 'kelas' - lihat Schema kelas: id,
+ * nama, tingkat, jurusan_id, timestamps). Tanpa ->fillRecordUsing(),
+ * Filament otomatis meng-assign $record->jurusan_kode = state SEBELUM
+ * save(), yang lolos dari validasi Eloquent (properti dinamis tetap
+ * dianggap dirty attribute) dan menyebabkan SQLSTATE[42S22] "Unknown
+ * column 'jurusan_kode'" saat INSERT/UPDATE - baris gagal total dengan
+ * pesan generik "Terjadi kesalahan sistem". fillRecordUsing() no-op
+ * memastikan resolusi HANYA lewat resolveRecord() (Aturan poin 3, DRY).
  */
 class KelasImporter extends Importer
 {
@@ -27,7 +37,7 @@ class KelasImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->label('Nama kelas (mis. X IPA 1)')
-                ->helperText('Harus unik secara global - tidak boleh ada 2 Kelas dengan nama sama meski beda Jurusan.')
+                ->helperText('Harus unik secara global - tidak boleh ada 2Kelas dengan nama sama meski beda Jurusan.')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
                 ->example('X IPA 1'),
@@ -41,7 +51,10 @@ class KelasImporter extends Importer
                 ->label('Kode Jurusan (opsional)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan. Kosongkan jika kelas ini tidak terikat jurusan tertentu.')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('IPA'),
+                ->example('IPA')
+                // BUG FIX - lihat docblock class. Kolom ini bukan kolom
+                // asli tabel 'kelas', jangan biarkan Filament auto-assign.
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -72,10 +85,10 @@ class KelasImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Kelas selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Kelas selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;

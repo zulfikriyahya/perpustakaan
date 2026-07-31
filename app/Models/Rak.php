@@ -13,11 +13,6 @@ class Rak extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'nama',
         'lokasi',
@@ -28,8 +23,17 @@ class Rak extends Model
         return $this->belongsToMany(Kategori::class);
     }
 
-    public function bukus(): HasMany
+    // FIX: Rak tidak lagi punya relasi langsung ke Buku sejak migration
+    // 2026_08_02_000003 (bukus.rak_id di-drop). Rak sekarang berelasi ke
+    // Eksemplar (kopi fisik), bukan ke Buku (judul).
+    public function eksemplars(): HasMany
     {
-        return $this->hasMany(Buku::class);
+        return $this->hasMany(Eksemplar::class);
     }
+
+    // TODO: GAP-SPEC - belum dikonfirmasi apakah Rak butuh hitungan "jumlah
+    // judul buku unik" (distinct Buku) selain "jumlah eksemplar". Kalau ya,
+    // tambahkan accessor terpisah pakai hasManyThrough(Buku::class,
+    // Eksemplar::class)->distinct('bukus.id') - belum ditambahkan di sini
+    // supaya tidak menebak kebutuhan tampilan.
 }

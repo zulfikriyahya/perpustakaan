@@ -15,7 +15,7 @@ class PengembalianExporter extends Exporter
     {
         return [
             ExportColumn::make('peminjaman.user.nama')->label('Peminjam'),
-            ExportColumn::make('peminjaman.buku.judul')->label('Buku'),
+            ExportColumn::make('peminjaman.eksemplar.buku.judul')->label('Buku'),
             ExportColumn::make('tanggal_kembali'),
             ExportColumn::make('kondisi'),
             ExportColumn::make('catatan'),

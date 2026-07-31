@@ -28,14 +28,14 @@ use Tests\TestCase;
  * di setiap environment baru (dev/staging/production/CI), terpisah dari
  * `php artisan db:seed`. Test ini mensimulasikan permission User secara
  * eksplisit karena tidak menjalankan shield:generate penuh (mahal/interaktif).
- * Perlu didokumentasikan di README/Makefile bahwa fresh deploy WAJIB
- * `php artisan shield:generate --all` setelah migrate, bukan cukup seed.
  *
- * TODO: GAP-SPEC - 'columnMap' disertakan eksplisit di data action
- * karena pemetaan kolom CSV<->Importer normalnya diisi UI wizard step-2
- * secara reaktif setelah upload file - dalam callAction() satu langkah,
- * ini tidak ter-populate otomatis walau header CSV persis sama dengan
- * nama kolom Importer.
+ * BUG FIX (ditemukan iterasi ini): sebelumnya test ini memakai kolom CSV
+ * gabungan 'kelas_tahun_pelajaran' - TIDAK ADA di UserImporter::getColumns()
+ * saat ini (kontrak sudah berubah menjadi 3 kolom terpisah: kelas_nama,
+ * jurusan_kode, tahun_pelajaran_nama - lihat docblock "PERUBAHAN KONTRAK
+ * (dikonfirmasi)" di UserImporter). Test lama tidak sinkron dan berisiko
+ * memberi hasil palsu (mapping ke kolom yang tidak ada). Diperbaiki agar
+ * cocok dengan kontrak importer yang berlaku sekarang.
  */
 class UserImporterTest extends TestCase
 {
@@ -65,11 +65,11 @@ class UserImporterTest extends TestCase
         return $admin;
     }
 
-    protected function buatKtp(string $namaKelas, string $namaTahun): KelasTahunPelajaran
+    protected function buatKtp(string $namaKelas, string $namaTahun, ?string $kodeJurusan = null): KelasTahunPelajaran
     {
         $jurusan = Jurusan::query()->create([
             'nama' => 'IPA',
-            'kode' => 'IPA-'.uniqid(),
+            'kode' => $kodeJurusan ?? 'IPA-'.uniqid(),
         ]);
 
         $kelas = Kelas::query()->create([
@@ -97,7 +97,9 @@ class UserImporterTest extends TestCase
             'nama' => 'nama',
             'nisn' => 'nisn',
             'nip' => 'nip',
-            'kelas_tahun_pelajaran' => 'kelas_tahun_pelajaran',
+            'kelas_nama' => 'kelas_nama',
+            'jurusan_kode' => 'jurusan_kode',
+            'tahun_pelajaran_nama' => 'tahun_pelajaran_nama',
             'jabatan' => 'jabatan',
             'no_telepon' => 'no_telepon',
         ];
@@ -106,10 +108,10 @@ class UserImporterTest extends TestCase
     public function test_import_dengan_kelas_valid_membuat_riwayat_kelas_siswa(): void
     {
         $this->actingAsSuperAdmin();
-        $ktp = $this->buatKtp('X IPA 1', '2025/2026');
+        $ktp = $this->buatKtp('X IPA 1', '2025/2026', 'IPA');
 
-        $csv = "nama,nisn,nip,kelas_tahun_pelajaran,jabatan,no_telepon\n"
-            ."Budi Santoso,1001,,X IPA 1 - 2025/2026,,081234567890\n";
+        $csv = "nama,nisn,nip,kelas_nama,jurusan_kode,tahun_pelajaran_nama,jabatan,no_telepon\n"
+            ."Budi Santoso,1001,,X IPA 1,IPA,2025/2026,,081234567890\n";
 
         $file = UploadedFile::fake()->createWithContent('users.csv', $csv);
 
@@ -137,10 +139,10 @@ class UserImporterTest extends TestCase
     public function test_import_dengan_kelas_tidak_ditemukan_baris_gagal_dan_user_tidak_dibuat(): void
     {
         $this->actingAsSuperAdmin();
-        $this->buatKtp('X IPA 1', '2025/2026');
+        $this->buatKtp('X IPA 1', '2025/2026', 'IPA');
 
-        $csv = "nama,nisn,nip,kelas_tahun_pelajaran,jabatan,no_telepon\n"
-            ."Ani Wijaya,1002,,Kelas Ngasal - Tahun Ngasal,,081234567891\n";
+        $csv = "nama,nisn,nip,kelas_nama,jurusan_kode,tahun_pelajaran_nama,jabatan,no_telepon\n"
+            ."Ani Wijaya,1002,,Kelas Ngasal,IPA,Tahun Ngasal,,081234567891\n";
 
         $file = UploadedFile::fake()->createWithContent('users.csv', $csv);
 
@@ -157,8 +159,8 @@ class UserImporterTest extends TestCase
     {
         $this->actingAsSuperAdmin();
 
-        $csv = "nama,nisn,nip,kelas_tahun_pelajaran,jabatan,no_telepon\n"
-            ."Citra Dewi,1003,,,,081234567892\n";
+        $csv = "nama,nisn,nip,kelas_nama,jurusan_kode,tahun_pelajaran_nama,jabatan,no_telepon\n"
+            ."Citra Dewi,1003,,,,,,081234567892\n";
 
         $file = UploadedFile::fake()->createWithContent('users.csv', $csv);
 
@@ -173,5 +175,23 @@ class UserImporterTest extends TestCase
 
         $this->assertNull($user->kelas_tahun_pelajaran_id);
         $this->assertDatabaseMissing('riwayat_kelas_siswas', ['user_id' => $user->id]);
+    }
+
+    public function test_import_dengan_kelas_diisi_tanpa_jurusan_kode_baris_gagal(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $csv = "nama,nisn,nip,kelas_nama,jurusan_kode,tahun_pelajaran_nama,jabatan,no_telepon\n"
+            ."Doni Pratama,1004,,X IPA 1,,2025/2026,,081234567893\n";
+
+        $file = UploadedFile::fake()->createWithContent('users.csv', $csv);
+
+        Livewire::test(ListUsers::class)
+            ->callAction(TestAction::make('import')->table(), [
+                'file' => $file,
+                'columnMap' => $this->columnMap(),
+            ]);
+
+        $this->assertDatabaseMissing('users', ['nisn' => '1004']);
     }
 }

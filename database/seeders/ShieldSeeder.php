@@ -29,32 +29,25 @@ class ShieldSeeder extends Seeder
             'guard_name' => 'web',
         ]);
 
-        // BARU iterasi ini - permission manual untuk LevelBadgeLog, sama
-        // alasannya dengan Eksemplar di atas: Resource ini dibuat manual
-        // setelah shield:generate terakhir dijalankan, sehingga permission-
-        // nya belum otomatis ter-generate. Jalankan `php artisan
-        // shield:generate` lagi kapan pun untuk memverifikasi/melengkapi
-        // daftar ini secara otomatis di masa depan.
+        // PERBAIKAN - permission Eksemplar TERLEWAT saat EksemplarPolicy
+        // dibuat sebelumnya. Eksemplar bukan Filament Resource sendiri
+        // (hanya diakses via RelationManager di BukuResource/RakResource),
+        // jadi shield:generate tidak pernah membuat permission ini secara
+        // otomatis - harus manual seperti LevelBadgeLog/FirmwareRelease.
         foreach (
             [
-                'ViewAny:LevelBadgeLog',
-                'View:LevelBadgeLog',
-                'Create:LevelBadgeLog',
-                'Update:LevelBadgeLog',
-                'Delete:LevelBadgeLog',
-                'DeleteAny:LevelBadgeLog',
-                'Restore:LevelBadgeLog',
-                'RestoreAny:LevelBadgeLog',
-                'ForceDelete:LevelBadgeLog',
-                'ForceDeleteAny:LevelBadgeLog',
-                'Replicate:LevelBadgeLog',
-                'Reorder:LevelBadgeLog',
-                'ViewAny:FirmwareRelease',
-                'View:FirmwareRelease',
-                'Create:FirmwareRelease',
-                'Update:FirmwareRelease',
-                'Delete:FirmwareRelease',
-                'DeleteAny:FirmwareRelease',
+                'ViewAny:Eksemplar',
+                'View:Eksemplar',
+                'Create:Eksemplar',
+                'Update:Eksemplar',
+                'Delete:Eksemplar',
+                'DeleteAny:Eksemplar',
+                'Restore:Eksemplar',
+                'RestoreAny:Eksemplar',
+                'ForceDelete:Eksemplar',
+                'ForceDeleteAny:Eksemplar',
+                'Replicate:Eksemplar',
+                'Reorder:Eksemplar',
             ] as $permissionName
         ) {
             Permission::firstOrCreate([

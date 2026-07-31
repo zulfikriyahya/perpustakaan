@@ -7,6 +7,10 @@ use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\EksemplarExporter;
 use App\Filament\Imports\EksemplarImporter;
 use App\Models\Eksemplar;
+use App\Services\LabelBarcodeService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
@@ -22,6 +26,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class EksemplarsRelationManager extends RelationManager
 {
@@ -73,8 +78,6 @@ class EksemplarsRelationManager extends RelationManager
             ->filters([
                 SelectFilter::make('status')
                     ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
-                // Ditambahkan supaya baris Eksemplar soft-deleted terlihat
-                // dan bisa direstore/force-delete dari tab ini.
                 TrashedFilter::make(),
             ])
             ->recordActions([
@@ -89,11 +92,6 @@ class EksemplarsRelationManager extends RelationManager
                         ? 'Eksemplar sedang dipinjam - tidak bisa dihapus.'
                         : null),
                 RestoreAction::make(),
-                // GAP-SPEC ditutup (konsisten dengan BukuResource): force
-                // delete diizinkan, eksemplar_id di riwayat Peminjaman jadi
-                // null (migration 2026_08_02_000007) - TAPI diblok kalau
-                // masih ada Peminjaman Aktif/Terlambat pada eksemplar ini
-                // (guard wajib, bukan pilihan bisnis).
                 ForceDeleteAction::make()
                     ->action(function (Eksemplar $record) {
                         $adaPeminjamanBerjalan = $record->peminjamans()
@@ -112,6 +110,49 @@ class EksemplarsRelationManager extends RelationManager
 
                         $record->forceDelete();
                     }),
+                // BARU - cetak 1 label barcode langsung dari baris tabel.
+                // Reuse ability 'view' Eksemplar (tidak ada permission baru,
+                // Aturan poin 15 - tidak mengubah skema/otorisasi).
+                Action::make('cetak_label')
+                    ->label('Cetak Label')
+                    ->icon('heroicon-o-printer')
+                    ->authorize(fn (Eksemplar $record) => auth()->user()?->can('view', $record) ?? false)
+                    ->action(function (Eksemplar $record, LabelBarcodeService $service) {
+                        $record->loadMissing('buku');
+                        $labels = $service->generateData(collect([$record]));
+
+                        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
+                            ->setPaper('a4', 'portrait');
+
+                        return response()->streamDownload(
+                            fn () => print ($pdf->output()),
+                            "label-{$record->barcode}.pdf",
+                            ['Content-Type' => 'application/pdf'],
+                        );
+                    }),
+            ])
+            ->toolbarActions([
+                // BARU - cetak label massal dari eksemplar terpilih, satu
+                // PDF sticker sheet A4 (3 kolom per baris, lihat
+                // pdf.label-barcode). Reuse ability 'viewAny' Eksemplar.
+                BulkAction::make('cetak_label_massal')
+                    ->label('Cetak Label (Massal)')
+                    ->icon('heroicon-o-printer')
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->action(function (Collection $records, LabelBarcodeService $service) {
+                        $records->loadMissing('buku');
+                        $labels = $service->generateData($records);
+
+                        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
+                            ->setPaper('a4', 'portrait');
+
+                        return response()->streamDownload(
+                            fn () => print ($pdf->output()),
+                            'label-barcode-massal-'.now()->format('Ymd-His').'.pdf',
+                            ['Content-Type' => 'application/pdf'],
+                        );
+                    })
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 }

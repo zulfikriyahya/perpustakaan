@@ -7,9 +7,13 @@ use App\Filament\Exports\BukuExporter;
 use App\Filament\Imports\BukuImporter;
 use App\Filament\Resources\BukuResource\Pages;
 use App\Filament\Resources\BukuResource\RelationManagers\EksemplarsRelationManager;
+use App\Jobs\GenerateLabelBarcodePdfJob;
 use App\Models\Buku;
 use App\Models\Eksemplar;
 use App\Models\Rak;
+use App\Services\LabelBarcodeService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ForceDeleteAction;
@@ -27,6 +31,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class BukuResource extends Resource
 {
@@ -145,12 +150,6 @@ class BukuResource extends Resource
             ])
             ->actions([
                 DeleteAction::make(),
-                // GAP-SPEC ditutup (dikonfirmasi user, Opsi B): force-delete
-                // diizinkan, eksemplar_id di riwayat Peminjaman jadi null
-                // (lihat migration 2026_08_02_000007). TAPI diblok kalau
-                // masih ada Peminjaman Aktif/Terlambat - bukan pilihan
-                // bisnis, ini guard wajib supaya alur pinjam yang sedang
-                // berjalan tidak rusak (lihat catatan PeminjamanService).
                 ForceDeleteAction::make()
                     ->action(function (Buku $record) {
                         $adaPeminjamanBerjalan = Eksemplar::query()
@@ -181,6 +180,66 @@ class BukuResource extends Resource
                 SelectFilter::make('kategoris')
                     ->label('Kategori')
                     ->relationship('kategoris', 'nama'),
+            ])
+            ->toolbarActions([
+                // BARU - cetak label barcode lintas Buku terpilih. Ambil
+                // SEMUA Eksemplar milik Buku-Buku yang dicentang (Aturan
+                // poin 3 - reuse LabelBarcodeService, jangan duplikasi
+                // logic generate barcode di sini).
+                BulkAction::make('cetak_label_massal')
+                    ->label('Cetak Label Eksemplar')
+                    ->icon('heroicon-o-printer')
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->action(function (Collection $records, LabelBarcodeService $service) {
+                        $eksemplars = Eksemplar::query()
+                            ->whereIn('buku_id', $records->pluck('id'))
+                            ->with('buku')
+                            ->get();
+
+                        if ($eksemplars->isEmpty()) {
+                            Notification::make()
+                                ->warning()
+                                ->title('Tidak ada Eksemplar')
+                                ->body('Buku yang dipilih belum punya Eksemplar untuk dicetak labelnya.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $labels = $service->generateData($eksemplars);
+
+                        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
+                            ->setPaper('a4', 'portrait');
+
+                        return response()->streamDownload(
+                            fn () => print ($pdf->output()),
+                            'label-barcode-buku-'.now()->format('Ymd-His').'.pdf',
+                            ['Content-Type' => 'application/pdf'],
+                        );
+                    })
+                    ->deselectRecordsAfterCompletion(),
+
+                // // BARU - generate PDF di background (queue 'default') agar
+                // // tidak timeout HTTP saat Buku terpilih banyak. Hasil
+                // // dikirim via Filament database notification (bell icon)
+                // // dengan tombol Download - lihat GenerateLabelBarcodePdfJob.
+                // BulkAction::make('cetak_label_massal')
+                //     ->label('Cetak Label Eksemplar')
+                //     ->icon('heroicon-o-printer')
+                //     ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                //     ->action(function (Collection $records) {
+                //         GenerateLabelBarcodePdfJob::dispatch(
+                //             $records->pluck('id')->all(),
+                //             (string) auth()->id(),
+                //         );
+
+                //         \Filament\Notifications\Notification::make()
+                //             ->info()
+                //             ->title('Sedang memproses label barcode')
+                //             ->body('Anda akan menerima notifikasi begitu PDF siap diunduh.')
+                //             ->send();
+                //     })
+                //     ->deselectRecordsAfterCompletion(),
             ]);
     }
 

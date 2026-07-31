@@ -3,19 +3,24 @@
 namespace App\Filament\Imports;
 
 use App\Enums\RoleUser;
+use App\Models\Jurusan;
+use App\Models\Kelas;
 use App\Models\KelasTahunPelajaran;
+use App\Models\TahunPelajaran;
 use App\Models\User;
+use App\Rules\FormatKartuRfid;
 use App\Services\KenaikanKelasService;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
- * TODO: GAP-SPEC - 'role' dan 'no_kartu_rfid' SENGAJA tidak termasuk kolom
- * import (dikonfirmasi: harus manual lewat form demi keamanan). User baru
- * hasil import otomatis role='siswa' (default migration/kolom).
+ * TODO: GAP-SPEC - 'role' SENGAJA tidak termasuk kolom import (dikonfirmasi:
+ * harus manual lewat form demi keamanan). User baru hasil import otomatis
+ * role='siswa' (default migration/kolom).
  *
  * Upsert berdasarkan 'nisn' jika ada, fallback 'nip' - baris tanpa
  * keduanya akan gagal (lihat rules 'required_without').
@@ -23,24 +28,25 @@ use Illuminate\Support\Str;
  * Password digenerate random - TIDAK ada mekanisme kirim WA/email
  * notifikasi password ke user baru dalam iterasi ini.
  *
- * TODO: GAP-SPEC - kolom 'kelas_tahun_pelajaran' berformat teks bebas
- * "Nama Kelas - Nama Tahun Pelajaran" (mis. "X IPA 1 - 2025/2026"),
- * dipisah pada tanda "-" TERAKHIR karena nama Kelas sendiri bisa
- * mengandung "-". Format ini asumsi/keputusan sepihak karena belum ada
- * spek resmi format Excel dari sekolah - jika format sumber data
- * berbeda, sesuaikan resolveKtp() di bawah. Baris yang tidak match KTP
- * manapun akan GAGAL divalidasi (RowImportFailedException, masuk
- * failed-rows CSV) - TIDAK assignment diam-diam ke kelas yang salah.
+ * Kolom 'no_kartu_rfid' (dikonfirmasi masuk ke import, sebelumnya
+ * sengaja dikeluarkan demi keamanan) - aturan MENGIKAT kontrak firmware
+ * Attendance Machine (lihat FormatKartuRfid::class, wajib persis 10
+ * digit angka) - dipakai lewat rule yang SAMA dengan form manual
+ * (Aturan poin 3, satu sumber kebenaran validasi).
+ *
+ * Perilaku no_kartu_rfid (dikonfirmasi eksplisit):
+ * - Diisi dan berbeda dari kartu user saat ini -> kartu di-assign,
+ *   KECUALI nomor tersebut sudah dipakai user LAIN -> baris GAGAL
+ *   (RowImportFailedException), user lain tidak diubah sama sekali.
+ * - Dikosongkan, padahal user sudah punya kartu terdaftar -> kartu
+ *   LAMA DIHAPUS (di-null-kan). User tersebut TIDAK BISA tap RFID lagi
+ *   sampai didaftarkan ulang. Jumlah kartu yang terhapus direkap di
+ *   notifikasi selesai import supaya tidak terjadi diam-diam.
  */
 class UserImporter extends Importer
 {
     protected static ?string $model = User::class;
 
-    /**
-     * KTP hasil resolve di resolveRecord(), dipakai lagi di afterSave()
-     * supaya logic parsing teks "kelas_tahun_pelajaran" tidak diduplikasi
-     * (Aturan poin 3, DRY - satu resolve, dua pemakaian).
-     */
     protected ?KelasTahunPelajaran $ktpTerresolve = null;
 
     public static function getColumns(): array
@@ -48,36 +54,57 @@ class UserImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Yahya Zulfikri'),
             ImportColumn::make('nisn')
                 ->label('NISN')
-                ->rules(['nullable', 'required_without:nip', 'string', 'max:255']),
+                ->helperText('Isi salah satu: NISN (untuk siswa) atau NIP (untuk pegawai/pustakawan).')
+                ->rules(['nullable', 'required_without:nip', 'string', 'max:10'])
+                ->example('0000971291'),
             ImportColumn::make('nip')
                 ->label('NIP')
-                ->rules(['nullable', 'required_without:nisn', 'string', 'max:255']),
-            ImportColumn::make('kelas_tahun_pelajaran')
-                ->label('Kelas (format: "Nama Kelas - Nama Tahun Pelajaran")')
+                ->rules(['nullable', 'required_without:nisn', 'string', 'max:18'])
+                ->example(''),
+            ImportColumn::make('kelas_nama')
+                ->label('Nama kelas (opsional, khusus siswa)')
+                ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('X IPA 1 - 2025/2026'),
+                ->example('VII A'),
+            ImportColumn::make('jurusan_kode')
+                ->label('Kode jurusan (wajib jika kelas_nama diisi)')
+                ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('Non_Jurusan'),
+            ImportColumn::make('tahun_pelajaran_nama')
+                ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('2025/2026'),
             ImportColumn::make('jabatan')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example(''),
             ImportColumn::make('no_telepon')
                 ->label('No. Telepon')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('081234567890'),
+            ImportColumn::make('no_kartu_rfid')
+                ->label('No. kartu RFID (opsional)')
+                ->helperText('PERHATIAN: kosongkan HANYA jika memang ingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
+                ->rules(['nullable', new FormatKartuRfid])
+                ->example('1234567890'),
         ];
     }
 
     public function resolveRecord(): ?User
     {
-        $teks = trim((string) ($this->data['kelas_tahun_pelajaran'] ?? ''));
+        $namaKelas = trim((string) ($this->data['kelas_nama'] ?? ''));
 
-        if ($teks !== '') {
-            $this->ktpTerresolve = $this->parseKtp($teks);
-
-            if (! $this->ktpTerresolve) {
-                throw new RowImportFailedException("KTP tidak ditemukan untuk teks kelas_tahun_pelajaran: \"{$teks}\".");
-            }
+        if ($namaKelas !== '') {
+            $this->ktpTerresolve = $this->resolveKtp(
+                $namaKelas,
+                trim((string) ($this->data['jurusan_kode'] ?? '')),
+                trim((string) ($this->data['tahun_pelajaran_nama'] ?? '')),
+            );
         }
 
         if (! empty($this->data['nisn'])) {
@@ -95,10 +122,36 @@ class UserImporter extends Importer
     }
 
     /**
-     * Assignment lewat service (bukan mass-assign kolom di resolveRecord)
-     * supaya RiwayatKelasSiswa tetap tercatat, dan hanya dijalankan
-     * SETELAH record dasar tersimpan (butuh $this->record->id).
+     * Uniqueness no_kartu_rfid dicek manual (bukan rule 'unique' di
+     * getColumns()) karena butuh tahu ID record yang sedang di-upsert
+     * dulu (supaya user meng-update kartunya sendiri dengan nilai yang
+     * sama tidak dianggap konflik) - baru tersedia setelah resolveRecord().
      */
+    protected function beforeSave(): void
+    {
+        $nomorBaru = trim((string) ($this->data['no_kartu_rfid'] ?? ''));
+
+        if ($nomorBaru === '') {
+            if ($this->record->no_kartu_rfid !== null) {
+                $this->record->no_kartu_rfid = null;
+                Cache::increment("import-{$this->import->id}-kartu-dihapus");
+            }
+
+            return;
+        }
+
+        $dipakaiUserLain = User::query()
+            ->where('no_kartu_rfid', $nomorBaru)
+            ->when($this->record->exists, fn ($q) => $q->whereKeyNot($this->record->id))
+            ->exists();
+
+        if ($dipakaiUserLain) {
+            throw new RowImportFailedException("Nomor kartu \"{$nomorBaru}\" sudah dipakai user lain. Cek kembali atau kosongkan kolom ini.");
+        }
+
+        $this->record->no_kartu_rfid = $nomorBaru;
+    }
+
     protected function afterSave(): void
     {
         if ($this->ktpTerresolve) {
@@ -106,34 +159,60 @@ class UserImporter extends Importer
         }
     }
 
-    protected function parseKtp(string $teks): ?KelasTahunPelajaran
+    protected function resolveKtp(string $namaKelas, string $kodeJurusan, string $namaTahun): KelasTahunPelajaran
     {
-        $posisi = strrpos($teks, '-');
-
-        if ($posisi === false) {
-            return null;
+        if ($kodeJurusan === '' || $namaTahun === '') {
+            throw new RowImportFailedException('Kelas diisi tapi kolom jurusan_kode atau tahun_pelajaran_nama kosong. Isi ketiganya, atau kosongkan ketiganya jika user ini belum mau ditempatkan ke kelas.');
         }
 
-        $namaKelas = trim(substr($teks, 0, $posisi));
-        $namaTahun = trim(substr($teks, $posisi + 1));
+        $jurusan = Jurusan::query()->where('kode', $kodeJurusan)->first();
 
-        if ($namaKelas === '' || $namaTahun === '') {
-            return null;
+        if (! $jurusan) {
+            throw new RowImportFailedException("Kode jurusan \"{$kodeJurusan}\" tidak ditemukan. Cek ejaan atau tambahkan Jurusan-nya dulu di Master Data.");
         }
 
-        return KelasTahunPelajaran::query()
-            ->whereHas('kelas', fn ($q) => $q->where('nama', $namaKelas))
-            ->whereHas('tahunPelajaran', fn ($q) => $q->where('nama', $namaTahun))
+        $kelas = Kelas::query()
+            ->where('nama', $namaKelas)
+            ->where('jurusan_id', $jurusan->id)
             ->first();
+
+        if (! $kelas) {
+            throw new RowImportFailedException("Kelas \"{$namaKelas}\" dengan jurusan \"{$kodeJurusan}\" tidak ditemukan. Cek ejaan atau tambahkan Kelas-nya dulu di Master Data.");
+        }
+
+        $tahun = TahunPelajaran::query()->where('nama', $namaTahun)->first();
+
+        if (! $tahun) {
+            throw new RowImportFailedException("Tahun pelajaran \"{$namaTahun}\" tidak ditemukan. Cek ejaan atau tambahkan dulu di Master Data.");
+        }
+
+        $ktp = KelasTahunPelajaran::query()
+            ->where('kelas_id', $kelas->id)
+            ->where('tahun_pelajaran_id', $tahun->id)
+            ->first();
+
+        if (! $ktp) {
+            throw new RowImportFailedException("Kombinasi kelas \"{$namaKelas}\" ({$kodeJurusan}) dan tahun pelajaran \"{$namaTahun}\" belum terdaftar. Import Kelas per Tahun Pelajaran dulu sebelum import User.");
+        }
+
+        return $ktp;
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import User selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
+
+        $kartuDihapus = (int) Cache::get("import-{$import->id}-kartu-dihapus", 0);
+
+        if ($kartuDihapus > 0) {
+            $body .= " PERHATIAN: {$kartuDihapus} kartu RFID dihapus dari user (kolom dikosongkan di file) - user tersebut tidak bisa tap RFID sampai didaftarkan ulang.";
+        }
+
+        Cache::forget("import-{$import->id}-kartu-dihapus");
 
         return $body;
     }

@@ -7,7 +7,9 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-// Upsert berdasarkan 'nama' (unique di form, sama pola dengan Kategori).
+/**
+ * Upsert case-insensitive berdasarkan 'nama' (dikonfirmasi).
+ */
 class RewardImporter extends Importer
 {
     protected static ?string $model = Reward::class;
@@ -17,30 +19,38 @@ class RewardImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Voucher buku gratis'),
             ImportColumn::make('deskripsi')
-                ->rules(['nullable', 'string']),
+                ->rules(['nullable', 'string'])
+                ->example('Dapat menukar 1 buku baru dari katalog toko rekanan'),
             ImportColumn::make('threshold_point')
+                ->label('Ambang batas point')
                 ->requiredMapping()
                 ->numeric()
-                ->rules(['required', 'integer']),
+                ->rules(['required', 'integer'])
+                ->example('500'),
             ImportColumn::make('aktif')
                 ->boolean()
-                ->rules(['nullable', 'boolean']),
+                ->rules(['nullable', 'boolean'])
+                ->example('1'),
         ];
     }
 
     public function resolveRecord(): ?Reward
     {
-        return Reward::query()->firstOrNew(['nama' => $this->data['nama']]);
+        $nama = trim($this->data['nama']);
+
+        return Reward::query()->whereRaw('LOWER(nama) = ?', [mb_strtolower($nama)])->first()
+            ?? new Reward(['nama' => $nama]);
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Reward selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Reward selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;

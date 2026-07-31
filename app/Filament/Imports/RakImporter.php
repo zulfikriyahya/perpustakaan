@@ -8,7 +8,12 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-// TODO: GAP-SPEC - upsert berdasarkan 'nama' - sama seperti BukuImporter/KategoriImporter.
+/**
+ * Upsert case-insensitive berdasarkan 'nama' (dikonfirmasi) - "Rak A"
+ * dan "rak a" dianggap Rak yang sama. Jika sudah ada baris cocok,
+ * ejaan/kapitalisasi LAMA di database yang dipertahankan - hanya kolom
+ * lain (lokasi, kategori) yang ter-update.
+ */
 class RakImporter extends Importer
 {
     protected static ?string $model = Rak::class;
@@ -18,18 +23,24 @@ class RakImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Rak A'),
             ImportColumn::make('lokasi')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('Lantai 1, dekat pintu masuk'),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
-                ->rules(['nullable', 'string']),
+                ->rules(['nullable', 'string'])
+                ->example('Fiksi;Sains'),
         ];
     }
 
     public function resolveRecord(): ?Rak
     {
-        return Rak::query()->firstOrNew(['nama' => $this->data['nama']]);
+        $nama = trim($this->data['nama']);
+
+        return Rak::query()->whereRaw('LOWER(nama) = ?', [mb_strtolower($nama)])->first()
+            ?? new Rak(['nama' => $nama]);
     }
 
     protected function afterSave(): void
@@ -43,10 +54,10 @@ class RakImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Rak selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Rak selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;

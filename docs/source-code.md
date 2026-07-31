@@ -1158,7 +1158,14 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-// TODO: GAP-SPEC - upsert berdasarkan 'nama' (case-sensitive) - sama seperti BukuImporter.
+/**
+ * Upsert case-insensitive berdasarkan 'nama' (dikonfirmasi) - "Fiksi"
+ * dan "fiksi" dianggap kategori yang sama, mencegah duplikat akibat
+ * ketidakkonsistenan pengetikan staf. Jika sudah ada baris cocok,
+ * ejaan/kapitalisasi LAMA di database yang dipertahankan (baris di
+ * file import tidak menimpa nama yang sudah ada) - hanya kolom lain
+ * (deskripsi) yang ter-update.
+ */
 class KategoriImporter extends Importer
 {
     protected static ?string $model = Kategori::class;
@@ -1168,23 +1175,28 @@ class KategoriImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Fiksi'),
             ImportColumn::make('deskripsi')
-                ->rules(['nullable', 'string']),
+                ->rules(['nullable', 'string'])
+                ->example('Novel dan cerita rekaan'),
         ];
     }
 
     public function resolveRecord(): ?Kategori
     {
-        return Kategori::query()->firstOrNew(['nama' => $this->data['nama']]);
+        $nama = trim($this->data['nama']);
+
+        return Kategori::query()->whereRaw('LOWER(nama) = ?', [mb_strtolower($nama)])->first()
+            ?? new Kategori(['nama' => $nama]);
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Kategori selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Kategori selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1279,6 +1291,7 @@ class KelasImporter extends Importer
 namespace App\Filament\Imports;
 
 use App\Enums\RoleUser;
+use App\Models\Jurusan;
 use App\Models\Kelas;
 use App\Models\KelasTahunPelajaran;
 use App\Models\TahunPelajaran;
@@ -1290,12 +1303,18 @@ use Filament\Actions\Imports\Models\Import;
 
 /**
  * Upsert berdasarkan (kelas_id, tahun_pelajaran_id) - sesuai unique
- * index di migration kelas_tahun_pelajarans, bukan tebakan sepihak.
+ * index di migration kelas_tahun_pelajarans.
  *
- * Wali kelas direferensikan via NIP (dikonfirmasi Aturan), dan WAJIB
- * bukan role super_admin (RoleUser::Admin) - konsisten dengan filter
- * form KelasTahunPelajaranResource. Baris dengan NIP milik super_admin
- * akan GAGAL divalidasi, bukan diproses diam-diam.
+ * PERUBAHAN KONTRAK (dikonfirmasi): kolom 'jurusan_kode' WAJIB diisi -
+ * sebelumnya Kelas dicocokkan hanya lewat nama, yang bisa ambigu karena
+ * Kelas.nama TIDAK unik secara global (lihat catatan di KelasImporter,
+ * dua kelas beda jurusan bisa punya nama sama, mis. "X-1"). Template
+ * Excel/CSV lama TANPA kolom ini akan GAGAL divalidasi (required),
+ * bukan diproses dengan asumsi keliru - sekolah wajib pakai template
+ * baru (tombol "Unduh contoh" di wizard import sudah otomatis
+ * memperbarui diri lewat ->example() di bawah).
+ *
+ * Wali kelas direferensikan via NIP, WAJIB bukan role super_admin.
  */
 class KelasTahunPelajaranImporter extends Importer
 {
@@ -1305,37 +1324,50 @@ class KelasTahunPelajaranImporter extends Importer
     {
         return [
             ImportColumn::make('kelas_nama')
-                ->label('Nama Kelas')
+                ->label('Nama kelas')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('X-1'),
+            ImportColumn::make('jurusan_kode')
+                ->label('Kode jurusan')
+                ->helperText('Wajib diisi - lihat daftar kode di menu Master Data > Jurusan, supaya kelas dengan nama yang sama di jurusan berbeda tidak tertukar.')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255'])
+                ->example('IPA'),
             ImportColumn::make('tahun_pelajaran_nama')
-                ->label('Nama Tahun Pelajaran')
+                ->label('Tahun pelajaran')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
                 ->example('2025/2026'),
             ImportColumn::make('wali_kelas_nip')
-                ->label('NIP Wali Kelas (opsional)')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->label('NIP wali kelas (opsional)')
+                ->helperText('Kosongkan jika belum ada wali kelas yang ditunjuk.')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('198501012010011001'),
         ];
     }
 
     public function resolveRecord(): ?KelasTahunPelajaran
     {
-        $kelas = Kelas::query()->where('nama', $this->data['kelas_nama'])->first();
+        $jurusan = Jurusan::query()->where('kode', trim($this->data['jurusan_kode']))->first();
 
-        if (! $kelas) {
-            throw new RowImportFailedException("Kelas \"{$this->data['kelas_nama']}\" tidak ditemukan.");
-            // TODO: GAP-SPEC - jika nama Kelas tidak unik global (lihat
-            // catatan KelasImporter), where('nama', ...) di atas bisa
-            // mengambil baris yang salah tanpa error. Perlu kolom
-            // tambahan (mis. kode Jurusan) di sini juga bila kasus
-            // tersebut nyata terjadi di data sekolah.
+        if (! $jurusan) {
+            throw new RowImportFailedException("Kode jurusan \"{$this->data['jurusan_kode']}\" tidak ditemukan. Cek ejaan atau tambahkan Jurusan-nya dulu di Master Data.");
         }
 
-        $tahun = TahunPelajaran::query()->where('nama', $this->data['tahun_pelajaran_nama'])->first();
+        $kelas = Kelas::query()
+            ->where('nama', trim($this->data['kelas_nama']))
+            ->where('jurusan_id', $jurusan->id)
+            ->first();
+
+        if (! $kelas) {
+            throw new RowImportFailedException("Kelas \"{$this->data['kelas_nama']}\" dengan jurusan \"{$this->data['jurusan_kode']}\" tidak ditemukan. Cek ejaan atau tambahkan Kelas-nya dulu di Master Data.");
+        }
+
+        $tahun = TahunPelajaran::query()->where('nama', trim($this->data['tahun_pelajaran_nama']))->first();
 
         if (! $tahun) {
-            throw new RowImportFailedException("Tahun Pelajaran \"{$this->data['tahun_pelajaran_nama']}\" tidak ditemukan.");
+            throw new RowImportFailedException("Tahun pelajaran \"{$this->data['tahun_pelajaran_nama']}\" tidak ditemukan. Cek ejaan atau tambahkan dulu di Master Data.");
         }
 
         return KelasTahunPelajaran::query()->firstOrNew([
@@ -1350,14 +1382,14 @@ class KelasTahunPelajaranImporter extends Importer
             return;
         }
 
-        $waliKelas = User::query()->where('nip', $this->data['wali_kelas_nip'])->first();
+        $waliKelas = User::query()->where('nip', trim($this->data['wali_kelas_nip']))->first();
 
         if (! $waliKelas) {
-            throw new RowImportFailedException("User dengan NIP \"{$this->data['wali_kelas_nip']}\" tidak ditemukan.");
+            throw new RowImportFailedException("NIP wali kelas \"{$this->data['wali_kelas_nip']}\" tidak ditemukan. Pastikan user dengan NIP tersebut sudah terdaftar.");
         }
 
         if ($waliKelas->role === RoleUser::Admin) {
-            throw new RowImportFailedException('User dengan role super_admin tidak boleh menjadi wali kelas.');
+            throw new RowImportFailedException('User dengan NIP tersebut berperan sebagai admin, tidak bisa dijadikan wali kelas.');
         }
 
         $this->record->update(['wali_kelas_id' => $waliKelas->id]);
@@ -1365,10 +1397,10 @@ class KelasTahunPelajaranImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Kelas per Tahun Pelajaran selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Kelas per Tahun Pelajaran selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1390,10 +1422,7 @@ use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
 /**
- * TODO: GAP-SPEC - upsert berdasarkan 'nama_badge'. Migration tidak
- * memberi unique constraint pada kolom ini (hanya di form Filament) -
- * jika sumber data ternyata mengizinkan nama badge duplikat secara sah,
- * upsert key ini perlu direvisi.
+ * Upsert case-insensitive berdasarkan 'nama_badge' (dikonfirmasi).
  */
 class LevelBadgeImporter extends Importer
 {
@@ -1403,32 +1432,44 @@ class LevelBadgeImporter extends Importer
     {
         return [
             ImportColumn::make('nama_badge')
+                ->label('Nama badge')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Kutu Buku'),
             ImportColumn::make('min_point')
+                ->label('Point minimal')
                 ->requiredMapping()
                 ->numeric()
-                ->rules(['required', 'integer']),
+                ->rules(['required', 'integer'])
+                ->example('0'),
             ImportColumn::make('max_point')
+                ->label('Point maksimal (opsional)')
+                ->helperText('Kosongkan jika badge ini adalah level tertinggi (tidak ada batas atas).')
                 ->numeric()
-                ->rules(['nullable', 'integer']),
+                ->rules(['nullable', 'integer'])
+                ->example('100'),
             ImportColumn::make('urutan')
+                ->helperText('Angka lebih kecil ditampilkan lebih dulu.')
                 ->numeric()
-                ->rules(['nullable', 'integer']),
+                ->rules(['nullable', 'integer'])
+                ->example('1'),
         ];
     }
 
     public function resolveRecord(): ?LevelBadge
     {
-        return LevelBadge::query()->firstOrNew(['nama_badge' => $this->data['nama_badge']]);
+        $nama = trim($this->data['nama_badge']);
+
+        return LevelBadge::query()->whereRaw('LOWER(nama_badge) = ?', [mb_strtolower($nama)])->first()
+            ?? new LevelBadge(['nama_badge' => $nama]);
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Level Badge selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Level Badge selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1449,7 +1490,9 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-// Upsert berdasarkan 'nama' (unique di form).
+/**
+ * Upsert case-insensitive berdasarkan 'nama' (dikonfirmasi).
+ */
 class PunishmentImporter extends Importer
 {
     protected static ?string $model = Punishment::class;
@@ -1459,33 +1502,44 @@ class PunishmentImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Skorsing peminjaman 7 hari'),
             ImportColumn::make('deskripsi')
-                ->rules(['nullable', 'string']),
+                ->rules(['nullable', 'string'])
+                ->example('Diberikan jika point minus mencapai ambang batas'),
             ImportColumn::make('threshold_point_minus')
+                ->label('Ambang batas point minus')
+                ->helperText('Isi dengan angka negatif atau 0 (mis. -50).')
                 ->requiredMapping()
                 ->numeric()
-                ->rules(['required', 'integer', 'max:0']),
+                ->rules(['required', 'integer', 'max:0'])
+                ->example('-50'),
             ImportColumn::make('durasi_suspend_hari')
+                ->label('Durasi suspend (hari, opsional)')
                 ->numeric()
-                ->rules(['nullable', 'integer', 'min:1']),
+                ->rules(['nullable', 'integer', 'min:1'])
+                ->example('7'),
             ImportColumn::make('aktif')
                 ->boolean()
-                ->rules(['nullable', 'boolean']),
+                ->rules(['nullable', 'boolean'])
+                ->example('1'),
         ];
     }
 
     public function resolveRecord(): ?Punishment
     {
-        return Punishment::query()->firstOrNew(['nama' => $this->data['nama']]);
+        $nama = trim($this->data['nama']);
+
+        return Punishment::query()->whereRaw('LOWER(nama) = ?', [mb_strtolower($nama)])->first()
+            ?? new Punishment(['nama' => $nama]);
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Punishment selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Punishment selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1507,7 +1561,12 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-// TODO: GAP-SPEC - upsert berdasarkan 'nama' - sama seperti BukuImporter/KategoriImporter.
+/**
+ * Upsert case-insensitive berdasarkan 'nama' (dikonfirmasi) - "Rak A"
+ * dan "rak a" dianggap Rak yang sama. Jika sudah ada baris cocok,
+ * ejaan/kapitalisasi LAMA di database yang dipertahankan - hanya kolom
+ * lain (lokasi, kategori) yang ter-update.
+ */
 class RakImporter extends Importer
 {
     protected static ?string $model = Rak::class;
@@ -1517,18 +1576,24 @@ class RakImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Rak A'),
             ImportColumn::make('lokasi')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('Lantai 1, dekat pintu masuk'),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
-                ->rules(['nullable', 'string']),
+                ->rules(['nullable', 'string'])
+                ->example('Fiksi;Sains'),
         ];
     }
 
     public function resolveRecord(): ?Rak
     {
-        return Rak::query()->firstOrNew(['nama' => $this->data['nama']]);
+        $nama = trim($this->data['nama']);
+
+        return Rak::query()->whereRaw('LOWER(nama) = ?', [mb_strtolower($nama)])->first()
+            ?? new Rak(['nama' => $nama]);
     }
 
     protected function afterSave(): void
@@ -1542,10 +1607,10 @@ class RakImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Rak selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Rak selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1566,7 +1631,9 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-// Upsert berdasarkan 'nama' (unique di form, sama pola dengan Kategori).
+/**
+ * Upsert case-insensitive berdasarkan 'nama' (dikonfirmasi).
+ */
 class RewardImporter extends Importer
 {
     protected static ?string $model = Reward::class;
@@ -1576,30 +1643,38 @@ class RewardImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Voucher buku gratis'),
             ImportColumn::make('deskripsi')
-                ->rules(['nullable', 'string']),
+                ->rules(['nullable', 'string'])
+                ->example('Dapat menukar 1 buku baru dari katalog toko rekanan'),
             ImportColumn::make('threshold_point')
+                ->label('Ambang batas point')
                 ->requiredMapping()
                 ->numeric()
-                ->rules(['required', 'integer']),
+                ->rules(['required', 'integer'])
+                ->example('500'),
             ImportColumn::make('aktif')
                 ->boolean()
-                ->rules(['nullable', 'boolean']),
+                ->rules(['nullable', 'boolean'])
+                ->example('1'),
         ];
     }
 
     public function resolveRecord(): ?Reward
     {
-        return Reward::query()->firstOrNew(['nama' => $this->data['nama']]);
+        $nama = trim($this->data['nama']);
+
+        return Reward::query()->whereRaw('LOWER(nama) = ?', [mb_strtolower($nama)])->first()
+            ?? new Reward(['nama' => $nama]);
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Reward selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Reward selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -1671,19 +1746,24 @@ class TahunPelajaranImporter extends Importer
 namespace App\Filament\Imports;
 
 use App\Enums\RoleUser;
+use App\Models\Jurusan;
+use App\Models\Kelas;
 use App\Models\KelasTahunPelajaran;
+use App\Models\TahunPelajaran;
 use App\Models\User;
+use App\Rules\FormatKartuRfid;
 use App\Services\KenaikanKelasService;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
- * TODO: GAP-SPEC - 'role' dan 'no_kartu_rfid' SENGAJA tidak termasuk kolom
- * import (dikonfirmasi: harus manual lewat form demi keamanan). User baru
- * hasil import otomatis role='siswa' (default migration/kolom).
+ * TODO: GAP-SPEC - 'role' SENGAJA tidak termasuk kolom import (dikonfirmasi:
+ * harus manual lewat form demi keamanan). User baru hasil import otomatis
+ * role='siswa' (default migration/kolom).
  *
  * Upsert berdasarkan 'nisn' jika ada, fallback 'nip' - baris tanpa
  * keduanya akan gagal (lihat rules 'required_without').
@@ -1691,24 +1771,25 @@ use Illuminate\Support\Str;
  * Password digenerate random - TIDAK ada mekanisme kirim WA/email
  * notifikasi password ke user baru dalam iterasi ini.
  *
- * TODO: GAP-SPEC - kolom 'kelas_tahun_pelajaran' berformat teks bebas
- * "Nama Kelas - Nama Tahun Pelajaran" (mis. "X IPA 1 - 2025/2026"),
- * dipisah pada tanda "-" TERAKHIR karena nama Kelas sendiri bisa
- * mengandung "-". Format ini asumsi/keputusan sepihak karena belum ada
- * spek resmi format Excel dari sekolah - jika format sumber data
- * berbeda, sesuaikan resolveKtp() di bawah. Baris yang tidak match KTP
- * manapun akan GAGAL divalidasi (RowImportFailedException, masuk
- * failed-rows CSV) - TIDAK assignment diam-diam ke kelas yang salah.
+ * Kolom 'no_kartu_rfid' (dikonfirmasi masuk ke import, sebelumnya
+ * sengaja dikeluarkan demi keamanan) - aturan MENGIKAT kontrak firmware
+ * Attendance Machine (lihat FormatKartuRfid::class, wajib persis 10
+ * digit angka) - dipakai lewat rule yang SAMA dengan form manual
+ * (Aturan poin 3, satu sumber kebenaran validasi).
+ *
+ * Perilaku no_kartu_rfid (dikonfirmasi eksplisit):
+ * - Diisi dan berbeda dari kartu user saat ini -> kartu di-assign,
+ *   KECUALI nomor tersebut sudah dipakai user LAIN -> baris GAGAL
+ *   (RowImportFailedException), user lain tidak diubah sama sekali.
+ * - Dikosongkan, padahal user sudah punya kartu terdaftar -> kartu
+ *   LAMA DIHAPUS (di-null-kan). User tersebut TIDAK BISA tap RFID lagi
+ *   sampai didaftarkan ulang. Jumlah kartu yang terhapus direkap di
+ *   notifikasi selesai import supaya tidak terjadi diam-diam.
  */
 class UserImporter extends Importer
 {
     protected static ?string $model = User::class;
 
-    /**
-     * KTP hasil resolve di resolveRecord(), dipakai lagi di afterSave()
-     * supaya logic parsing teks "kelas_tahun_pelajaran" tidak diduplikasi
-     * (Aturan poin 3, DRY - satu resolve, dua pemakaian).
-     */
     protected ?KelasTahunPelajaran $ktpTerresolve = null;
 
     public static function getColumns(): array
@@ -1716,36 +1797,57 @@ class UserImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('Yahya Zulfikri'),
             ImportColumn::make('nisn')
                 ->label('NISN')
-                ->rules(['nullable', 'required_without:nip', 'string', 'max:255']),
+                ->helperText('Isi salah satu: NISN (untuk siswa) atau NIP (untuk pegawai/pustakawan).')
+                ->rules(['nullable', 'required_without:nip', 'string', 'max:10'])
+                ->example('0000971291'),
             ImportColumn::make('nip')
                 ->label('NIP')
-                ->rules(['nullable', 'required_without:nisn', 'string', 'max:255']),
-            ImportColumn::make('kelas_tahun_pelajaran')
-                ->label('Kelas (format: "Nama Kelas - Nama Tahun Pelajaran")')
+                ->rules(['nullable', 'required_without:nisn', 'string', 'max:18'])
+                ->example(''),
+            ImportColumn::make('kelas_nama')
+                ->label('Nama kelas (opsional, khusus siswa)')
+                ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('X IPA 1 - 2025/2026'),
+                ->example('VII A'),
+            ImportColumn::make('jurusan_kode')
+                ->label('Kode jurusan (wajib jika kelas_nama diisi)')
+                ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('Non_Jurusan'),
+            ImportColumn::make('tahun_pelajaran_nama')
+                ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('2025/2026'),
             ImportColumn::make('jabatan')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example(''),
             ImportColumn::make('no_telepon')
                 ->label('No. Telepon')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('081234567890'),
+            ImportColumn::make('no_kartu_rfid')
+                ->label('No. kartu RFID (opsional)')
+                ->helperText('PERHATIAN: kosongkan HANYA jika memang ingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
+                ->rules(['nullable', new FormatKartuRfid])
+                ->example('1234567890'),
         ];
     }
 
     public function resolveRecord(): ?User
     {
-        $teks = trim((string) ($this->data['kelas_tahun_pelajaran'] ?? ''));
+        $namaKelas = trim((string) ($this->data['kelas_nama'] ?? ''));
 
-        if ($teks !== '') {
-            $this->ktpTerresolve = $this->parseKtp($teks);
-
-            if (! $this->ktpTerresolve) {
-                throw new RowImportFailedException("KTP tidak ditemukan untuk teks kelas_tahun_pelajaran: \"{$teks}\".");
-            }
+        if ($namaKelas !== '') {
+            $this->ktpTerresolve = $this->resolveKtp(
+                $namaKelas,
+                trim((string) ($this->data['jurusan_kode'] ?? '')),
+                trim((string) ($this->data['tahun_pelajaran_nama'] ?? '')),
+            );
         }
 
         if (! empty($this->data['nisn'])) {
@@ -1763,10 +1865,36 @@ class UserImporter extends Importer
     }
 
     /**
-     * Assignment lewat service (bukan mass-assign kolom di resolveRecord)
-     * supaya RiwayatKelasSiswa tetap tercatat, dan hanya dijalankan
-     * SETELAH record dasar tersimpan (butuh $this->record->id).
+     * Uniqueness no_kartu_rfid dicek manual (bukan rule 'unique' di
+     * getColumns()) karena butuh tahu ID record yang sedang di-upsert
+     * dulu (supaya user meng-update kartunya sendiri dengan nilai yang
+     * sama tidak dianggap konflik) - baru tersedia setelah resolveRecord().
      */
+    protected function beforeSave(): void
+    {
+        $nomorBaru = trim((string) ($this->data['no_kartu_rfid'] ?? ''));
+
+        if ($nomorBaru === '') {
+            if ($this->record->no_kartu_rfid !== null) {
+                $this->record->no_kartu_rfid = null;
+                Cache::increment("import-{$this->import->id}-kartu-dihapus");
+            }
+
+            return;
+        }
+
+        $dipakaiUserLain = User::query()
+            ->where('no_kartu_rfid', $nomorBaru)
+            ->when($this->record->exists, fn($q) => $q->whereKeyNot($this->record->id))
+            ->exists();
+
+        if ($dipakaiUserLain) {
+            throw new RowImportFailedException("Nomor kartu \"{$nomorBaru}\" sudah dipakai user lain. Cek kembali atau kosongkan kolom ini.");
+        }
+
+        $this->record->no_kartu_rfid = $nomorBaru;
+    }
+
     protected function afterSave(): void
     {
         if ($this->ktpTerresolve) {
@@ -1774,34 +1902,60 @@ class UserImporter extends Importer
         }
     }
 
-    protected function parseKtp(string $teks): ?KelasTahunPelajaran
+    protected function resolveKtp(string $namaKelas, string $kodeJurusan, string $namaTahun): KelasTahunPelajaran
     {
-        $posisi = strrpos($teks, '-');
-
-        if ($posisi === false) {
-            return null;
+        if ($kodeJurusan === '' || $namaTahun === '') {
+            throw new RowImportFailedException('Kelas diisi tapi kolom jurusan_kode atau tahun_pelajaran_nama kosong. Isi ketiganya, atau kosongkan ketiganya jika user ini belum mau ditempatkan ke kelas.');
         }
 
-        $namaKelas = trim(substr($teks, 0, $posisi));
-        $namaTahun = trim(substr($teks, $posisi + 1));
+        $jurusan = Jurusan::query()->where('kode', $kodeJurusan)->first();
 
-        if ($namaKelas === '' || $namaTahun === '') {
-            return null;
+        if (! $jurusan) {
+            throw new RowImportFailedException("Kode jurusan \"{$kodeJurusan}\" tidak ditemukan. Cek ejaan atau tambahkan Jurusan-nya dulu di Master Data.");
         }
 
-        return KelasTahunPelajaran::query()
-            ->whereHas('kelas', fn ($q) => $q->where('nama', $namaKelas))
-            ->whereHas('tahunPelajaran', fn ($q) => $q->where('nama', $namaTahun))
+        $kelas = Kelas::query()
+            ->where('nama', $namaKelas)
+            ->where('jurusan_id', $jurusan->id)
             ->first();
+
+        if (! $kelas) {
+            throw new RowImportFailedException("Kelas \"{$namaKelas}\" dengan jurusan \"{$kodeJurusan}\" tidak ditemukan. Cek ejaan atau tambahkan Kelas-nya dulu di Master Data.");
+        }
+
+        $tahun = TahunPelajaran::query()->where('nama', $namaTahun)->first();
+
+        if (! $tahun) {
+            throw new RowImportFailedException("Tahun pelajaran \"{$namaTahun}\" tidak ditemukan. Cek ejaan atau tambahkan dulu di Master Data.");
+        }
+
+        $ktp = KelasTahunPelajaran::query()
+            ->where('kelas_id', $kelas->id)
+            ->where('tahun_pelajaran_id', $tahun->id)
+            ->first();
+
+        if (! $ktp) {
+            throw new RowImportFailedException("Kombinasi kelas \"{$namaKelas}\" ({$kodeJurusan}) dan tahun pelajaran \"{$namaTahun}\" belum terdaftar. Import Kelas per Tahun Pelajaran dulu sebelum import User.");
+        }
+
+        return $ktp;
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import User selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
+
+        $kartuDihapus = (int) Cache::get("import-{$import->id}-kartu-dihapus", 0);
+
+        if ($kartuDihapus > 0) {
+            $body .= " PERHATIAN: {$kartuDihapus} kartu RFID dihapus dari user (kolom dikosongkan di file) - user tersebut tidak bisa tap RFID sampai didaftarkan ulang.";
+        }
+
+        Cache::forget("import-{$import->id}-kartu-dihapus");
 
         return $body;
     }
@@ -2544,6 +2698,7 @@ use App\Services\PeminjamanService;
 use App\Services\RfidResolverService;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 /**
@@ -2560,6 +2715,19 @@ use RuntimeException;
  * Otorisasi: reuse Policy existing, tidak ada permission baru untuk
  * halaman ini sendiri - akses digerbang oleh Create:Peminjaman.
  *
+ * Rate limit anti-scan-ganda: barcode yang sama untuk user aktif yang
+ * sama tidak boleh diproses ulang dalam window RATE_LIMIT_DETIK detik
+ * (mencegah pinjam->kembali->pinjam tidak sengaja akibat buku ter-scan
+ * 2x, mis. scanner bouncing atau operator tidak sadar sudah masuk).
+ * Diguard via Cache (bukan DB), TTL pendek, tidak butuh migration.
+ *
+ * TODO: GAP-SPEC - window rate limit di-key per (user_id, buku_id), BUKAN
+ * global per buku - asumsi: 2 user berbeda scan buku yang sama beruntun
+ * (mis. serah terima cepat) tetap valid, hanya user yang SAMA scan buku
+ * yang SAMA berulang yang di-block. Jika ternyata yang diinginkan adalah
+ * block global per buku (siapapun operatornya), sesuaikan cache key di
+ * bawah (buang bagian user->id).
+ *
  * TODO: verifikasi signature terhadap versi package yang terpasang
  * (filament/filament versi sesuai composer.json) - properti $view dan
  * $navigationIcon di bawah mengikuti API Filament v4/v5 (schema-based),
@@ -2575,6 +2743,11 @@ class TransaksiCepat extends Page
 
     protected string $view = 'filament.pages.transaksi-cepat';
 
+    /**
+     * Window rate limit anti-scan-ganda (detik). Lihat catatan class di atas.
+     */
+    protected const RATE_LIMIT_DETIK = 15;
+
     public ?string $kartuInput = '';
 
     public ?string $barcodeInput = '';
@@ -2584,7 +2757,7 @@ class TransaksiCepat extends Page
     public bool $bisaMeminjam = false;
 
     /**
-     * @var array<int, array{barcode: string, judul: string, aksi: string, pesan: string, sukses: bool}>
+     * @var array<int, array{barcode: string, judul: string, aksi: string,pesan: string, sukses: bool}>
      */
     public array $riwayatScan = [];
 
@@ -2639,6 +2812,25 @@ class TransaksiCepat extends Page
             return;
         }
 
+        // Rate limit anti-scan-ganda - dicek SEBELUM logic pinjam/kembali,
+        // supaya buku yang sama ter-scan 2x dalam window tidak memicu
+        // toggle pinjam->kembali->pinjam yang tidak diinginkan.
+        $rateLimitKey = "transaksi-cepat-scan:{$this->user->id}:{$buku->id}";
+
+        if (Cache::has($rateLimitKey)) {
+            $this->tambahRiwayat(
+                $barcode,
+                $buku->judul,
+                'ditolak',
+                'Buku ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
+                false,
+            );
+
+            return;
+        }
+
+        Cache::put($rateLimitKey, true, self::RATE_LIMIT_DETIK);
+
         // Deteksi otomatis: ada Peminjaman aktif/terlambat milik user ini
         // untuk buku ini -> kembalikan. Kalau tidak -> pinjam baru.
         $peminjamanAktif = Peminjaman::query()
@@ -2653,7 +2845,7 @@ class TransaksiCepat extends Page
             if ($peminjamanAktif) {
                 $service->prosesPengembalian(
                     peminjaman: $peminjamanAktif,
-                    kondisi: KondisiBuku::Baik, // default, koreksi manual lewat PengembalianResource jika perlu
+                    kondisi: KondisiBuku::Baik, // default, koreksi manuallewat PengembalianResource jika perlu
                     diprosesOleh: auth()->user(),
                 );
                 $this->tambahRiwayat($barcode, $buku->judul, 'dikembalikan', 'Berhasil dikembalikan (kondisi: baik).', true);
@@ -2666,6 +2858,9 @@ class TransaksiCepat extends Page
                 $this->tambahRiwayat($barcode, $buku->judul, 'dipinjamkan', 'Berhasil dipinjamkan.', true);
             }
         } catch (RuntimeException $e) {
+            // Gagal diproses - buka kembali rate limit supaya operator bisa
+            // langsung retry tanpa perlu menunggu window habis.
+            Cache::forget($rateLimitKey);
             $this->tambahRiwayat($barcode, $buku->judul, 'error', $e->getMessage(), false);
         }
 
@@ -8252,14 +8447,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -8319,8 +8514,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-}
 
+}
 ```
 ---
 
@@ -8332,14 +8527,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -8399,8 +8594,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-}
 
+}
 ```
 ---
 
@@ -8412,14 +8607,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -8479,8 +8674,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-}
 
+}
 ```
 ---
 
@@ -8492,14 +8687,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -8559,8 +8754,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-}
 
+}
 ```
 ---
 
@@ -8572,14 +8767,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -8639,8 +8834,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-}
 
+}
 ```
 ---
 
@@ -8652,14 +8847,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -8719,8 +8914,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -8732,14 +8927,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -8799,8 +8994,8 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-}
 
+}
 ```
 ---
 
@@ -8812,14 +9007,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -8879,8 +9074,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-}
 
+}
 ```
 ---
 
@@ -8892,14 +9087,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -8959,8 +9154,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-}
 
+}
 ```
 ---
 
@@ -8972,14 +9167,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -9039,8 +9234,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-}
 
+}
 ```
 ---
 
@@ -9052,14 +9247,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -9119,8 +9314,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-}
 
+}
 ```
 ---
 
@@ -9132,14 +9327,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -9199,8 +9394,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-}
 
+}
 ```
 ---
 
@@ -9212,14 +9407,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -9279,8 +9474,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-}
 
+}
 ```
 ---
 
@@ -9292,14 +9487,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -9359,8 +9554,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-}
 
+}
 ```
 ---
 
@@ -9372,14 +9567,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -9439,8 +9634,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-}
 
+}
 ```
 ---
 
@@ -9452,14 +9647,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -9519,8 +9714,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-}
 
+}
 ```
 ---
 
@@ -9532,14 +9727,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -9599,8 +9794,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-}
 
+}
 ```
 ---
 
@@ -9612,14 +9807,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -9679,8 +9874,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -9692,14 +9887,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -9759,8 +9954,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-}
 
+}
 ```
 ---
 
@@ -9770,13 +9965,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -9836,8 +10031,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-}
 
+}
 ```
 ---
 
@@ -9936,12 +10131,7 @@ class DashboardPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
-            ->widgets([
-                // \App\Filament\Widgets\PeminjamanStatsWidget::class,
-                // \App\Filament\Widgets\TrenKunjunganChartWidget::class,
-                // \App\Filament\Widgets\PeminjamanJatuhTempoWidget::class,
-                // \App\Filament\Widgets\DendaTerbaruWidget::class,
-            ])
+            ->widgets([])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -11492,7 +11682,7 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => 'Asia/Jakarta',
 
     /*
     |--------------------------------------------------------------------------
@@ -16466,63 +16656,141 @@ return [
 ## resources/views/filament/pages/transaksi-cepat.blade.php
 ```blade
 <x-filament-panels::page>
-    @if (! $user)
-        <div class="rounded-xl border p-6 space-y-3" x-data x-init="$refs.kartu.focus()">
-            <label class="font-medium">Scan Kartu RFID</label>
-            <input
-                x-ref="kartu"
-                type="text"
-                wire:model="kartuInput"
-                wire:keydown.enter="scanKartu"
-                autofocus
-                class="fi-input w-full rounded-lg"
-                placeholder="Tempelkan/scan kartu..."
-            />
-        </div>
-    @else
-        <div class="rounded-xl border p-6 space-y-2">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-lg font-semibold">{{ $user->nama }}</p>
-                    <p class="text-sm text-gray-500">
-                        Status: {{ $user->status_suspend ? 'SUSPEND' : 'Aktif' }}
-                        &middot;
-                        {{ $bisaMeminjam ? 'Bisa meminjam' : 'Tidak bisa meminjam baru' }}
-                    </p>
+    <div style="max-width: 480px; margin: 0 auto;">
+
+        @if (! $user)
+            <div
+                x-data
+                x-init="$nextTick(() => $refs.kartu.focus())"
+                style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 4rem 1.5rem;"
+            >
+                <div style="display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 50%; background: var(--primary-50); margin-bottom: 1.5rem;">
+                    <x-filament::icon icon="heroicon-o-credit-card" style="width: 44px; height: 44px; color: var(--primary-600);" />
                 </div>
-                <x-filament::button color="gray" wire:click="selesai">Selesai / Ganti User</x-filament::button>
+
+                <h2 class="text-gray-950 dark:text-white" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem;">Tempelkan kartu RFID</h2>
+                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.875rem; margin-bottom: 1.5rem;">Scan kartu siswa atau pegawai untuk memulai transaksi.</p>
+
+                <input
+                    x-ref="kartu"
+                    type="text"
+                    wire:model="kartuInput"
+                    wire:keydown.enter="scanKartu"
+                    autofocus
+                    class="fi-input"
+                    style="width: 100%; max-width: 280px; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem;"
+                    placeholder="Tempelkan/scan kartu..."
+                />
             </div>
-        </div>
-
-        <div class="rounded-xl border p-6 space-y-3 mt-4" x-data x-init="$refs.barcode.focus()">
-            <label class="font-medium">Scan Barcode Buku</label>
-            <input
-                x-ref="barcode"
-                type="text"
-                wire:model="barcodeInput"
-                wire:keydown.enter="scanBarcode"
-                autofocus
-                class="fi-input w-full rounded-lg"
-                placeholder="Scan barcode buku..."
-            />
-        </div>
-
-        <div class="mt-4 space-y-2">
-            @foreach ($riwayatScan as $item)
-                <div @class([
-                    'rounded-lg border p-3 flex items-center justify-between',
-                    'border-success-300 bg-success-50' => $item['sukses'],
-                    'border-danger-300 bg-danger-50' => ! $item['sukses'],
-                ])>
-                    <div>
-                        <p class="font-medium">{{ $item['judul'] }}</p>
-                        <p class="text-sm text-gray-600">{{ $item['pesan'] }}</p>
-                    </div>
-                    <span class="text-xs uppercase font-semibold">{{ $item['aksi'] }}</span>
+        @else
+            <div
+                x-data="{ show: false }"
+                x-init="requestAnimationFrame(() => show = true)"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                style="display: flex; flex-direction: column; align-items: center; text-align: center;"
+            >
+                <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 50%; font-weight: 600; font-size: 22px; color: #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }}; margin-bottom: 0.75rem;">
+                    {{ collect(explode(' ', $user->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
                 </div>
-            @endforeach
-        </div>
-    @endif
+
+                <h2 class="text-gray-950 dark:text-white" style="font-size: 1.125rem; font-weight: 600; line-height: 1.3;">{{ $user->nama }}</h2>
+
+                <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0.5rem; margin-bottom: 1.5rem;">
+                    <x-filament::badge :color="$user->status_suspend ? 'danger' : 'success'">
+                        {{ $user->status_suspend ? 'Suspend' : 'Aktif' }}
+                    </x-filament::badge>
+                    <x-filament::badge :color="$bisaMeminjam ? 'success' : 'gray'">
+                        {{ $bisaMeminjam ? 'Bisa meminjam' : 'Tidak bisa meminjam baru' }}
+                    </x-filament::badge>
+                </div>
+
+                @if ($user->status_suspend)
+                    <div class="bg-warning-50 dark:bg-warning-500/10 text-warning-600 dark:text-warning-400" style="display: flex; align-items: flex-start; gap: 0.5rem; border-radius: 12px; padding: 0.75rem; font-size: 0.875rem; margin-bottom: 1.5rem; text-align: left; width: 100%;">
+                        <x-filament::icon icon="heroicon-o-exclamation-triangle" style="width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;" />
+                        <span>User masih bisa mengembalikan buku, tapi tidak bisa meminjam baru sampai Denda lunas.</span>
+                    </div>
+                @endif
+
+                <div x-data x-init="$refs.barcode.focus()" style="width: 100%; margin-bottom: 1rem;">
+                    <input
+                        x-ref="barcode"
+                        type="text"
+                        wire:model="barcodeInput"
+                        wire:keydown.enter="scanBarcode"
+                        autofocus
+                        class="fi-input"
+                        style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem; font-size: 1rem;"
+                        placeholder="Scan barcode buku..."
+                    />
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <x-filament::button
+                        wire:click="selesai"
+                        color="gray"
+                        icon="heroicon-o-arrow-path"
+                        size="sm"
+                    >
+                        Ganti user
+                    </x-filament::button>
+                </div>
+
+                @php
+                    $totalDipinjam = collect($riwayatScan)->where('aksi', 'dipinjamkan')->where('sukses', true)->count();
+                    $totalDikembalikan = collect($riwayatScan)->where('aksi', 'dikembalikan')->where('sukses', true)->count();
+                @endphp
+                @if (count($riwayatScan) > 0)
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 2.5rem; margin-bottom: 2rem;">
+                        <div style="text-align: center;">
+                            <p class="text-primary-600 dark:text-primary-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDipinjam }}</p>
+                            <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dipinjamkan</p>
+                        </div>
+                        <div class="bg-gray-200 dark:bg-gray-700" style="height: 32px; width: 1px;"></div>
+                        <div style="text-align: center;">
+                            <p class="text-success-600 dark:text-success-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDikembalikan }}</p>
+                            <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dikembalikan</p>
+                        </div>
+                    </div>
+                @endif
+
+                <div style="width: 100%; text-align: left; display: flex; flex-direction: column; gap: 0.5rem;">
+                    @forelse ($riwayatScan as $item)
+                        <div
+                            x-data="{ show: false }"
+                            x-init="requestAnimationFrame(() => show = true)"
+                            x-transition:enter="transition ease-out duration-300"
+                            x-transition:enter-start="opacity-0"
+                            x-transition:enter-end="opacity-100"
+                            class="bg-gray-50 dark:bg-white/5"
+                            style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 12px;"
+                        >
+                            <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: {{ $item['sukses'] ? 'var(--success-100)' : 'var(--danger-100)' }}; color: {{ $item['sukses'] ? 'var(--success-700)' : 'var(--danger-700)' }};">
+                                @if (! $item['sukses'])
+                                    <x-filament::icon icon="heroicon-o-x-mark" style="width: 16px; height: 16px;" />
+                                @elseif ($item['aksi'] === 'dipinjamkan')
+                                    <x-filament::icon icon="heroicon-o-arrow-up-circle" style="width: 16px; height: 16px;" />
+                                @else
+                                    <x-filament::icon icon="heroicon-o-arrow-down-circle" style="width: 16px; height: 16px;" />
+                                @endif
+                            </div>
+                            <div style="flex: 1; min-width: 0;">
+                                <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['judul'] }}</p>
+                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['pesan'] }}</p>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="text-gray-400 dark:text-gray-500" style="text-align: center; padding: 2rem 0;">
+                            <x-filament::icon icon="heroicon-o-book-open" style="width: 32px; height: 32px; margin: 0 auto 0.5rem;" />
+                            <p style="font-size: 0.875rem; margin: 0;">Belum ada buku yang di-scan.</p>
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        @endif
+
+    </div>
 </x-filament-panels::page>
 
 ```

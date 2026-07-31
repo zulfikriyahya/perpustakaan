@@ -3,6 +3,7 @@
 namespace App\Filament\Imports;
 
 use App\Enums\RoleUser;
+use App\Models\Jurusan;
 use App\Models\Kelas;
 use App\Models\KelasTahunPelajaran;
 use App\Models\TahunPelajaran;
@@ -14,12 +15,18 @@ use Filament\Actions\Imports\Models\Import;
 
 /**
  * Upsert berdasarkan (kelas_id, tahun_pelajaran_id) - sesuai unique
- * index di migration kelas_tahun_pelajarans, bukan tebakan sepihak.
+ * index di migration kelas_tahun_pelajarans.
  *
- * Wali kelas direferensikan via NIP (dikonfirmasi Aturan), dan WAJIB
- * bukan role super_admin (RoleUser::Admin) - konsisten dengan filter
- * form KelasTahunPelajaranResource. Baris dengan NIP milik super_admin
- * akan GAGAL divalidasi, bukan diproses diam-diam.
+ * PERUBAHAN KONTRAK (dikonfirmasi): kolom 'jurusan_kode' WAJIB diisi -
+ * sebelumnya Kelas dicocokkan hanya lewat nama, yang bisa ambigu karena
+ * Kelas.nama TIDAK unik secara global (lihat catatan di KelasImporter,
+ * dua kelas beda jurusan bisa punya nama sama, mis. "X-1"). Template
+ * Excel/CSV lama TANPA kolom ini akan GAGAL divalidasi (required),
+ * bukan diproses dengan asumsi keliru - sekolah wajib pakai template
+ * baru (tombol "Unduh contoh" di wizard import sudah otomatis
+ * memperbarui diri lewat ->example() di bawah).
+ *
+ * Wali kelas direferensikan via NIP, WAJIB bukan role super_admin.
  */
 class KelasTahunPelajaranImporter extends Importer
 {
@@ -29,37 +36,50 @@ class KelasTahunPelajaranImporter extends Importer
     {
         return [
             ImportColumn::make('kelas_nama')
-                ->label('Nama Kelas')
+                ->label('Nama kelas')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('X-1'),
+            ImportColumn::make('jurusan_kode')
+                ->label('Kode jurusan')
+                ->helperText('Wajib diisi - lihat daftar kode di menu Master Data > Jurusan, supaya kelas dengan nama yang sama di jurusan berbeda tidak tertukar.')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255'])
+                ->example('IPA'),
             ImportColumn::make('tahun_pelajaran_nama')
-                ->label('Nama Tahun Pelajaran')
+                ->label('Tahun pelajaran')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
                 ->example('2025/2026'),
             ImportColumn::make('wali_kelas_nip')
-                ->label('NIP Wali Kelas (opsional)')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->label('NIP wali kelas (opsional)')
+                ->helperText('Kosongkan jika belum ada wali kelas yang ditunjuk.')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('198501012010011001'),
         ];
     }
 
     public function resolveRecord(): ?KelasTahunPelajaran
     {
-        $kelas = Kelas::query()->where('nama', $this->data['kelas_nama'])->first();
+        $jurusan = Jurusan::query()->where('kode', trim($this->data['jurusan_kode']))->first();
 
-        if (! $kelas) {
-            throw new RowImportFailedException("Kelas \"{$this->data['kelas_nama']}\" tidak ditemukan.");
-            // TODO: GAP-SPEC - jika nama Kelas tidak unik global (lihat
-            // catatan KelasImporter), where('nama', ...) di atas bisa
-            // mengambil baris yang salah tanpa error. Perlu kolom
-            // tambahan (mis. kode Jurusan) di sini juga bila kasus
-            // tersebut nyata terjadi di data sekolah.
+        if (! $jurusan) {
+            throw new RowImportFailedException("Kode jurusan \"{$this->data['jurusan_kode']}\" tidak ditemukan. Cek ejaan atau tambahkan Jurusan-nya dulu di Master Data.");
         }
 
-        $tahun = TahunPelajaran::query()->where('nama', $this->data['tahun_pelajaran_nama'])->first();
+        $kelas = Kelas::query()
+            ->where('nama', trim($this->data['kelas_nama']))
+            ->where('jurusan_id', $jurusan->id)
+            ->first();
+
+        if (! $kelas) {
+            throw new RowImportFailedException("Kelas \"{$this->data['kelas_nama']}\" dengan jurusan \"{$this->data['jurusan_kode']}\" tidak ditemukan. Cek ejaan atau tambahkan Kelas-nya dulu di Master Data.");
+        }
+
+        $tahun = TahunPelajaran::query()->where('nama', trim($this->data['tahun_pelajaran_nama']))->first();
 
         if (! $tahun) {
-            throw new RowImportFailedException("Tahun Pelajaran \"{$this->data['tahun_pelajaran_nama']}\" tidak ditemukan.");
+            throw new RowImportFailedException("Tahun pelajaran \"{$this->data['tahun_pelajaran_nama']}\" tidak ditemukan. Cek ejaan atau tambahkan dulu di Master Data.");
         }
 
         return KelasTahunPelajaran::query()->firstOrNew([
@@ -74,14 +94,14 @@ class KelasTahunPelajaranImporter extends Importer
             return;
         }
 
-        $waliKelas = User::query()->where('nip', $this->data['wali_kelas_nip'])->first();
+        $waliKelas = User::query()->where('nip', trim($this->data['wali_kelas_nip']))->first();
 
         if (! $waliKelas) {
-            throw new RowImportFailedException("User dengan NIP \"{$this->data['wali_kelas_nip']}\" tidak ditemukan.");
+            throw new RowImportFailedException("NIP wali kelas \"{$this->data['wali_kelas_nip']}\" tidak ditemukan. Pastikan user dengan NIP tersebut sudah terdaftar.");
         }
 
         if ($waliKelas->role === RoleUser::Admin) {
-            throw new RowImportFailedException('User dengan role super_admin tidak boleh menjadi wali kelas.');
+            throw new RowImportFailedException('User dengan NIP tersebut berperan sebagai admin, tidak bisa dijadikan wali kelas.');
         }
 
         $this->record->update(['wali_kelas_id' => $waliKelas->id]);
@@ -89,10 +109,10 @@ class KelasTahunPelajaranImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Kelas per Tahun Pelajaran selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Kelas per Tahun Pelajaran selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;

@@ -11,6 +11,11 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use App\Filament\Exports\KategoriExporter;
+use App\Filament\Imports\KategoriImporter;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
+
 
 class KategoriResource extends Resource
 {
@@ -54,6 +59,14 @@ class KategoriResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(KategoriImporter::class)
+                    ->authorize(fn() => auth()->user()?->can('create', Kategori::class) ?? false),
+                ExportAction::make()
+                    ->exporter(KategoriExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Kategori::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('nama')
                     ->searchable()

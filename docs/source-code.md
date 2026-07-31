@@ -222,6 +222,335 @@ class WhatsappGatewayException extends Exception
 ```
 ---
 
+## app/Filament/Exports/BukuExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Buku;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class BukuExporter extends Exporter
+{
+    protected static ?string $model = Buku::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('judul'),
+            ExportColumn::make('penulis'),
+            ExportColumn::make('penerbit'),
+            ExportColumn::make('isbn')->label('ISBN'),
+            ExportColumn::make('barcode'),
+            ExportColumn::make('rak.nama')->label('Rak'),
+            ExportColumn::make('kategoris.nama')->label('Kategori'), // dipisah koma otomatis oleh Filament untuk relasi many
+            ExportColumn::make('harga_ganti')->label('Harga Ganti'),
+            ExportColumn::make('stok'),
+            ExportColumn::make('deskripsi'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Buku selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/KategoriExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Kategori;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class KategoriExporter extends Exporter
+{
+    protected static ?string $model = Kategori::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('nama'),
+            ExportColumn::make('deskripsi'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Kategori selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/RakExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Rak;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class RakExporter extends Exporter
+{
+    protected static ?string $model = Rak::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('nama'),
+            ExportColumn::make('lokasi'),
+            ExportColumn::make('kategoris.nama')->label('Kategori Terkait'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Rak selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/BukuImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Models\Buku;
+use App\Models\Kategori;
+use App\Models\Rak;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+/**
+ * TODO: GAP-SPEC - resolveRecord() upsert berdasarkan 'barcode' (create
+ * jika tidak ada, update jika sudah ada). Belum dikonfirmasi apakah
+ * perilaku yang diinginkan justru reject baris dengan barcode duplikat.
+ */
+class BukuImporter extends Importer
+{
+    protected static ?string $model = Buku::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('judul')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('penulis')
+                ->rules(['nullable', 'string', 'max:255']),
+            ImportColumn::make('penerbit')
+                ->rules(['nullable', 'string', 'max:255']),
+            ImportColumn::make('isbn')
+                ->label('ISBN')
+                ->rules(['nullable', 'string', 'max:255']),
+            ImportColumn::make('barcode')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('rak')
+                ->label('Rak (nama)')
+                ->rules(['nullable', 'string']),
+            ImportColumn::make('kategori')
+                ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
+                ->rules(['nullable', 'string']),
+            ImportColumn::make('harga_ganti')
+                ->label('Harga Ganti')
+                ->numeric()
+                ->rules(['required', 'numeric', 'min:0']),
+            ImportColumn::make('stok')
+                ->numeric()
+                ->rules(['required', 'integer', 'min:0']),
+            ImportColumn::make('deskripsi')
+                ->rules(['nullable', 'string']),
+        ];
+    }
+
+    public function resolveRecord(): ?Buku
+    {
+        // upsert - lihat TODO: GAP-SPEC di atas class.
+        return Buku::query()->firstOrNew(['barcode' => $this->data['barcode']]);
+    }
+
+    /**
+     * Dipanggil setelah field kolom dasar di-assign, sebelum save() -
+     * dipakai untuk resolusi 'rak'/'kategori' by nama (bukan foreign key
+     * mentah), karena kolom ini bukan field langsung di tabel bukus.
+     */
+    protected function beforeSave(): void
+    {
+        if (! empty($this->data['rak'])) {
+            $rak = Rak::query()->where('nama', trim($this->data['rak']))->first();
+            $this->record->rak_id = $rak?->id;
+        }
+    }
+
+    protected function afterSave(): void
+    {
+        if (! empty($this->data['kategori'])) {
+            $namaKategoris = array_filter(array_map('trim', explode(';', $this->data['kategori'])));
+            $kategoriIds = Kategori::query()->whereIn('nama', $namaKategoris)->pluck('id');
+            $this->record->kategoris()->sync($kategoriIds);
+        }
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Buku selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/KategoriImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Models\Kategori;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+// TODO: GAP-SPEC - upsert berdasarkan 'nama' (case-sensitive) - sama seperti BukuImporter.
+class KategoriImporter extends Importer
+{
+    protected static ?string $model = Kategori::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('nama')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('deskripsi')
+                ->rules(['nullable', 'string']),
+        ];
+    }
+
+    public function resolveRecord(): ?Kategori
+    {
+        return Kategori::query()->firstOrNew(['nama' => $this->data['nama']]);
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Kategori selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/RakImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Models\Kategori;
+use App\Models\Rak;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+// TODO: GAP-SPEC - upsert berdasarkan 'nama' - sama seperti BukuImporter/KategoriImporter.
+class RakImporter extends Importer
+{
+    protected static ?string $model = Rak::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('nama')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('lokasi')
+                ->rules(['nullable', 'string', 'max:255']),
+            ImportColumn::make('kategori')
+                ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
+                ->rules(['nullable', 'string']),
+        ];
+    }
+
+    public function resolveRecord(): ?Rak
+    {
+        return Rak::query()->firstOrNew(['nama' => $this->data['nama']]);
+    }
+
+    protected function afterSave(): void
+    {
+        if (! empty($this->data['kategori'])) {
+            $namaKategoris = array_filter(array_map('trim', explode(';', $this->data['kategori'])));
+            $kategoriIds = Kategori::query()->whereIn('nama', $namaKategoris)->pluck('id');
+            $this->record->kategoris()->sync($kategoriIds);
+        }
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Rak selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
 ## app/Filament/Pages/Auth/Login.php
 ```php
 <?php
@@ -374,7 +703,19 @@ class RequestPasswordReset extends SimplePage
             return;
         }
 
-        $otpService->kirimOtp($user);
+        try {
+            $otpService->kirimOtp($user);
+        } catch (\RuntimeException $e) {
+            // rate limit OTP (lihat PasswordResetOtpService::kirimOtp) -
+            // ditangkap disini, bukan dibiarkan jadi fatal error.
+            Notification::make()
+                ->title('Belum bisa mengirim OTP')
+                ->body($e->getMessage())
+                ->warning()
+                ->send();
+
+            return;
+        }
 
         Session::put('reset_password_no_telepon', $user->no_telepon);
 
@@ -439,7 +780,8 @@ class ResetPassword extends SimplePage
             TextInput::make('otp')
                 ->label('Kode OTP')
                 ->required()
-                ->length(6),
+                ->minLength(6)
+                ->maxLength(6),
             TextInput::make('password')
                 ->label('Password Baru')
                 ->password()
@@ -470,6 +812,97 @@ class ResetPassword extends SimplePage
         Notification::make()->title('Password berhasil direset, silakan login.')->success()->send();
 
         $this->redirect(route('filament.dashboard.auth.login'));
+    }
+}
+
+```
+---
+
+## app/Filament/Pages/LaporanBulanan.php
+```php
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Services\LaporanBulananService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Forms\Components\Select;
+use Filament\Pages\Page;
+use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
+
+class LaporanBulanan extends Page
+{
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-chart-bar';
+
+    protected static ?string $navigationLabel = 'Laporan Bulanan';
+
+    protected string $view = 'filament.pages.laporan-bulanan';
+
+    public ?array $data = [];
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('ViewAny:LaporanBulanan') ?? false;
+    }
+
+    public function getHeading(): string|HtmlString
+    {
+        return 'Laporan Bulanan';
+    }
+
+    public function mount(): void
+    {
+        $this->form->fill([
+            'bulan' => (int) now()->format('n'),
+            'tahun' => (int) now()->format('Y'),
+        ]);
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Select::make('bulan')
+                ->label('Bulan')
+                ->options([
+                    1 => 'Januari',
+                    2 => 'Februari',
+                    3 => 'Maret',
+                    4 => 'April',
+                    5 => 'Mei',
+                    6 => 'Juni',
+                    7 => 'Juli',
+                    8 => 'Agustus',
+                    9 => 'September',
+                    10 => 'Oktober',
+                    11 => 'November',
+                    12 => 'Desember',
+                ])
+                ->required(),
+            Select::make('tahun')
+                ->label('Tahun')
+                ->options(
+                    collect(range((int) now()->format('Y'), 2024))
+                        ->mapWithKeys(fn($y) => [$y => $y])
+                )
+                ->required(),
+        ])->statePath('data');
+    }
+
+    public function generate(LaporanBulananService $service): mixed
+    {
+        $data = $this->form->getState();
+
+        $laporan = $service->generate((int) $data['bulan'], (int) $data['tahun']);
+
+        $pdf = Pdf::loadView('pdf.laporan-bulanan', $laporan)
+            ->setPaper('a4', 'portrait');
+
+        return response()->streamDownload(
+            fn() => print($pdf->output()),
+            "laporan-bulanan-{$data['tahun']}-{$data['bulan']}.pdf",
+            ['Content-Type' => 'application/pdf'],
+        );
     }
 }
 
@@ -651,6 +1084,10 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateBuku extends CreateRecord
 {
     protected static string $resource = BukuResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }
 
 ```
@@ -675,6 +1112,10 @@ class EditBuku extends EditRecord
         return [
             DeleteAction::make(),
         ];
+    }
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
     }
 }
 
@@ -724,6 +1165,10 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use App\Filament\Exports\BukuExporter;
+use App\Filament\Imports\BukuImporter;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 
 class BukuResource extends Resource
 {
@@ -788,6 +1233,14 @@ class BukuResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(BukuImporter::class)
+                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
+                ExportAction::make()
+                    ->exporter(BukuExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
+            ])
             ->columns([
                 ImageColumn::make('cover')
                     ->square(),
@@ -834,6 +1287,213 @@ class BukuResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/DendaResource/Pages/ListDendas.php
+```php
+<?php
+
+namespace App\Filament\Resources\DendaResource\Pages;
+
+use App\Filament\Resources\DendaResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListDendas extends ListRecords
+{
+    protected static string $resource = DendaResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/DendaResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Enums\StatusRefund;
+use App\Enums\TipeDenda;
+use App\Filament\Resources\DendaResource\Pages;
+use App\Models\Denda;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Table;
+
+/**
+ * Denda SELALU dibuat otomatis oleh PeminjamanService (keterlambatan saat
+ * pengembalian, kerusakan/kehilangan saat proses terkait) - tidak ada
+ * Create/Edit page di Resource ini, sesuai pola PengembalianResource
+ * (Aturan poin 3, DRY - tidak ada jalan lain mengubah data selain lewat
+ * Service/Observer terpusat).
+ *
+ * TODO: GAP-SPEC - PeminjamanService::batalkanDenda() TIDAK men-set
+ * status_refund ke 'perlu_refund' saat membatalkan Denda yang sudah
+ * terbayar (lihat komentar di method tsb + migration
+ * add_status_refund_to_dendas_table). Action 'update_status_refund' di
+ * bawah adalah mitigasi manual sementara - Admin harus proaktif mengecek
+ * kolom 'keterangan' untuk tahu ada Denda yang perlu direfund, sistem
+ * TIDAK memberi notifikasi otomatis untuk ini. Perlu konfirmasi apakah
+ * PeminjamanService perlu di-patch.
+ */
+class DendaResource extends Resource
+{
+    protected static ?string $model = Denda::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';
+
+    protected static ?string $navigationLabel = 'Denda';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('user.nama')
+                    ->label('User')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('peminjaman.buku.judul')
+                    ->label('Buku')
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('tipe')
+                    ->badge()
+                    ->color(fn(TipeDenda $state) => match ($state) {
+                        TipeDenda::Keterlambatan => 'warning',
+                        TipeDenda::Kerusakan => 'danger',
+                        TipeDenda::Kehilangan => 'danger',
+                    }),
+                TextColumn::make('nominal')
+                    ->money('IDR')
+                    ->sortable(),
+                TextColumn::make('status_lunas')
+                    ->label('Status')
+                    ->badge()
+                    ->formatStateUsing(fn(bool $state) => $state ? 'Lunas' : 'Belum Lunas')
+                    ->color(fn(bool $state) => $state ? 'success' : 'danger'),
+                TextColumn::make('tanggal_lunas')
+                    ->dateTime()
+                    ->toggleable(),
+                TextColumn::make('status_refund')
+                    ->label('Refund')
+                    ->badge()
+                    ->color(fn(StatusRefund $state) => match ($state) {
+                        StatusRefund::TidakPerlu => 'gray',
+                        StatusRefund::PerluRefund => 'warning',
+                        StatusRefund::SudahDirefund => 'success',
+                    })
+                    ->toggleable(),
+                TextColumn::make('keterangan')
+                    ->limit(50)
+                    ->toggleable(),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                SelectFilter::make('tipe')
+                    ->options(collect(TipeDenda::cases())->mapWithKeys(fn($t) => [$t->value => ucfirst($t->value)])),
+                TernaryFilter::make('status_lunas')
+                    ->label('Status Lunas'),
+                SelectFilter::make('status_refund')
+                    ->label('Status Refund')
+                    ->options(collect(StatusRefund::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
+            ])
+            ->recordActions([
+                Action::make('tandai_lunas')
+                    ->label('Tandai Lunas')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    // TODO: ASUMSI - Pustakawan boleh tandai lunas (setara
+                    // proses pembayaran di meja), sama seperti pola akses
+                    // Aksi "Proses Pengembalian" - perlu dikonfirmasi.
+                    ->authorize(fn(Denda $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->visible(fn(Denda $record) => ! $record->status_lunas)
+                    ->requiresConfirmation()
+                    ->schema([
+                        DateTimePicker::make('tanggal_lunas')
+                            ->label('Tanggal Lunas')
+                            ->default(now())
+                            ->required(),
+                        Textarea::make('keterangan')
+                            ->label('Catatan')
+                            ->default(fn(Denda $record) => $record->keterangan),
+                    ])
+                    ->action(function (Denda $record, array $data) {
+                        // dipicu DendaObserver::updated() -> cek auto-unsuspend user
+                        $record->update([
+                            'status_lunas' => true,
+                            'tanggal_lunas' => $data['tanggal_lunas'],
+                            'keterangan' => $data['keterangan'] ?? $record->keterangan,
+                        ]);
+
+                        Notification::make()
+                            ->success()
+                            ->title('Denda ditandai lunas')
+                            ->send();
+                    }),
+
+                Action::make('update_status_refund')
+                    ->label('Update Status Refund')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('gray')
+                    // Sengaja HANYA super_admin (bukan permission 'update'
+                    // biasa) - lihat TODO: GAP-SPEC di atas class, ini
+                    // mitigasi manual untuk gap yang belum ada alur
+                    // otomatisnya, jadi dibatasi lebih ketat dari Update:Denda.
+                    ->authorize(fn() => auth()->user()?->hasRole('super_admin') ?? false)
+                    ->schema([
+                        Select::make('status_refund')
+                            ->label('Status Refund')
+                            ->options(collect(StatusRefund::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
+                            ->required(),
+                    ])
+                    ->action(function (Denda $record, array $data) {
+                        $record->update(['status_refund' => $data['status_refund']]);
+
+                        Notification::make()
+                            ->success()
+                            ->title('Status refund diperbarui')
+                            ->send();
+                    }),
+
+                DeleteAction::make(), // digerbang DendaPolicy::delete() - hanya Admin, lihat ShieldSeeder
+            ])
+            ->toolbarActions([
+                DeleteBulkAction::make(), // digerbang DendaPolicy::deleteAny()
+            ]);
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListDendas::route('/'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/KategoriResource/Pages/CreateKategori.php
 ```php
 <?php
@@ -846,6 +1506,10 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateKategori extends CreateRecord
 {
     protected static string $resource = KategoriResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }
 
 ```
@@ -870,6 +1534,10 @@ class EditKategori extends EditRecord
         return [
             DeleteAction::make(),
         ];
+    }
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
     }
 }
 
@@ -916,6 +1584,11 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use App\Filament\Exports\KategoriExporter;
+use App\Filament\Imports\KategoriImporter;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
+
 
 class KategoriResource extends Resource
 {
@@ -938,13 +1611,35 @@ class KategoriResource extends Resource
                 ->relationship('raks', 'nama')
                 ->multiple()
                 ->preload()
-                ->searchable(),
+                ->searchable()
+                ->createOptionForm([
+                    TextInput::make('nama')
+                        ->required()
+                        ->maxLength(255),
+                    TextInput::make('lokasi')
+                        ->maxLength(255),
+                    Select::make('kategoris')
+                        ->label('Kategori Terkait')
+                        ->relationship('kategoris', 'nama')
+                        ->multiple()
+                        ->preload()
+                        ->searchable(),
+                ])
+                ,
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(KategoriImporter::class)
+                    ->authorize(fn() => auth()->user()?->can('create', Kategori::class) ?? false),
+                ExportAction::make()
+                    ->exporter(KategoriExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Kategori::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('nama')
                     ->searchable()
@@ -979,6 +1674,116 @@ class KategoriResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/KunjunganResource/Pages/ListKunjungans.php
+```php
+<?php
+
+namespace App\Filament\Resources\KunjunganResource\Pages;
+
+use App\Filament\Resources\KunjunganResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListKunjungans extends ListRecords
+{
+    protected static string $resource = KunjunganResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/KunjunganResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Enums\SourceKunjungan;
+use App\Filament\Resources\KunjunganResource\Pages;
+use App\Models\Kunjungan;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+/**
+ * Kunjungan HANYA hasil sinkronisasi device RFID (atau input manual oleh
+ * Pustakawan di luar sistem ini - lihat SourceKunjungan::Manual, belum ada
+ * UI-nya). Tidak ada Create/Edit page - murni log read-only, Admin boleh
+ * Delete untuk koreksi data salah (dikonfirmasi). Tidak ada halaman View
+ * terpisah karena semua field sudah tampil penuh di tabel (Aturan poin 6 -
+ * hindari file yang tidak menambah nilai).
+ */
+class KunjunganResource extends Resource
+{
+    protected static ?string $model = Kunjungan::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-finger-print';
+
+    protected static ?string $navigationLabel = 'Kunjungan';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('user.nama')
+                    ->label('Pengunjung')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('tanggal')
+                    ->date()
+                    ->sortable(),
+                TextColumn::make('jam_tap')
+                    ->time()
+                    ->sortable(),
+                TextColumn::make('source')
+                    ->label('Sumber')
+                    ->badge()
+                    ->color(fn(SourceKunjungan $state) => match ($state) {
+                        SourceKunjungan::Rfid => 'info',
+                        SourceKunjungan::Manual => 'warning',
+                    }),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                SelectFilter::make('source')
+                    ->options(collect(SourceKunjungan::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
+            ])
+            ->recordActions([
+                DeleteAction::make(), // digerbang KunjunganPolicy::delete() - hanya Admin
+            ])
+            ->toolbarActions([
+                DeleteBulkAction::make(),
+            ])
+            ->defaultSort('tanggal', 'desc');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListKunjungans::route('/'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/PeminjamanResource/Pages/CreatePeminjaman.php
 ```php
 <?php
@@ -997,6 +1802,10 @@ use RuntimeException;
 class CreatePeminjaman extends CreateRecord
 {
     protected static string $resource = PeminjamanResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 
     /**
      * Override total - TIDAK memakai Peminjaman::create($data) bawaan
@@ -1252,6 +2061,10 @@ class ListPengembalians extends ListRecords
     {
         return [];
     }
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }
 
 ```
@@ -1414,6 +2227,10 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateRak extends CreateRecord
 {
     protected static string $resource = RakResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }
 
 ```
@@ -1438,6 +2255,10 @@ class EditRak extends EditRecord
         return [
             DeleteAction::make(),
         ];
+    }
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
     }
 }
 
@@ -1477,6 +2298,10 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\RakResource\Pages;
 use App\Filament\Resources\RakResource\RelationManagers\BukusRelationManager;
+use App\Filament\Exports\RakExporter;
+use App\Filament\Imports\RakImporter;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use App\Models\Rak;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -1513,6 +2338,14 @@ class RakResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(RakImporter::class)
+                    ->authorize(fn() => auth()->user()?->can('create', Rak::class) ?? false),
+                ExportAction::make()
+                    ->exporter(RakExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Rak::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('nama')
                     ->searchable()
@@ -1594,6 +2427,193 @@ class BukusRelationManager extends RelationManager
             ->toolbarActions([
                 //
             ]);
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/TransaksiResource/Pages/ListTransaksis.php
+```php
+<?php
+
+namespace App\Filament\Resources\TransaksiResource\Pages;
+
+use App\Filament\Resources\TransaksiResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListTransaksis extends ListRecords
+{
+    protected static string $resource = TransaksiResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/TransaksiResource/Pages/ViewTransaksi.php
+```php
+<?php
+
+namespace App\Filament\Resources\TransaksiResource\Pages;
+
+use App\Filament\Resources\TransaksiResource;
+use Filament\Resources\Pages\ViewRecord;
+
+class ViewTransaksi extends ViewRecord
+{
+    protected static string $resource = TransaksiResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/TransaksiResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Enums\JenisTransaksi;
+use App\Filament\Resources\TransaksiResource\Pages;
+use App\Filament\Resources\TransaksiResource\RelationManagers\PeminjamansRelationManager;
+use App\Models\Transaksi;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+/**
+ * Transaksi dibuat otomatis sebagai pembungkus proses (peminjaman/
+ * kunjungan/pembayaran_denda) - tidak ada Create/Edit manual di sini.
+ * Read-only log + Admin boleh Delete untuk koreksi (dikonfirmasi).
+ *
+ * TODO: GAP-SPEC - belum ditemukan kode yang membuat Transaksi dengan
+ * jenis 'kunjungan' atau 'pembayaran_denda' (PeminjamanService hanya
+ * terlihat menangani jenis 'peminjaman' lewat pinjamBuku()). Kemungkinan
+ * dua jenis ini memang belum diimplementasikan - perlu dikonfirmasi apakah
+ * ini scope iterasi selanjutnya, bukan gap di TransaksiResource ini.
+ */
+class TransaksiResource extends Resource
+{
+    protected static ?string $model = Transaksi::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-queue-list';
+
+    protected static ?string $navigationLabel = 'Transaksi';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('user.nama')
+                    ->label('User')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('jenis')
+                    ->badge()
+                    ->color(fn(JenisTransaksi $state) => match ($state) {
+                        JenisTransaksi::Peminjaman => 'info',
+                        JenisTransaksi::Kunjungan => 'gray',
+                        JenisTransaksi::PembayaranDenda => 'success',
+                    }),
+                TextColumn::make('diprosesOleh.nama')
+                    ->label('Diproses Oleh')
+                    ->toggleable(),
+                TextColumn::make('tanggal')
+                    ->dateTime()
+                    ->sortable(),
+                TextColumn::make('keterangan')
+                    ->limit(50)
+                    ->toggleable(),
+            ])
+            ->filters([
+                SelectFilter::make('jenis')
+                    ->options(collect(JenisTransaksi::cases())->mapWithKeys(fn($j) => [$j->value => ucfirst(str_replace('_', ' ', $j->value))])),
+            ])
+            ->recordActions([
+                DeleteAction::make(), // digerbang TransaksiPolicy::delete() - hanya Admin
+            ])
+            ->toolbarActions([
+                DeleteBulkAction::make(),
+            ])
+            ->defaultSort('tanggal', 'desc');
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            PeminjamansRelationManager::class,
+        ];
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListTransaksis::route('/'),
+            'view' => Pages\ViewTransaksi::route('/{record}'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/TransaksiResource/RelationManagers/PeminjamansRelationManager.php
+```php
+<?php
+
+namespace App\Filament\Resources\TransaksiResource\RelationManagers;
+
+use App\Enums\StatusPeminjaman;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+/**
+ * Read-only - Peminjaman diubah HANYA lewat PeminjamanResource/
+ * PeminjamanService (Aturan poin 3), RelationManager ini murni untuk lihat
+ * buku apa saja yang termasuk dalam satu Transaksi (mirip pola
+ * RakResource\BukusRelationManager).
+ */
+class PeminjamansRelationManager extends RelationManager
+{
+    protected static string $relationship = 'peminjamans';
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->recordTitleAttribute('id')
+            ->columns([
+                TextColumn::make('buku.judul')
+                    ->label('Buku')
+                    ->searchable(),
+                TextColumn::make('tanggal_jatuh_tempo')
+                    ->date(),
+                TextColumn::make('status')
+                    ->badge()
+                    ->color(fn(StatusPeminjaman $state) => match ($state) {
+                        StatusPeminjaman::Aktif => 'success',
+                        StatusPeminjaman::Terlambat => 'danger',
+                        StatusPeminjaman::Selesai => 'gray',
+                        StatusPeminjaman::Hilang => 'warning',
+                    }),
+            ])
+            ->headerActions([])
+            ->recordActions([])
+            ->toolbarActions([]);
     }
 }
 
@@ -2902,11 +3922,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements AuthenticatableContract, HasName, FilamentUser
 {
-    use HasFactory, SoftDeletes, HasRoles;
+    use HasFactory, SoftDeletes, HasRoles, Notifiable;
 
     protected $fillable = [
         'avatar',
@@ -3182,7 +4203,7 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class BukuPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -3247,6 +4268,86 @@ class BukuPolicy
 ```
 ---
 
+## app/Policies/DendaPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Denda;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class DendaPolicy
+{
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Denda');
+    }
+
+    public function view(AuthUser $authUser, Denda $denda): bool
+    {
+        return $authUser->can('View:Denda');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Denda');
+    }
+
+    public function update(AuthUser $authUser, Denda $denda): bool
+    {
+        return $authUser->can('Update:Denda');
+    }
+
+    public function delete(AuthUser $authUser, Denda $denda): bool
+    {
+        return $authUser->can('Delete:Denda');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Denda');
+    }
+
+    public function restore(AuthUser $authUser, Denda $denda): bool
+    {
+        return $authUser->can('Restore:Denda');
+    }
+
+    public function forceDelete(AuthUser $authUser, Denda $denda): bool
+    {
+        return $authUser->can('ForceDelete:Denda');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Denda');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Denda');
+    }
+
+    public function replicate(AuthUser $authUser, Denda $denda): bool
+    {
+        return $authUser->can('Replicate:Denda');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Denda');
+    }
+
+}
+```
+---
+
 ## app/Policies/KategoriPolicy.php
 ```php
 <?php
@@ -3262,7 +4363,7 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class KategoriPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -3327,6 +4428,86 @@ class KategoriPolicy
 ```
 ---
 
+## app/Policies/KunjunganPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Kunjungan;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class KunjunganPolicy
+{
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Kunjungan');
+    }
+
+    public function view(AuthUser $authUser, Kunjungan $kunjungan): bool
+    {
+        return $authUser->can('View:Kunjungan');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Kunjungan');
+    }
+
+    public function update(AuthUser $authUser, Kunjungan $kunjungan): bool
+    {
+        return $authUser->can('Update:Kunjungan');
+    }
+
+    public function delete(AuthUser $authUser, Kunjungan $kunjungan): bool
+    {
+        return $authUser->can('Delete:Kunjungan');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Kunjungan');
+    }
+
+    public function restore(AuthUser $authUser, Kunjungan $kunjungan): bool
+    {
+        return $authUser->can('Restore:Kunjungan');
+    }
+
+    public function forceDelete(AuthUser $authUser, Kunjungan $kunjungan): bool
+    {
+        return $authUser->can('ForceDelete:Kunjungan');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Kunjungan');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Kunjungan');
+    }
+
+    public function replicate(AuthUser $authUser, Kunjungan $kunjungan): bool
+    {
+        return $authUser->can('Replicate:Kunjungan');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Kunjungan');
+    }
+
+}
+```
+---
+
 ## app/Policies/PeminjamanPolicy.php
 ```php
 <?php
@@ -3342,7 +4523,7 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -3422,7 +4603,7 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -3502,7 +4683,7 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class RakPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -3582,7 +4763,7 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class RolePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -3641,6 +4822,86 @@ class RolePolicy
     public function reorder(AuthUser $authUser): bool
     {
         return $authUser->can('Reorder:Role');
+    }
+
+}
+```
+---
+
+## app/Policies/TransaksiPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Transaksi;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class TransaksiPolicy
+{
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Transaksi');
+    }
+
+    public function view(AuthUser $authUser, Transaksi $transaksi): bool
+    {
+        return $authUser->can('View:Transaksi');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Transaksi');
+    }
+
+    public function update(AuthUser $authUser, Transaksi $transaksi): bool
+    {
+        return $authUser->can('Update:Transaksi');
+    }
+
+    public function delete(AuthUser $authUser, Transaksi $transaksi): bool
+    {
+        return $authUser->can('Delete:Transaksi');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Transaksi');
+    }
+
+    public function restore(AuthUser $authUser, Transaksi $transaksi): bool
+    {
+        return $authUser->can('Restore:Transaksi');
+    }
+
+    public function forceDelete(AuthUser $authUser, Transaksi $transaksi): bool
+    {
+        return $authUser->can('ForceDelete:Transaksi');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Transaksi');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Transaksi');
+    }
+
+    public function replicate(AuthUser $authUser, Transaksi $transaksi): bool
+    {
+        return $authUser->can('Replicate:Transaksi');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Transaksi');
     }
 
 }
@@ -3713,10 +4974,14 @@ class DashboardPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
+            ->globalSearch(false)
             ->default()
+            ->databaseNotifications()
             ->id('dashboard')
             ->path('dashboard')
             ->login(Login::class)
+            ->spa()
+
             ->passwordReset(
                 RequestPasswordReset::class,
                 ResetPassword::class,
@@ -3791,6 +5056,138 @@ class FormatKartuRfid implements ValidationRule
         if (! preg_match('/^[0-9]{10}$/', (string) $value)) {
             $fail('Nomor kartu RFID harus persis 10 digit angka (sesuai kontrak firmware Attendance Machine). Kartu dengan format lain tidak akan terbaca oleh device.');
         }
+    }
+}
+
+```
+---
+
+## app/Services/LaporanBulananService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\Denda;
+use App\Models\Kunjungan;
+use App\Models\Peminjaman;
+use App\Models\Pengembalian;
+use App\Models\Point;
+use Illuminate\Support\Carbon;
+
+/**
+ * Satu sumber kebenaran agregasi data untuk Laporan Bulanan (Aturan poin 3)
+ * - dipanggil dari LaporanBulanan Page, jangan duplikasi query di tempat lain.
+ *
+ * TODO: GAP-SPEC - filter tanggal per domain memakai kolom "kejadian"
+ * masing-masing (tanggal_pinjam, tanggal_kembali, created_at untuk
+ * Denda/Point, tanggal untuk Kunjungan) - bukan tanggal_lunas untuk Denda.
+ * Perlu dikonfirmasi jika laporan dimaksudkan sebagai laporan kas/arus
+ * pemasukan (yang mestinya pakai tanggal_lunas), bukan laporan aktivitas.
+ */
+class LaporanBulananService
+{
+    public function generate(int $bulan, int $tahun): array
+    {
+        $awal = Carbon::create($tahun, $bulan, 1)->startOfMonth();
+        $akhir = $awal->copy()->endOfMonth();
+
+        return [
+            'bulan' => $bulan,
+            'tahun' => $tahun,
+            'periode_label' => $awal->translatedFormat('F Y'),
+            'peminjaman' => $this->dataPeminjaman($awal, $akhir),
+            'pengembalian' => $this->dataPengembalian($awal, $akhir),
+            'denda' => $this->dataDenda($awal, $akhir),
+            'kunjungan' => $this->dataKunjungan($awal, $akhir),
+            'point' => $this->dataPoint($awal, $akhir),
+        ];
+    }
+
+    protected function dataPeminjaman(Carbon $awal, Carbon $akhir): array
+    {
+        $records = Peminjaman::query()
+            ->with(['user', 'buku'])
+            ->whereBetween('tanggal_pinjam', [$awal->toDateString(), $akhir->toDateString()])
+            ->orderBy('tanggal_pinjam')
+            ->get();
+
+        return [
+            'total' => $records->count(),
+            'per_status' => $records->groupBy(fn($r) => $r->status->value)->map->count(),
+            'detail' => $records,
+        ];
+    }
+
+    protected function dataPengembalian(Carbon $awal, Carbon $akhir): array
+    {
+        $records = Pengembalian::query()
+            ->with(['peminjaman.user', 'peminjaman.buku'])
+            ->whereBetween('tanggal_kembali', [$awal->toDateString(), $akhir->toDateString()])
+            ->orderBy('tanggal_kembali')
+            ->get();
+
+        return [
+            'total' => $records->count(),
+            'per_kondisi' => $records->groupBy(fn($r) => $r->kondisi->value)->map->count(),
+            'detail' => $records,
+        ];
+    }
+
+    protected function dataDenda(Carbon $awal, Carbon $akhir): array
+    {
+        $records = Denda::query()
+            ->with(['user', 'peminjaman.buku'])
+            ->whereBetween('created_at', [$awal, $akhir])
+            ->orderBy('created_at')
+            ->get();
+
+        return [
+            'total' => $records->count(),
+            'total_nominal' => $records->sum('nominal'),
+            'total_nominal_lunas' => $records->where('status_lunas', true)->sum('nominal'),
+            'total_nominal_belum_lunas' => $records->where('status_lunas', false)->sum('nominal'),
+            'per_tipe' => $records->groupBy(fn($r) => $r->tipe->value)->map(fn($g) => [
+                'jumlah' => $g->count(),
+                'nominal' => $g->sum('nominal'),
+            ]),
+            'detail' => $records,
+        ];
+    }
+
+    protected function dataKunjungan(Carbon $awal, Carbon $akhir): array
+    {
+        $records = Kunjungan::query()
+            ->with('user')
+            ->whereBetween('tanggal', [$awal->toDateString(), $akhir->toDateString()])
+            ->orderBy('tanggal')
+            ->get();
+
+        return [
+            'total' => $records->count(),
+            'user_unik' => $records->pluck('user_id')->unique()->count(),
+            'per_source' => $records->groupBy(fn($r) => $r->source->value)->map->count(),
+            'detail' => $records,
+        ];
+    }
+
+    protected function dataPoint(Carbon $awal, Carbon $akhir): array
+    {
+        $records = Point::query()
+            ->with('user')
+            ->whereBetween('created_at', [$awal, $akhir])
+            ->orderBy('created_at')
+            ->get();
+
+        return [
+            'total_transaksi' => $records->count(),
+            'total_nilai' => $records->sum('nilai'),
+            'per_event' => $records->groupBy(fn($r) => $r->event_type->value)->map(fn($g) => [
+                'jumlah' => $g->count(),
+                'total_nilai' => $g->sum('nilai'),
+            ]),
+            'detail' => $records,
+        ];
     }
 }
 
@@ -4871,7 +6268,7 @@ Schedule::command('perpustakaan:cron-harian')
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect('dashboard');
 });
 
 ```
@@ -8446,6 +9843,161 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_07_31_051302_create_imports_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('imports', function (Blueprint $table): void {
+            $table->id();
+            $table->timestamp('completed_at')->nullable();
+            $table->string('file_name');
+            $table->string('file_path');
+            $table->string('importer');
+            $table->unsignedInteger('processed_rows')->default(0);
+            $table->unsignedInteger('total_rows');
+            $table->unsignedInteger('successful_rows')->default(0);
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('imports');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_31_051303_create_exports_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('exports', function (Blueprint $table): void {
+            $table->id();
+            $table->timestamp('completed_at')->nullable();
+            $table->string('file_disk');
+            $table->string('file_name')->nullable();
+            $table->string('exporter');
+            $table->unsignedInteger('processed_rows')->default(0);
+            $table->unsignedInteger('total_rows');
+            $table->unsignedInteger('successful_rows')->default(0);
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('exports');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_31_051304_create_failed_import_rows_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('failed_import_rows', function (Blueprint $table): void {
+            $table->id();
+            $table->json('data');
+            $table->foreignId('import_id')->constrained()->cascadeOnDelete();
+            $table->text('validation_error')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('failed_import_rows');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_07_31_052251_create_notifications_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('notifications', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('type');
+            $table->morphs('notifiable');
+            $table->text('data');
+            $table->timestamp('read_at')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('notifications');
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -8580,31 +10132,18 @@ use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
-/**
- * Mapping Role Spatie -> Permission, sesuai scope akses di dokumen
- * Logic Module Perpustakaan v1.0 poin 1 (dikonfirmasi user):
- *
- * - super_admin (User.role = admin): akses penuh semua permission.
- * - pustakawan : full CRUD Buku/Kategori/Rak (master data) + Peminjaman/
- *                Pengembalian (proses pinjam-kembali, termasuk Action
- *                "Proses Pengembalian"/"Laporkan Hilang" - keduanya di-guard
- *                oleh ViewAny:Peminjaman, bukan permission terpisah, sesuai
- *                konfirmasi: hanya Admin & Pustakawan yang boleh akses sama
- *                sekali ke Resource ini).
- * - siswa/pegawai: TIDAK diberi permission Resource apa pun di panel ini.
- *   Kebutuhan "lihat point/badge/histori/denda pribadi" akan dipenuhi lewat
- *   halaman scoped-ke-user terpisah (bukan Resource CRUD Filament biasa) -
- *   BELUM dibuat di iterasi ini.
- *   TODO: GAP-SPEC - role Spatie 'siswa' dan 'pegawai' dibuat sebagai
- *   placeholder kosong sekarang supaya UserObserver/assignment role di masa
- *   depan tidak perlu migration ulang, tapi belum ada guna praktis sampai
- *   halaman "milik saya" dibuat dan permission-nya di-generate.
- */
 class ShieldSeeder extends Seeder
 {
     public function run(): void
     {
-        // guard 'web' adalah default Spatie & Filament panel ini.
+        // Permission manual untuk halaman non-Resource (LaporanBulanan) -
+        // dibuat eksplisit di sini karena Shield tidak auto-generate
+        // permission untuk Filament Page biasa (hanya untuk Resource).
+        Permission::firstOrCreate([
+            'name' => 'ViewAny:LaporanBulanan',
+            'guard_name' => 'web',
+        ]);
+
         $superAdmin = Role::firstOrCreate([
             'name' => 'super_admin',
             'guard_name' => 'web',
@@ -8656,33 +10195,30 @@ class ShieldSeeder extends Seeder
                 'Replicate:Rak',
                 'Reorder:Rak',
 
-                // Peminjaman: create dipakai form manual fallback (lihat
-                // PeminjamanResource\Pages\CreatePeminjaman). Update/Delete
-                // TIDAK diberikan - status Peminjaman HANYA boleh berubah
-                // lewat PeminjamanService (Action Proses Pengembalian/
-                // Laporkan Hilang, atau cron harian), tidak ada halaman Edit
-                // di Resource ini sama sekali.
                 'ViewAny:Peminjaman',
                 'View:Peminjaman',
                 'Create:Peminjaman',
 
-                // Pengembalian: READ-ONLY di Resource (canCreate() => false),
-                // permission Create/Update/Delete tidak dipakai UI tapi tetap
-                // di-generate Shield - sengaja TIDAK diberikan ke pustakawan
-                // supaya tidak ada jalan lain mengubah data selain lewat
-                // PeminjamanService::prosesPengembalian().
                 'ViewAny:Pengembalian',
                 'View:Pengembalian',
+                'Update:Pengembalian',
+
+                'ViewAny:Denda',
+                'View:Denda',
+                'Update:Denda',
+                'ViewAny:Kunjungan',
+                'View:Kunjungan',
+                'ViewAny:Transaksi',
+                'View:Transaksi',
+
+                // BARU iterasi ini.
+                'ViewAny:LaporanBulanan',
             ])->get()
         );
 
-        // Placeholder kosong - lihat TODO: GAP-SPEC di atas class.
         Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'pegawai', 'guard_name' => 'web']);
 
-        // Sinkronkan ulang semua user existing yang role App-nya 'admin'
-        // ke Spatie role 'super_admin', jaga-jaga kalau di-run setelah ada
-        // user baru sebelum Observer sempat jalan (mis. hasil import/seed).
         \App\Models\User::where('role', RoleUser::Admin)->each(
             fn($user) => $user->syncRoles(['super_admin'])
         );
@@ -8726,196 +10262,208 @@ return Application::configure(basePath: dirname(__DIR__))
 ## bootstrap/cache/packages.php
 ```php
 <?php return array (
-  'anourvalar/eloquent-serialize' =>
+  'anourvalar/eloquent-serialize' => 
   array (
-    'aliases' =>
+    'aliases' => 
     array (
       'EloquentSerialize' => 'AnourValar\\EloquentSerialize\\Facades\\EloquentSerializeFacade',
     ),
   ),
-  'bezhansalleh/filament-plugin-essentials' =>
+  'barryvdh/laravel-dompdf' => 
   array (
-    'providers' =>
+    'aliases' => 
+    array (
+      'PDF' => 'Barryvdh\\DomPDF\\Facade\\Pdf',
+      'Pdf' => 'Barryvdh\\DomPDF\\Facade\\Pdf',
+    ),
+    'providers' => 
+    array (
+      0 => 'Barryvdh\\DomPDF\\ServiceProvider',
+    ),
+  ),
+  'bezhansalleh/filament-plugin-essentials' => 
+  array (
+    'providers' => 
     array (
       0 => 'BezhanSalleh\\PluginEssentials\\PluginEssentialsServiceProvider',
     ),
   ),
-  'bezhansalleh/filament-shield' =>
+  'bezhansalleh/filament-shield' => 
   array (
-    'aliases' =>
+    'aliases' => 
     array (
       'FilamentShield' => 'BezhanSalleh\\FilamentShield\\Facades\\FilamentShield',
     ),
-    'providers' =>
+    'providers' => 
     array (
       0 => 'BezhanSalleh\\FilamentShield\\FilamentShieldServiceProvider',
     ),
   ),
-  'blade-ui-kit/blade-heroicons' =>
+  'blade-ui-kit/blade-heroicons' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
     ),
   ),
-  'blade-ui-kit/blade-icons' =>
+  'blade-ui-kit/blade-icons' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
     ),
   ),
-  'filament/actions' =>
+  'filament/actions' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\Actions\\ActionsServiceProvider',
     ),
   ),
-  'filament/filament' =>
+  'filament/filament' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\FilamentServiceProvider',
     ),
   ),
-  'filament/forms' =>
+  'filament/forms' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\Forms\\FormsServiceProvider',
     ),
   ),
-  'filament/infolists' =>
+  'filament/infolists' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\Infolists\\InfolistsServiceProvider',
     ),
   ),
-  'filament/notifications' =>
+  'filament/notifications' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\Notifications\\NotificationsServiceProvider',
     ),
   ),
-  'filament/query-builder' =>
+  'filament/query-builder' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
     ),
   ),
-  'filament/schemas' =>
+  'filament/schemas' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\Schemas\\SchemasServiceProvider',
     ),
   ),
-  'filament/support' =>
+  'filament/support' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\Support\\SupportServiceProvider',
     ),
   ),
-  'filament/tables' =>
+  'filament/tables' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\Tables\\TablesServiceProvider',
     ),
   ),
-  'filament/widgets' =>
+  'filament/widgets' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Filament\\Widgets\\WidgetsServiceProvider',
     ),
   ),
-  'kirschbaum-development/eloquent-power-joins' =>
+  'kirschbaum-development/eloquent-power-joins' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
     ),
   ),
-  'laravel-shift/blueprint' =>
+  'laravel-shift/blueprint' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Blueprint\\BlueprintServiceProvider',
     ),
   ),
-  'laravel/pail' =>
+  'laravel/pail' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Laravel\\Pail\\PailServiceProvider',
     ),
   ),
-  'laravel/pao' =>
+  'laravel/pao' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
     ),
   ),
-  'laravel/tinker' =>
+  'laravel/tinker' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Laravel\\Tinker\\TinkerServiceProvider',
     ),
   ),
-  'livewire/livewire' =>
+  'livewire/livewire' => 
   array (
-    'aliases' =>
+    'aliases' => 
     array (
       'Livewire' => 'Livewire\\Livewire',
     ),
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Livewire\\LivewireServiceProvider',
     ),
   ),
-  'nesbot/carbon' =>
+  'nesbot/carbon' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Carbon\\Laravel\\ServiceProvider',
     ),
   ),
-  'nunomaduro/collision' =>
+  'nunomaduro/collision' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     ),
   ),
-  'nunomaduro/termwind' =>
+  'nunomaduro/termwind' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Termwind\\Laravel\\TermwindServiceProvider',
     ),
   ),
-  'ryangjchandler/blade-capture-directive' =>
+  'ryangjchandler/blade-capture-directive' => 
   array (
-    'aliases' =>
+    'aliases' => 
     array (
       'BladeCaptureDirective' => 'RyanChandler\\BladeCaptureDirective\\Facades\\BladeCaptureDirective',
     ),
-    'providers' =>
+    'providers' => 
     array (
       0 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
     ),
   ),
-  'spatie/laravel-permission' =>
+  'spatie/laravel-permission' => 
   array (
-    'providers' =>
+    'providers' => 
     array (
       0 => 'Spatie\\Permission\\PermissionServiceProvider',
     ),
@@ -8927,7 +10475,7 @@ return Application::configure(basePath: dirname(__DIR__))
 ## bootstrap/cache/services.php
 ```php
 <?php return array (
-  'providers' =>
+  'providers' => 
   array (
     0 => 'Illuminate\\Auth\\AuthServiceProvider',
     1 => 'Illuminate\\Broadcasting\\BroadcastServiceProvider',
@@ -8953,35 +10501,36 @@ return Application::configure(basePath: dirname(__DIR__))
     21 => 'Illuminate\\Translation\\TranslationServiceProvider',
     22 => 'Illuminate\\Validation\\ValidationServiceProvider',
     23 => 'Illuminate\\View\\ViewServiceProvider',
-    24 => 'BezhanSalleh\\PluginEssentials\\PluginEssentialsServiceProvider',
-    25 => 'BezhanSalleh\\FilamentShield\\FilamentShieldServiceProvider',
-    26 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
-    27 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
-    28 => 'Filament\\Actions\\ActionsServiceProvider',
-    29 => 'Filament\\FilamentServiceProvider',
-    30 => 'Filament\\Forms\\FormsServiceProvider',
-    31 => 'Filament\\Infolists\\InfolistsServiceProvider',
-    32 => 'Filament\\Notifications\\NotificationsServiceProvider',
-    33 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
-    34 => 'Filament\\Schemas\\SchemasServiceProvider',
-    35 => 'Filament\\Support\\SupportServiceProvider',
-    36 => 'Filament\\Tables\\TablesServiceProvider',
-    37 => 'Filament\\Widgets\\WidgetsServiceProvider',
-    38 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
-    39 => 'Blueprint\\BlueprintServiceProvider',
-    40 => 'Laravel\\Pail\\PailServiceProvider',
-    41 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
-    42 => 'Laravel\\Tinker\\TinkerServiceProvider',
-    43 => 'Livewire\\LivewireServiceProvider',
-    44 => 'Carbon\\Laravel\\ServiceProvider',
-    45 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
-    46 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    47 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
-    48 => 'Spatie\\Permission\\PermissionServiceProvider',
-    49 => 'App\\Providers\\AppServiceProvider',
-    50 => 'App\\Providers\\Filament\\DashboardPanelProvider',
+    24 => 'Barryvdh\\DomPDF\\ServiceProvider',
+    25 => 'BezhanSalleh\\PluginEssentials\\PluginEssentialsServiceProvider',
+    26 => 'BezhanSalleh\\FilamentShield\\FilamentShieldServiceProvider',
+    27 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
+    28 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
+    29 => 'Filament\\Actions\\ActionsServiceProvider',
+    30 => 'Filament\\FilamentServiceProvider',
+    31 => 'Filament\\Forms\\FormsServiceProvider',
+    32 => 'Filament\\Infolists\\InfolistsServiceProvider',
+    33 => 'Filament\\Notifications\\NotificationsServiceProvider',
+    34 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
+    35 => 'Filament\\Schemas\\SchemasServiceProvider',
+    36 => 'Filament\\Support\\SupportServiceProvider',
+    37 => 'Filament\\Tables\\TablesServiceProvider',
+    38 => 'Filament\\Widgets\\WidgetsServiceProvider',
+    39 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
+    40 => 'Blueprint\\BlueprintServiceProvider',
+    41 => 'Laravel\\Pail\\PailServiceProvider',
+    42 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
+    43 => 'Laravel\\Tinker\\TinkerServiceProvider',
+    44 => 'Livewire\\LivewireServiceProvider',
+    45 => 'Carbon\\Laravel\\ServiceProvider',
+    46 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
+    47 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    48 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
+    49 => 'Spatie\\Permission\\PermissionServiceProvider',
+    50 => 'App\\Providers\\AppServiceProvider',
+    51 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
-  'eager' =>
+  'eager' => 
   array (
     0 => 'Illuminate\\Auth\\AuthServiceProvider',
     1 => 'Illuminate\\Cookie\\CookieServiceProvider',
@@ -8993,33 +10542,34 @@ return Application::configure(basePath: dirname(__DIR__))
     7 => 'Illuminate\\Pagination\\PaginationServiceProvider',
     8 => 'Illuminate\\Session\\SessionServiceProvider',
     9 => 'Illuminate\\View\\ViewServiceProvider',
-    10 => 'BezhanSalleh\\PluginEssentials\\PluginEssentialsServiceProvider',
-    11 => 'BezhanSalleh\\FilamentShield\\FilamentShieldServiceProvider',
-    12 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
-    13 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
-    14 => 'Filament\\Actions\\ActionsServiceProvider',
-    15 => 'Filament\\FilamentServiceProvider',
-    16 => 'Filament\\Forms\\FormsServiceProvider',
-    17 => 'Filament\\Infolists\\InfolistsServiceProvider',
-    18 => 'Filament\\Notifications\\NotificationsServiceProvider',
-    19 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
-    20 => 'Filament\\Schemas\\SchemasServiceProvider',
-    21 => 'Filament\\Support\\SupportServiceProvider',
-    22 => 'Filament\\Tables\\TablesServiceProvider',
-    23 => 'Filament\\Widgets\\WidgetsServiceProvider',
-    24 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
-    25 => 'Laravel\\Pail\\PailServiceProvider',
-    26 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
-    27 => 'Livewire\\LivewireServiceProvider',
-    28 => 'Carbon\\Laravel\\ServiceProvider',
-    29 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
-    30 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    31 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
-    32 => 'Spatie\\Permission\\PermissionServiceProvider',
-    33 => 'App\\Providers\\AppServiceProvider',
-    34 => 'App\\Providers\\Filament\\DashboardPanelProvider',
+    10 => 'Barryvdh\\DomPDF\\ServiceProvider',
+    11 => 'BezhanSalleh\\PluginEssentials\\PluginEssentialsServiceProvider',
+    12 => 'BezhanSalleh\\FilamentShield\\FilamentShieldServiceProvider',
+    13 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
+    14 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
+    15 => 'Filament\\Actions\\ActionsServiceProvider',
+    16 => 'Filament\\FilamentServiceProvider',
+    17 => 'Filament\\Forms\\FormsServiceProvider',
+    18 => 'Filament\\Infolists\\InfolistsServiceProvider',
+    19 => 'Filament\\Notifications\\NotificationsServiceProvider',
+    20 => 'Filament\\QueryBuilder\\QueryBuilderServiceProvider',
+    21 => 'Filament\\Schemas\\SchemasServiceProvider',
+    22 => 'Filament\\Support\\SupportServiceProvider',
+    23 => 'Filament\\Tables\\TablesServiceProvider',
+    24 => 'Filament\\Widgets\\WidgetsServiceProvider',
+    25 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
+    26 => 'Laravel\\Pail\\PailServiceProvider',
+    27 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
+    28 => 'Livewire\\LivewireServiceProvider',
+    29 => 'Carbon\\Laravel\\ServiceProvider',
+    30 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
+    31 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    32 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
+    33 => 'Spatie\\Permission\\PermissionServiceProvider',
+    34 => 'App\\Providers\\AppServiceProvider',
+    35 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
-  'deferred' =>
+  'deferred' => 
   array (
     'Illuminate\\Broadcasting\\BroadcastManager' => 'Illuminate\\Broadcasting\\BroadcastServiceProvider',
     'Illuminate\\Contracts\\Broadcasting\\Factory' => 'Illuminate\\Broadcasting\\BroadcastServiceProvider',
@@ -9189,54 +10739,54 @@ return Application::configure(basePath: dirname(__DIR__))
     'Blueprint\\Blueprint' => 'Blueprint\\BlueprintServiceProvider',
     'command.tinker' => 'Laravel\\Tinker\\TinkerServiceProvider',
   ),
-  'when' =>
+  'when' => 
   array (
-    'Illuminate\\Broadcasting\\BroadcastServiceProvider' =>
+    'Illuminate\\Broadcasting\\BroadcastServiceProvider' => 
     array (
     ),
-    'Illuminate\\Bus\\BusServiceProvider' =>
+    'Illuminate\\Bus\\BusServiceProvider' => 
     array (
     ),
-    'Illuminate\\Cache\\CacheServiceProvider' =>
+    'Illuminate\\Cache\\CacheServiceProvider' => 
     array (
     ),
-    'Illuminate\\Foundation\\Providers\\ConsoleSupportServiceProvider' =>
+    'Illuminate\\Foundation\\Providers\\ConsoleSupportServiceProvider' => 
     array (
     ),
-    'Illuminate\\Concurrency\\ConcurrencyServiceProvider' =>
+    'Illuminate\\Concurrency\\ConcurrencyServiceProvider' => 
     array (
     ),
-    'Illuminate\\Image\\ImageServiceProvider' =>
+    'Illuminate\\Image\\ImageServiceProvider' => 
     array (
     ),
-    'Illuminate\\Hashing\\HashServiceProvider' =>
+    'Illuminate\\Hashing\\HashServiceProvider' => 
     array (
     ),
-    'Illuminate\\Mail\\MailServiceProvider' =>
+    'Illuminate\\Mail\\MailServiceProvider' => 
     array (
     ),
-    'Illuminate\\Auth\\Passwords\\PasswordResetServiceProvider' =>
+    'Illuminate\\Auth\\Passwords\\PasswordResetServiceProvider' => 
     array (
     ),
-    'Illuminate\\Pipeline\\PipelineServiceProvider' =>
+    'Illuminate\\Pipeline\\PipelineServiceProvider' => 
     array (
     ),
-    'Illuminate\\Queue\\QueueServiceProvider' =>
+    'Illuminate\\Queue\\QueueServiceProvider' => 
     array (
     ),
-    'Illuminate\\Redis\\RedisServiceProvider' =>
+    'Illuminate\\Redis\\RedisServiceProvider' => 
     array (
     ),
-    'Illuminate\\Translation\\TranslationServiceProvider' =>
+    'Illuminate\\Translation\\TranslationServiceProvider' => 
     array (
     ),
-    'Illuminate\\Validation\\ValidationServiceProvider' =>
+    'Illuminate\\Validation\\ValidationServiceProvider' => 
     array (
     ),
-    'Blueprint\\BlueprintServiceProvider' =>
+    'Blueprint\\BlueprintServiceProvider' => 
     array (
     ),
-    'Laravel\\Tinker\\TinkerServiceProvider' =>
+    'Laravel\\Tinker\\TinkerServiceProvider' => 
     array (
     ),
   ),
@@ -9259,12 +10809,13 @@ return [
 ## resources/css/app.css
 ```css
 @import 'tailwindcss';
-
+@import '@fontsource/lexend';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    --font-sans: 'Lexend', ui-sans-serif, system-ui, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
@@ -9308,6 +10859,22 @@ return [
         </div>
     </form>
 </x-filament-panels::page.simple>
+
+```
+---
+
+## resources/views/filament/pages/laporan-bulanan.blade.php
+```blade
+<x-filament-panels::page>
+    <form wire:submit="generate">
+        {{ $this->form }}
+        <div style="margin-top: 1.5rem;">
+            <x-filament::button type="submit" icon="heroicon-o-document-arrow-down">
+                Generate & Download PDF
+            </x-filament::button>
+        </div>
+    </form>
+</x-filament-panels::page>
 
 ```
 ---
@@ -9373,6 +10940,202 @@ return [
         </div>
     @endif
 </x-filament-panels::page>
+
+```
+---
+
+## resources/views/pdf/laporan-bulanan.blade.php
+```blade
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: sans-serif; font-size: 11px; color: #111; }
+        h1 { font-size: 16px; margin-bottom: 0; }
+        h2 { font-size: 13px; margin-top: 24px; margin-bottom: 6px; border-bottom: 1px solid #999; padding-bottom: 4px; }
+        .subheading { color: #555; margin-top: 2px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
+        th { background: #f0f0f0; }
+        .ringkasan-box { margin-bottom: 8px; }
+        .ringkasan-box span { display: inline-block; margin-right: 16px; }
+        .section { page-break-after: always; }
+        .section:last-child { page-break-after: auto; }
+    </style>
+</head>
+<body>
+    <h1>Laporan Bulanan Perpustakaan</h1>
+    <p class="subheading">Periode: {{ $periode_label }}</p>
+
+    {{-- PEMINJAMAN --}}
+    <div class="section">
+        <h2>Peminjaman</h2>
+        <div class="ringkasan-box">
+            <span><strong>Total:</strong> {{ $peminjaman['total'] }}</span>
+            @foreach ($peminjaman['per_status'] as $status => $jumlah)
+                <span><strong>{{ ucfirst($status) }}:</strong> {{ $jumlah }}</span>
+            @endforeach
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tanggal Pinjam</th>
+                    <th>Peminjam</th>
+                    <th>Buku</th>
+                    <th>Jatuh Tempo</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($peminjaman['detail'] as $p)
+                    <tr>
+                        <td>{{ $p->tanggal_pinjam->format('d-m-Y') }}</td>
+                        <td>{{ $p->user->nama }}</td>
+                        <td>{{ $p->buku->judul }}</td>
+                        <td>{{ $p->tanggal_jatuh_tempo->format('d-m-Y') }}</td>
+                        <td>{{ ucfirst($p->status->value) }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5">Tidak ada data.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    {{-- PENGEMBALIAN --}}
+    <div class="section">
+        <h2>Pengembalian</h2>
+        <div class="ringkasan-box">
+            <span><strong>Total:</strong> {{ $pengembalian['total'] }}</span>
+            @foreach ($pengembalian['per_kondisi'] as $kondisi => $jumlah)
+                <span><strong>{{ ucfirst($kondisi) }}:</strong> {{ $jumlah }}</span>
+            @endforeach
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tanggal Kembali</th>
+                    <th>Peminjam</th>
+                    <th>Buku</th>
+                    <th>Kondisi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($pengembalian['detail'] as $p)
+                    <tr>
+                        <td>{{ $p->tanggal_kembali->format('d-m-Y') }}</td>
+                        <td>{{ $p->peminjaman->user->nama }}</td>
+                        <td>{{ $p->peminjaman->buku->judul }}</td>
+                        <td>{{ ucfirst($p->kondisi->value) }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="4">Tidak ada data.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    {{-- DENDA --}}
+    <div class="section">
+        <h2>Denda</h2>
+        <div class="ringkasan-box">
+            <span><strong>Total Transaksi:</strong> {{ $denda['total'] }}</span>
+            <span><strong>Total Nominal:</strong> Rp {{ number_format($denda['total_nominal'], 0, ',', '.') }}</span>
+            <span><strong>Sudah Lunas:</strong> Rp {{ number_format($denda['total_nominal_lunas'], 0, ',', '.') }}</span>
+            <span><strong>Belum Lunas:</strong> Rp {{ number_format($denda['total_nominal_belum_lunas'], 0, ',', '.') }}</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tanggal</th>
+                    <th>User</th>
+                    <th>Tipe</th>
+                    <th>Nominal</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($denda['detail'] as $d)
+                    <tr>
+                        <td>{{ $d->created_at->format('d-m-Y') }}</td>
+                        <td>{{ $d->user->nama }}</td>
+                        <td>{{ ucfirst($d->tipe->value) }}</td>
+                        <td>Rp {{ number_format($d->nominal, 0, ',', '.') }}</td>
+                        <td>{{ $d->status_lunas ? 'Lunas' : 'Belum Lunas' }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5">Tidak ada data.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    {{-- KUNJUNGAN --}}
+    <div class="section">
+        <h2>Kunjungan</h2>
+        <div class="ringkasan-box">
+            <span><strong>Total Kunjungan:</strong> {{ $kunjungan['total'] }}</span>
+            <span><strong>Pengunjung Unik:</strong> {{ $kunjungan['user_unik'] }}</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tanggal</th>
+                    <th>Jam</th>
+                    <th>Pengunjung</th>
+                    <th>Sumber</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($kunjungan['detail'] as $k)
+                    <tr>
+                        <td>{{ $k->tanggal->format('d-m-Y') }}</td>
+                        <td>{{ $k->jam_tap }}</td>
+                        <td>{{ $k->user->nama }}</td>
+                        <td>{{ ucfirst($k->source->value) }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="4">Tidak ada data.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    {{-- POINT --}}
+    <div class="section">
+        <h2>Point</h2>
+        <div class="ringkasan-box">
+            <span><strong>Total Transaksi:</strong> {{ $point['total_transaksi'] }}</span>
+            <span><strong>Total Nilai:</strong> {{ $point['total_nilai'] }}</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tanggal</th>
+                    <th>User</th>
+                    <th>Event</th>
+                    <th>Nilai</th>
+                    <th>Keterangan</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($point['detail'] as $p)
+                    <tr>
+                        <td>{{ $p->created_at->format('d-m-Y') }}</td>
+                        <td>{{ $p->user->nama }}</td>
+                        <td>{{ ucfirst($p->event_type->value) }}</td>
+                        <td>{{ $p->nilai }}</td>
+                        <td>{{ $p->keterangan }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5">Tidak ada data.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
 
 ```
 ---
@@ -9555,7 +11318,7 @@ return [
                             <path d="M260.6 400.8C229.8 400.8 204.6 392.4 185 375.6C165.8 358.8 156.2 337 156.2 310.2H226.4C226.4 318.2 229.4 324.8 235.4 330C241.4 335.2 249.4 337.8 259.4 337.8C269 337.8 276.8 335 282.8 329.4C289.2 323.8 292.4 316.6 292.4 307.8C292.4 299.8 289.6 293.2 284 288C278.4 282.8 271.2 280.2 262.4 280.2H225.2V218.4H262.4C269.2 218.4 275 216 279.8 211.2C284.6 206.4 287 200.4 287 193.2C287 184.8 284.4 178.2 279.2 173.4C274 168.6 267.4 166.2 259.4 166.2C252.2 166.2 246 168.4 240.8 172.8C236 177.2 233.6 182.8 233.6 189.6H167C167 164.8 175.8 144.6 193.4 129C211 113 233.6 105 261.2 105C288.8 105 311.2 112.2 328.4 126.6C346 141 354.8 160 354.8 183.6C354.8 200.8 350.2 214.8 341 225.6C331.8 236 320 243.2 305.6 247.2C322.8 252 336.4 260.2 346.4 271.8C356.8 283.4 362 298 362 315.6C362 340.4 352.6 360.8 333.8 376.8C315 392.8 290.6 400.8 260.6 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-2-mask)"/>
                             <path d="M52.5357 167.6H27.3357V105.2H120.336V400.2H52.5357V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-2-mask)"/>
                         </g>
-
+                        
                         <g class="mix-blend-color dark:mix-blend-hard-light transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[51px] text-[#F8B803] dark:text-[#391800]">
                             <mask id="path-3-mask" maskUnits="userSpaceOnUse" x="51" y="103" width="338" height="299" fill="black">
                                 <rect fill="white" x="51" y="103" width="338" height="299"/>
@@ -9567,7 +11330,7 @@ return [
                             <path d="M286.264 400.8C255.464 400.8 230.264 392.4 210.664 375.6C191.464 358.8 181.864 337 181.864 310.2H252.064C252.064 318.2 255.064 324.8 261.064 330C267.064 335.2 275.064 337.8 285.064 337.8C294.664 337.8 302.464 335 308.464 329.4C314.864 323.8 318.064 316.6 318.064 307.8C318.064 299.8 315.264 293.2 309.664 288C304.064 282.8 296.864 280.2 288.064 280.2H250.864V218.4H288.064C294.864 218.4 300.664 216 305.464 211.2C310.264 206.4 312.664 200.4 312.664 193.2C312.664 184.8 310.064 178.2 304.864 173.4C299.664 168.6 293.064 166.2 285.064 166.2C277.864 166.2 271.664 168.4 266.464 172.8C261.664 177.2 259.264 182.8 259.264 189.6H192.664C192.664 164.8 201.464 144.6 219.064 129C236.664 113 259.264 105 286.864 105C314.464 105 336.864 112.2 354.064 126.6C371.664 141 380.464 160 380.464 183.6C380.464 200.8 375.864 214.8 366.664 225.6C357.464 236 345.664 243.2 331.264 247.2C348.464 252 362.064 260.2 372.064 271.8C382.464 283.4 387.664 298 387.664 315.6C387.664 340.4 378.264 360.8 359.464 376.8C340.664 392.8 316.264 400.8 286.264 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-3-mask)"/>
                             <path d="M78.2 167.6H53V105.2H146V400.2H78.2V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-3-mask)"/>
                         </g>
-
+                        
                         <g class="mix-blend-multiply dark:mix-blend-normal transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[78px] text-[#F3BEC7] dark:text-[#733000]">
                             <mask id="path-4-mask" maskUnits="userSpaceOnUse" x="76.6643" y="103" width="338" height="299" fill="black">
                                 <rect fill="white" x="76.6643" y="103" width="338" height="299"/>
@@ -9579,7 +11342,7 @@ return [
                             <path d="M311.929 400.8C281.129 400.8 255.929 392.4 236.329 375.6C217.129 358.8 207.529 337 207.529 310.2H277.729C277.729 318.2 280.729 324.8 286.729 330C292.729 335.2 300.729 337.8 310.729 337.8C320.329 337.8 328.129 335 334.129 329.4C340.529 323.8 343.729 316.6 343.729 307.8C343.729 299.8 340.929 293.2 335.329 288C329.729 282.8 322.529 280.2 313.729 280.2H276.529V218.4H313.729C320.529 218.4 326.329 216 331.129 211.2C335.929 206.4 338.329 200.4 338.329 193.2C338.329 184.8 335.729 178.2 330.529 173.4C325.329 168.6 318.729 166.2 310.729 166.2C303.529 166.2 297.329 168.4 292.129 172.8C287.329 177.2 284.929 182.8 284.929 189.6H218.329C218.329 164.8 227.129 144.6 244.729 129C262.329 113 284.929 105 312.529 105C340.129 105 362.529 112.2 379.729 126.6C397.329 141 406.129 160 406.129 183.6C406.129 200.8 401.529 214.8 392.329 225.6C383.129 236 371.329 243.2 356.929 247.2C374.129 252 387.729 260.2 397.729 271.8C408.129 283.4 413.329 298 413.329 315.6C413.329 340.4 403.929 360.8 385.129 376.8C366.329 392.8 341.929 400.8 311.929 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-4-mask)"/>
                             <path d="M103.864 167.6H78.6643V105.2H171.664V400.2H103.864V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-4-mask)"/>
                         </g>
-
+                        
                         <g class="mix-blend-hard-light transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[102px] text-[#F3BEC7] dark:text-[#4B0600]">
                             <mask id="path-5-mask" maskUnits="userSpaceOnUse" x="102.329" y="103" width="338" height="299" fill="black">
                                 <rect fill="white" x="102.329" y="103" width="338" height="299"/>

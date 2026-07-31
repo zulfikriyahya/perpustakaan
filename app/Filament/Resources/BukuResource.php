@@ -14,6 +14,10 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use App\Filament\Exports\BukuExporter;
+use App\Filament\Imports\BukuImporter;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 
 class BukuResource extends Resource
 {
@@ -78,6 +82,14 @@ class BukuResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(BukuImporter::class)
+                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
+                ExportAction::make()
+                    ->exporter(BukuExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
+            ])
             ->columns([
                 ImageColumn::make('cover')
                     ->square(),

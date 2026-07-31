@@ -16,11 +16,20 @@
 │   ├── Exceptions
 │   │   └── WhatsappGatewayException.php
 │   ├── Filament
+│   │   ├── Exports
+│   │   │   ├── BukuExporter.php
+│   │   │   ├── KategoriExporter.php
+│   │   │   └── RakExporter.php
+│   │   ├── Imports
+│   │   │   ├── BukuImporter.php
+│   │   │   ├── KategoriImporter.php
+│   │   │   └── RakImporter.php
 │   │   ├── Pages
 │   │   │   ├── Auth
 │   │   │   │   ├── Login.php
 │   │   │   │   ├── RequestPasswordReset.php
 │   │   │   │   └── ResetPassword.php
+│   │   │   ├── LaporanBulanan.php
 │   │   │   └── TransaksiCepat.php
 │   │   └── Resources
 │   │       ├── BukuResource
@@ -28,11 +37,17 @@
 │   │       │       ├── CreateBuku.php
 │   │       │       ├── EditBuku.php
 │   │       │       └── ListBukus.php
+│   │       ├── DendaResource
+│   │       │   └── Pages
+│   │       │       └── ListDendas.php
 │   │       ├── KategoriResource
 │   │       │   └── Pages
 │   │       │       ├── CreateKategori.php
 │   │       │       ├── EditKategori.php
 │   │       │       └── ListKategoris.php
+│   │       ├── KunjunganResource
+│   │       │   └── Pages
+│   │       │       └── ListKunjungans.php
 │   │       ├── PeminjamanResource
 │   │       │   └── Pages
 │   │       │       ├── CreatePeminjaman.php
@@ -47,11 +62,20 @@
 │   │       │   │   └── ListRaks.php
 │   │       │   └── RelationManagers
 │   │       │       └── BukusRelationManager.php
+│   │       ├── TransaksiResource
+│   │       │   ├── Pages
+│   │       │   │   ├── ListTransaksis.php
+│   │       │   │   └── ViewTransaksi.php
+│   │       │   └── RelationManagers
+│   │       │       └── PeminjamansRelationManager.php
 │   │       ├── BukuResource.php
+│   │       ├── DendaResource.php
 │   │       ├── KategoriResource.php
+│   │       ├── KunjunganResource.php
 │   │       ├── PeminjamanResource.php
 │   │       ├── PengembalianResource.php
-│   │       └── RakResource.php
+│   │       ├── RakResource.php
+│   │       └── TransaksiResource.php
 │   ├── Http
 │   │   ├── Controllers
 │   │   │   ├── Api
@@ -87,11 +111,14 @@
 │   │   └── UserObserver.php
 │   ├── Policies
 │   │   ├── BukuPolicy.php
+│   │   ├── DendaPolicy.php
 │   │   ├── KategoriPolicy.php
+│   │   ├── KunjunganPolicy.php
 │   │   ├── PeminjamanPolicy.php
 │   │   ├── PengembalianPolicy.php
 │   │   ├── RakPolicy.php
-│   │   └── RolePolicy.php
+│   │   ├── RolePolicy.php
+│   │   └── TransaksiPolicy.php
 │   ├── Providers
 │   │   ├── Filament
 │   │   │   └── DashboardPanelProvider.php
@@ -99,6 +126,7 @@
 │   ├── Rules
 │   │   └── FormatKartuRfid.php
 │   └── Services
+│       ├── LaporanBulananService.php
 │       ├── PasswordResetOtpService.php
 │       ├── PeminjamanService.php
 │       ├── PointService.php
@@ -172,7 +200,11 @@
 │   │   ├── 2026_07_30_000005_create_firmware_releases_table.php
 │   │   ├── 2026_07_30_000006_create_password_reset_otps_table.php
 │   │   ├── 2026_07_30_000007_add_indexes_untuk_performa_query.php
-│   │   └── 2026_07_30_000008_add_status_refund_to_dendas_table.php
+│   │   ├── 2026_07_30_000008_add_status_refund_to_dendas_table.php
+│   │   ├── 2026_07_31_051302_create_imports_table.php
+│   │   ├── 2026_07_31_051303_create_exports_table.php
+│   │   ├── 2026_07_31_051304_create_failed_import_rows_table.php
+│   │   └── 2026_07_31_052251_create_notifications_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
@@ -193,7 +225,10 @@
 │       │       ├── auth
 │       │       │   ├── request-password-reset.blade.php
 │       │       │   └── reset-password.blade.php
+│       │       ├── laporan-bulanan.blade.php
 │       │       └── transaksi-cepat.blade.php
+│       ├── pdf
+│       │   └── laporan-bulanan.blade.php
 │       └── welcome.blade.php
 ├── routes
 │   ├── api.php
@@ -220,4 +255,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-52 directories, 169 files
+62 directories, 194 files

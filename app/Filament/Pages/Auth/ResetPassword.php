@@ -48,7 +48,8 @@ class ResetPassword extends SimplePage
             TextInput::make('otp')
                 ->label('Kode OTP')
                 ->required()
-                ->length(6),
+                ->minLength(6)
+                ->maxLength(6),
             TextInput::make('password')
                 ->label('Password Baru')
                 ->password()

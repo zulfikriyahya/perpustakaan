@@ -7,28 +7,27 @@ use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
-/**
- * Mapping Role Spatie -> Permission, sesuai scope akses di dokumen
- * Logic Module Perpustakaan v1.0 poin 1 (dikonfirmasi user):
- *
- * - super_admin (User.role = admin): akses penuh semua permission.
- * - pustakawan : full CRUD Buku/Kategori/Rak (master data) + Peminjaman/
- *                Pengembalian (proses pinjam-kembali) + Denda (tandai
- *                lunas - TODO: ASUMSI, lihat DendaResource) + lihat
- *                Kunjungan/Transaksi (operasional harian, read-only).
- * - siswa/pegawai: TIDAK diberi permission Resource apa pun di panel ini.
- *
- * ITERASI INI (Denda/Kunjungan/Transaksi/Setting): Delete/DeleteAny untuk
- * ketiga Resource log (Denda/Kunjungan/Transaksi) SENGAJA tidak diberikan
- * ke pustakawan - hanya super_admin (dikonfirmasi user: "read-only tapi
- * Admin boleh hapus"). SettingResource sepenuhnya ditahan dulu (belum
- * dibuat) sampai SettingObserver.php diverifikasi.
- */
 class ShieldSeeder extends Seeder
 {
     public function run(): void
     {
-        // guard 'web' adalah default Spatie & Filament panel ini.
+        // Permission manual untuk halaman non-Resource (LaporanBulanan,
+        // PengaturanSistem) - Shield tidak auto-generate permission untuk
+        // Filament Page biasa (hanya untuk Resource).
+        Permission::firstOrCreate([
+            'name' => 'ViewAny:LaporanBulanan',
+            'guard_name' => 'web',
+        ]);
+
+        // BARU iterasi ini - sengaja TIDAK dimasukkan ke daftar permission
+        // pustakawan di bawah, karena scope Setting = Admin (dok Logic
+        // Module §1). Hanya super_admin yang otomatis dapat lewat
+        // syncPermissions(Permission::all()).
+        Permission::firstOrCreate([
+            'name' => 'ViewAny:PengaturanSistem',
+            'guard_name' => 'web',
+        ]);
+
         $superAdmin = Role::firstOrCreate([
             'name' => 'super_admin',
             'guard_name' => 'web',
@@ -88,7 +87,6 @@ class ShieldSeeder extends Seeder
                 'View:Pengembalian',
                 'Update:Pengembalian',
 
-                // BARU iterasi ini - lihat catatan class di atas.
                 'ViewAny:Denda',
                 'View:Denda',
                 'Update:Denda',
@@ -96,10 +94,14 @@ class ShieldSeeder extends Seeder
                 'View:Kunjungan',
                 'ViewAny:Transaksi',
                 'View:Transaksi',
+
+                'ViewAny:LaporanBulanan',
+
+                // Catatan: 'ViewAny:PengaturanSistem' SENGAJA tidak
+                // ditambahkan di sini - lihat komentar di atas.
             ])->get()
         );
 
-        // Placeholder kosong - role belum punya guna praktis (lihat catatan lama).
         Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'pegawai', 'guard_name' => 'web']);
 

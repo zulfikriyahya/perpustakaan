@@ -28,19 +28,30 @@ class DashboardPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
+            // ->topNavigation()
+
+            ->globalSearch(false)
             ->default()
+            ->databaseNotifications()
             ->id('dashboard')
             ->path('dashboard')
             ->login(Login::class)
             ->spa()
-            
+
             ->passwordReset(
                 RequestPasswordReset::class,
                 ResetPassword::class,
             )
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Cyan,
             ])
+            // Pakai Lexend yang sudah di-bundle lokal via @fontsource/lexend
+            // (resources/css/app.css), bukan fetch dari Google Fonts CDN.
+            // TODO: verifikasi signature terhadap versi package yang
+            // terpasang - argumen kedua diasumsikan menonaktifkan provider
+            // Google Fonts bawaan Filament v5.7; cek ulang jika behaviour
+            // berbeda (mis. tetap muncul request ke fonts.googleapis.com).
+            ->font('Lexend', provider: null)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([

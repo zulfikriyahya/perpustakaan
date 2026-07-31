@@ -85,7 +85,19 @@ class RequestPasswordReset extends SimplePage
             return;
         }
 
-        $otpService->kirimOtp($user);
+        try {
+            $otpService->kirimOtp($user);
+        } catch (\RuntimeException $e) {
+            // rate limit OTP (lihat PasswordResetOtpService::kirimOtp) -
+            // ditangkap disini, bukan dibiarkan jadi fatal error.
+            Notification::make()
+                ->title('Belum bisa mengirim OTP')
+                ->body($e->getMessage())
+                ->warning()
+                ->send();
+
+            return;
+        }
 
         Session::put('reset_password_no_telepon', $user->no_telepon);
 

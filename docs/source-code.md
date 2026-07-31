@@ -185,6 +185,27 @@ enum StatusEksemplar: string
 ```
 ---
 
+## app/Enums/StatusOtaFirmware.php
+```php
+<?php
+
+namespace App\Enums;
+
+/**
+ * Value PERSIS string yang dikirim device di field "status" pada endpoint
+ * POST /api/perpustakaan/firmware/report (kontrak baru, lihat
+ * PerpustakaanDeviceController::firmwareReport()). Jangan ubah value tanpa
+ * menyesuaikan firmware juga.
+ */
+enum StatusOtaFirmware: string
+{
+    case Sukses = 'success';
+    case Gagal = 'failed';
+}
+
+```
+---
+
 ## app/Enums/StatusPeminjaman.php
 ```php
 <?php
@@ -746,7 +767,9 @@ class PeminjamanExporter extends Exporter
     {
         return [
             ExportColumn::make('user.nama')->label('Peminjam'),
-            ExportColumn::make('eksemplar.buku.judul')->label('Buku'),
+            ExportColumn::make('eksemplar.buku.judul')
+                ->label('Buku')
+                ->formatStateUsing(fn ($state) => $state ?? '(eksemplar sudah dihapus permanen)'),
             ExportColumn::make('tanggal_pinjam'),
             ExportColumn::make('tanggal_jatuh_tempo'),
             ExportColumn::make('status'),
@@ -3790,12 +3813,18 @@ class ListBukus extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\BukuExporter;
 use App\Filament\Imports\BukuImporter;
 use App\Filament\Resources\BukuResource\Pages;
 use App\Filament\Resources\BukuResource\RelationManagers\EksemplarsRelationManager;
+use App\Jobs\GenerateLabelBarcodePdfJob;
 use App\Models\Buku;
+use App\Models\Eksemplar;
 use App\Models\Rak;
+use App\Services\LabelBarcodeService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ForceDeleteAction;
@@ -3805,6 +3834,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
@@ -3812,6 +3842,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class BukuResource extends Resource
 {
@@ -3896,10 +3927,6 @@ class BukuResource extends Resource
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
-                // Import/Export Eksemplar TIDAK lagi ada di sini - dipindah
-                // sepenuhnya ke EksemplarsRelationManager (satu lokasi,
-                // sebelumnya duplikat di dua tempat dengan sumber
-                // otorisasi berbeda - lihat EksemplarPolicy baru).
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -3918,11 +3945,6 @@ class BukuResource extends Resource
                     ->label('Total Eksemplar')
                     ->counts('eksemplars')
                     ->sortable(),
-                // GAP-SPEC ditutup: "stok tersedia" = HANYA status Tersedia
-                // (Buku::stokTersedia()) - Dipinjam, Rusak, DAN Hilang semua
-                // dikecualikan, bukan cuma Dipinjam+Hilang. Dihitung
-                // on-the-fly (bukan counts() bawaan) karena butuh filter
-                // where status, bukan sekadar hitung semua baris relasi.
                 TextColumn::make('stok_tersedia')
                     ->label('Stok Tersedia')
                     ->state(fn (Buku $record) => $record->stokTersedia())
@@ -3939,7 +3961,29 @@ class BukuResource extends Resource
             ])
             ->actions([
                 DeleteAction::make(),
-                ForceDeleteAction::make(),
+                ForceDeleteAction::make()
+                    ->action(function (Buku $record) {
+                        $adaPeminjamanBerjalan = Eksemplar::query()
+                            ->withTrashed()
+                            ->where('buku_id', $record->id)
+                            ->whereHas('peminjamans', fn ($q) => $q->whereIn('status', [
+                                StatusPeminjaman::Aktif,
+                                StatusPeminjaman::Terlambat,
+                            ]))
+                            ->exists();
+
+                        if ($adaPeminjamanBerjalan) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada Peminjaman Aktif/Terlambat yang menggunakan eksemplar buku ini. Selesaikan/kembalikan dulu sebelum force delete.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
                 RestoreAction::make(),
             ])
             ->filters([
@@ -3947,6 +3991,66 @@ class BukuResource extends Resource
                 SelectFilter::make('kategoris')
                     ->label('Kategori')
                     ->relationship('kategoris', 'nama'),
+            ])
+            ->toolbarActions([
+                // BARU - cetak label barcode lintas Buku terpilih. Ambil
+                // SEMUA Eksemplar milik Buku-Buku yang dicentang (Aturan
+                // poin 3 - reuse LabelBarcodeService, jangan duplikasi
+                // logic generate barcode di sini).
+                BulkAction::make('cetak_label_massal')
+                    ->label('Cetak Label Eksemplar')
+                    ->icon('heroicon-o-printer')
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->action(function (Collection $records, LabelBarcodeService $service) {
+                        $eksemplars = Eksemplar::query()
+                            ->whereIn('buku_id', $records->pluck('id'))
+                            ->with('buku')
+                            ->get();
+
+                        if ($eksemplars->isEmpty()) {
+                            Notification::make()
+                                ->warning()
+                                ->title('Tidak ada Eksemplar')
+                                ->body('Buku yang dipilih belum punya Eksemplar untuk dicetak labelnya.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $labels = $service->generateData($eksemplars);
+
+                        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
+                            ->setPaper('a4', 'portrait');
+
+                        return response()->streamDownload(
+                            fn () => print ($pdf->output()),
+                            'label-barcode-buku-'.now()->format('Ymd-His').'.pdf',
+                            ['Content-Type' => 'application/pdf'],
+                        );
+                    })
+                    ->deselectRecordsAfterCompletion(),
+
+                // // BARU - generate PDF di background (queue 'default') agar
+                // // tidak timeout HTTP saat Buku terpilih banyak. Hasil
+                // // dikirim via Filament database notification (bell icon)
+                // // dengan tombol Download - lihat GenerateLabelBarcodePdfJob.
+                // BulkAction::make('cetak_label_massal')
+                //     ->label('Cetak Label Eksemplar')
+                //     ->icon('heroicon-o-printer')
+                //     ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                //     ->action(function (Collection $records) {
+                //         GenerateLabelBarcodePdfJob::dispatch(
+                //             $records->pluck('id')->all(),
+                //             (string) auth()->id(),
+                //         );
+
+                //         \Filament\Notifications\Notification::make()
+                //             ->info()
+                //             ->title('Sedang memproses label barcode')
+                //             ->body('Anda akan menerima notifikasi begitu PDF siap diunduh.')
+                //             ->send();
+                //     })
+                //     ->deselectRecordsAfterCompletion(),
             ]);
     }
 
@@ -3977,20 +4081,30 @@ class BukuResource extends Resource
 namespace App\Filament\Resources\BukuResource\RelationManagers;
 
 use App\Enums\StatusEksemplar;
+use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\EksemplarExporter;
 use App\Filament\Imports\EksemplarImporter;
 use App\Models\Eksemplar;
+use App\Services\LabelBarcodeService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class EksemplarsRelationManager extends RelationManager
 {
@@ -4021,9 +4135,6 @@ class EksemplarsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('barcode')
             ->headerActions([
-                // Import/Export Eksemplar terpusat di sini (bukan di
-                // RakResource) - satu sumber kebenaran perubahan data
-                // Eksemplar, lihat docblock RakResource\EksemplarsRelationManager.
                 ImportAction::make()
                     ->importer(EksemplarImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Eksemplar::class) ?? false),
@@ -4045,6 +4156,7 @@ class EksemplarsRelationManager extends RelationManager
             ->filters([
                 SelectFilter::make('status')
                     ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+                TrashedFilter::make(),
             ])
             ->recordActions([
                 EditAction::make()
@@ -4057,6 +4169,68 @@ class EksemplarsRelationManager extends RelationManager
                     ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
                         ? 'Eksemplar sedang dipinjam - tidak bisa dihapus.'
                         : null),
+                RestoreAction::make(),
+                ForceDeleteAction::make()
+                    ->action(function (Eksemplar $record) {
+                        $adaPeminjamanBerjalan = $record->peminjamans()
+                            ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat])
+                            ->exists();
+
+                        if ($adaPeminjamanBerjalan) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Tidak bisa dihapus permanen')
+                                ->body('Eksemplar ini masih punya Peminjaman Aktif/Terlambat. Selesaikan/kembalikan dulu sebelum force delete.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+                // BARU - cetak 1 label barcode langsung dari baris tabel.
+                // Reuse ability 'view' Eksemplar (tidak ada permission baru,
+                // Aturan poin 15 - tidak mengubah skema/otorisasi).
+                Action::make('cetak_label')
+                    ->label('Cetak Label')
+                    ->icon('heroicon-o-printer')
+                    ->authorize(fn (Eksemplar $record) => auth()->user()?->can('view', $record) ?? false)
+                    ->action(function (Eksemplar $record, LabelBarcodeService $service) {
+                        $record->loadMissing('buku');
+                        $labels = $service->generateData(collect([$record]));
+
+                        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
+                            ->setPaper('a4', 'portrait');
+
+                        return response()->streamDownload(
+                            fn () => print ($pdf->output()),
+                            "label-{$record->barcode}.pdf",
+                            ['Content-Type' => 'application/pdf'],
+                        );
+                    }),
+            ])
+            ->toolbarActions([
+                // BARU - cetak label massal dari eksemplar terpilih, satu
+                // PDF sticker sheet A4 (3 kolom per baris, lihat
+                // pdf.label-barcode). Reuse ability 'viewAny' Eksemplar.
+                BulkAction::make('cetak_label_massal')
+                    ->label('Cetak Label (Massal)')
+                    ->icon('heroicon-o-printer')
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->action(function (Collection $records, LabelBarcodeService $service) {
+                        $records->loadMissing('buku');
+                        $labels = $service->generateData($records);
+
+                        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
+                            ->setPaper('a4', 'portrait');
+
+                        return response()->streamDownload(
+                            fn () => print ($pdf->output()),
+                            'label-barcode-massal-'.now()->format('Ymd-His').'.pdf',
+                            ['Content-Type' => 'application/pdf'],
+                        );
+                    })
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 }
@@ -4291,6 +4465,207 @@ class DendaResource extends Resource
     {
         return [
             'index' => Pages\ListDendas::route('/'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/FirmwareResource/Pages/CreateFirmwareRelease.php
+```php
+<?php
+
+namespace App\Filament\Resources\FirmwareResource\Pages;
+
+use App\Filament\Resources\FirmwareResource;
+use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Support\Facades\Storage;
+
+class CreateFirmwareRelease extends CreateRecord
+{
+    protected static string $resource = FirmwareResource::class;
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $path = $data['file'] ?? null;
+        unset($data['file']);
+
+        if ($path) {
+            $data['url'] = Storage::disk('public')->url($path);
+            $data['md5'] = md5_file(Storage::disk('public')->path($path));
+        }
+
+        return $data;
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/FirmwareResource/Pages/EditFirmwareRelease.php
+```php
+<?php
+
+namespace App\Filament\Resources\FirmwareResource\Pages;
+
+use App\Filament\Resources\FirmwareResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Facades\Storage;
+
+class EditFirmwareRelease extends EditRecord
+{
+    protected static string $resource = FirmwareResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            DeleteAction::make(),
+        ];
+    }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $path = $data['file'] ?? null;
+        unset($data['file']);
+
+        // Hanya recompute url/md5 kalau ada file BARU diupload - lihat
+        // GAP-SPEC di FirmwareResource (form Edit tidak preload file lama).
+        if ($path) {
+            $data['url'] = Storage::disk('public')->url($path);
+            $data['md5'] = md5_file(Storage::disk('public')->path($path));
+        }
+
+        return $data;
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/FirmwareResource/Pages/ListFirmwareReleases.php
+```php
+<?php
+
+namespace App\Filament\Resources\FirmwareResource\Pages;
+
+use App\Filament\Resources\FirmwareResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListFirmwareReleases extends ListRecords
+{
+    protected static string $resource = FirmwareResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/FirmwareResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\FirmwareResource\Pages;
+use App\Models\FirmwareRelease;
+use Filament\Actions\DeleteAction;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+/**
+ * Kelola rilis firmware OTA untuk device Attendance Machine (ESP32-C3).
+ * File .bin disimpan di disk 'public' (dikonfirmasi user) - URL hasil
+ * upload langsung dipakai sebagai field 'url' yang dikirim ke device lewat
+ * PerpustakaanDeviceController::firmwareCheck().
+ *
+ * TODO: GAP-SPEC - form Edit TIDAK menampilkan preview file lama (field
+ * 'file' hanya dipetakan satu arah saat create/update baru), karena kolom
+ * tersimpan adalah 'url' (full URL) bukan path relatif disk. Jika ingin
+ * ganti versi, admin wajib upload ulang file setiap kali submit form Edit.
+ */
+class FirmwareResource extends Resource
+{
+    protected static ?string $model = FirmwareRelease::class;
+
+    protected static ?string $navigationLabel = 'Firmware OTA';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Perangkat';
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cpu-chip';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('version')
+                ->label('Versi (semver x.y.z)')
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->rule('regex:/^\d+\.\d+\.\d+$/')
+                ->helperText('Format wajib x.y.z, dibandingkan device via compareFirmwareVersion().'),
+            FileUpload::make('file')
+                ->label('File Firmware (.bin)')
+                ->disk('public')
+                ->directory('firmware')
+                ->required(fn (string $context) => $context === 'create')
+                ->helperText('Upload ulang file setiap kali menyimpan (lihat catatan GAP-SPEC di kode).'),
+            Toggle::make('aktif')
+                ->label('Aktif')
+                ->default(true)
+                ->helperText('Hanya rilis aktif dengan versi tertinggi yang ditawarkan ke device.'),
+            Textarea::make('catatan')
+                ->columnSpanFull(),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('version')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('url')
+                    ->label('URL')
+                    ->limit(40)
+                    ->copyable(),
+                TextColumn::make('md5')
+                    ->label('MD5')
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                IconColumn::make('aktif')
+                    ->boolean(),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->actions([
+                DeleteAction::make(),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListFirmwareReleases::route('/'),
+            'create' => Pages\CreateFirmwareRelease::route('/create'),
+            'edit' => Pages\EditFirmwareRelease::route('/{record}/edit'),
         ];
     }
 }
@@ -5634,6 +6009,7 @@ class PeminjamanResource extends Resource
                     ->sortable(),
                 TextColumn::make('eksemplar.buku.judul')
                     ->label('Buku')
+                    ->placeholder('(eksemplar sudah dihapus permanen)')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('tanggal_pinjam')
@@ -7118,6 +7494,7 @@ class PeminjamansRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('eksemplar.buku.judul')
                     ->label('Buku')
+                    ->placeholder('(eksemplar sudah dihapus permanen)')
                     ->searchable(),
                 TextColumn::make('tanggal_jatuh_tempo')
                     ->date(),
@@ -7804,6 +8181,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\EventTypePoint;
 use App\Enums\JenisTransaksi;
 use App\Enums\SourceKunjungan;
+use App\Enums\StatusOtaFirmware;
 use App\Http\Controllers\Controller;
 use App\Models\DeviceLog;
 use App\Models\FirmwareRelease;
@@ -8111,6 +8489,50 @@ class PerpustakaanDeviceController extends Controller
     {
         return $this->normalisasiVersi($a) <=> $this->normalisasiVersi($b);
     }
+
+    /**
+     * Kontrak BARU: firmware lapor hasil OTA setelah proses update/reboot.
+     * Request: { "device_id": string, "version": string, "status": "success"|"failed", "error"?: string }
+     * Response selalu { "status": "ok" } dengan HTTP 200 selama device_id
+     * terisi - device tidak perlu retry berdasarkan response ini (best
+     * effort logging, bukan bagian kritis alur OTA).
+     *
+     * Jika status "success", firmware_version di DeviceLog ikut
+     * diperbarui ke versi baru (device sudah berhasil boot versi
+     * tersebut). Jika "failed", firmware_version TIDAK diubah (device
+     * masih menjalankan versi lama) - hanya ota_error yang dicatat.
+     */
+    public function firmwareReport(Request $request): JsonResponse
+    {
+        $deviceId = (string) $request->input('device_id');
+
+        if ($deviceId === '') {
+            return response()->json(['error' => 'device_id wajib diisi'], 422);
+        }
+
+        $status = StatusOtaFirmware::tryFrom((string) $request->input('status'));
+
+        if (! $status) {
+            return response()->json(['error' => 'status harus "success" atau "failed"'], 422);
+        }
+
+        $update = [
+            'ota_status' => $status,
+            'ota_error' => $status === StatusOtaFirmware::Gagal ? (string) $request->input('error', '') : null,
+            'ota_reported_at' => now(),
+        ];
+
+        if ($status === StatusOtaFirmware::Sukses && $request->filled('version')) {
+            $update['firmware_version'] = (string) $request->input('version');
+        }
+
+        DeviceLog::query()->updateOrCreate(
+            ['device_id' => $deviceId],
+            $update
+        );
+
+        return response()->json(['status' => 'ok']);
+    }
 }
 
 ```
@@ -8160,6 +8582,120 @@ class AuthenticateDeviceApiKey
         }
 
         return $next($request);
+    }
+}
+
+```
+---
+
+## app/Jobs/GenerateLabelBarcodePdfJob.php
+```php
+<?php
+
+namespace App\Jobs;
+
+use App\Models\Eksemplar;
+use App\Models\User;
+use App\Services\LabelBarcodeService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Notifications\Notification;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Notifications\Action;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+
+/**
+ * Job generate PDF label barcode untuk banyak Buku sekaligus (bulk action
+ * BukuResource) - dijalankan di queue 'default' agar tidak timeout HTTP
+ * request Livewire (Aturan poin 3 - reuse LabelBarcodeService, jangan
+ * duplikasi logic generate barcode di sini).
+ *
+ * PENTING (Aturan poin 17): $timeout di bawah WAJIB <= --timeout worker
+ * queue 'default' di supervisor config - lihat catatan perubahan
+ * supervisor yang mengikuti perubahan ini.
+ */
+class GenerateLabelBarcodePdfJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public int $tries = 2;
+
+    /**
+     * Konsisten dengan --timeout=180 pada supervisor worker queue
+     * 'default' (WAJIB diupdate manual, lihat catatan di respons ini).
+     */
+    public int $timeout = 170;
+
+    public function __construct(
+        protected array $bukuIds,
+        protected string $userId,
+    ) {}
+
+    public function handle(LabelBarcodeService $service): void
+    {
+        $eksemplars = Eksemplar::query()
+            ->whereIn('buku_id', $this->bukuIds)
+            ->with('buku')
+            ->get();
+
+        $user = User::query()->find($this->userId);
+
+        if (! $user) {
+            Log::error("GenerateLabelBarcodePdfJob: user id '{$this->userId}' tidak ditemukan, notifikasi dibatalkan.");
+
+            return;
+        }
+
+        if ($eksemplars->isEmpty()) {
+            Notification::make()
+                ->warning()
+                ->title('Tidak ada Eksemplar')
+                ->body('Buku yang dipilih belum punya Eksemplar untuk dicetak labelnya.')
+                ->sendToDatabase($user);
+
+            return;
+        }
+
+        $labels = $service->generateData($eksemplars);
+
+        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
+            ->setPaper('a4', 'portrait');
+
+        $filename = 'label-barcode-'.now()->format('Ymd-His').'-'.substr(md5(uniqid()), 0, 6).'.pdf';
+        $path = "labels/{$filename}";
+
+        Storage::disk('public')->put($path, $pdf->output());
+
+        Notification::make()
+            ->success()
+            ->title('Label barcode siap diunduh')
+            ->body(count($labels).' label dari '.count($this->bukuIds).' buku berhasil dibuat.')
+            ->actions([
+                Action::make('download')
+                    ->label('Download PDF')
+                    ->url(Storage::disk('public')->url($path))
+                    ->openUrlInNewTab(),
+            ])
+            ->sendToDatabase($user);
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('GenerateLabelBarcodePdfJob: gagal generate label. Buku IDs: '.implode(',', $this->bukuIds).". Error: {$exception->getMessage()}");
+
+        $user = User::query()->find($this->userId);
+
+        if ($user) {
+            Notification::make()
+                ->danger()
+                ->title('Gagal membuat label barcode')
+                ->body('Terjadi kesalahan saat memproses PDF. Coba lagi atau hubungi Admin.')
+                ->sendToDatabase($user);
+        }
     }
 }
 
@@ -8430,6 +8966,7 @@ class Denda extends Model
 
 namespace App\Models;
 
+use App\Enums\StatusOtaFirmware;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
@@ -8450,6 +8987,9 @@ class DeviceLog extends Model
         'rfid_db_entries',
         'online',
         'last_seen_at',
+        'ota_status',
+        'ota_error',
+        'ota_reported_at',
     ];
 
     protected function casts(): array
@@ -8458,6 +8998,8 @@ class DeviceLog extends Model
             'sd_ok' => 'boolean',
             'online' => 'boolean',
             'last_seen_at' => 'datetime',
+            'ota_status' => StatusOtaFirmware::class,
+            'ota_reported_at' => 'datetime',
         ];
     }
 }
@@ -10047,6 +10589,86 @@ class EksemplarPolicy
     public function reorder(User $user): bool
     {
         return $user->can('Reorder:Eksemplar');
+    }
+}
+
+```
+---
+
+## app/Policies/FirmwareReleasePolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use App\Models\FirmwareRelease;
+use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
+
+class FirmwareReleasePolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:FirmwareRelease');
+    }
+
+    public function view(AuthUser $authUser, FirmwareRelease $firmwareRelease): bool
+    {
+        return $authUser->can('View:FirmwareRelease');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:FirmwareRelease');
+    }
+
+    public function update(AuthUser $authUser, FirmwareRelease $firmwareRelease): bool
+    {
+        return $authUser->can('Update:FirmwareRelease');
+    }
+
+    public function delete(AuthUser $authUser, FirmwareRelease $firmwareRelease): bool
+    {
+        return $authUser->can('Delete:FirmwareRelease');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:FirmwareRelease');
+    }
+
+    public function restore(AuthUser $authUser, FirmwareRelease $firmwareRelease): bool
+    {
+        return $authUser->can('Restore:FirmwareRelease');
+    }
+
+    public function forceDelete(AuthUser $authUser, FirmwareRelease $firmwareRelease): bool
+    {
+        return $authUser->can('ForceDelete:FirmwareRelease');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:FirmwareRelease');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:FirmwareRelease');
+    }
+
+    public function replicate(AuthUser $authUser, FirmwareRelease $firmwareRelease): bool
+    {
+        return $authUser->can('Replicate:FirmwareRelease');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:FirmwareRelease');
     }
 }
 
@@ -11935,6 +12557,56 @@ class KenaikanKelasService
 ```
 ---
 
+## app/Services/LabelBarcodeService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\Eksemplar;
+use Illuminate\Support\Collection;
+use Picqer\Barcode\BarcodeGeneratorPNG;
+
+/**
+ * Satu sumber kebenaran generate data label barcode Eksemplar (Aturan
+ * poin 3) - dipanggil dari EksemplarsRelationManager (aksi single & bulk),
+ * jangan duplikasi pemanggilan BarcodeGeneratorPNG di tempat lain.
+ */
+class LabelBarcodeService
+{
+    protected BarcodeGeneratorPNG $generator;
+
+    public function __construct()
+    {
+        $this->generator = new BarcodeGeneratorPNG;
+    }
+
+    /**
+     * @param  Collection<int, Eksemplar>  $eksemplars
+     * @return array<int, array{barcode: string, judul: string, gambar: string}>
+     */
+    public function generateData(Collection $eksemplars): array
+    {
+        return $eksemplars->map(function (Eksemplar $eksemplar) {
+            $png = $this->generator->getBarcode(
+                $eksemplar->barcode,
+                $this->generator::TYPE_CODE_128,
+                2,
+                50,
+            );
+
+            return [
+                'barcode' => $eksemplar->barcode,
+                'judul' => $eksemplar->buku->judul,
+                'gambar' => 'data:image/png;base64,'.base64_encode($png),
+            ];
+        })->all();
+    }
+}
+
+```
+---
+
 ## app/Services/LaporanBulananService.php
 ```php
 <?php
@@ -13136,6 +13808,7 @@ use Illuminate\Support\Facades\Route;
  *   POST /api/perpustakaan/heartbeat
  *   GET  /api/perpustakaan/config
  *   POST /api/perpustakaan/firmware/check
+ *   POST /api/perpustakaan/firmware/report  (BARU - kontrak OTA report, firmware akan disesuaikan)
  *
  * Semua endpoint di bawah prefix ini wajib header X-API-KEY (lihat
  * AuthenticateDeviceApiKey) - firmware mengirim header ini di SETIAP request
@@ -13154,6 +13827,7 @@ Route::prefix('perpustakaan')
         Route::post('/heartbeat', [PerpustakaanDeviceController::class, 'heartbeat']);
         Route::get('/config', [PerpustakaanDeviceController::class, 'config']);
         Route::post('/firmware/check', [PerpustakaanDeviceController::class, 'firmwareCheck']);
+        Route::post('/firmware/report', [PerpustakaanDeviceController::class, 'firmwareReport']);
     });
 
 ```
@@ -17483,6 +18157,96 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_08_02_000007_make_eksemplar_id_nullable_in_peminjamans_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * GAP-SPEC ditutup (dikonfirmasi user): force-delete Buku/Eksemplar yang
+ * punya riwayat Peminjaman DIIZINKAN - eksemplar_id di riwayat Peminjaman
+ * jadi null (Opsi B), bukan RESTRICT (penyebab error 1451 sebelumnya).
+ * Riwayat Peminjaman/Denda/Point TETAP ada, hanya jejak eksemplar fisik
+ * yang hilang.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->dropForeign(['eksemplar_id']);
+        });
+
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->uuid('eksemplar_id')->nullable()->change();
+        });
+
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->foreign('eksemplar_id')
+                ->references('id')->on('eksemplars')
+                ->nullOnDelete();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->dropForeign(['eksemplar_id']);
+        });
+
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->uuid('eksemplar_id')->nullable(false)->change();
+        });
+
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->foreign('eksemplar_id')
+                ->references('id')->on('eksemplars');
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_02_000008_add_ota_report_columns_to_device_logs_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Kontrak BARU (belum ada di firmware lama) - endpoint report status OTA
+ * akan ditambahkan ke firmware bersamaan dengan perubahan ini (dikonfirmasi
+ * user: kode firmware akan disesuaikan). Field mengikuti keputusan yang
+ * dikonfirmasi: simpan di DeviceLog existing, bukan tabel baru.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('device_logs', function (Blueprint $table) {
+            $table->string('ota_status')->nullable()->after('firmware_version');
+            $table->text('ota_error')->nullable()->after('ota_status');
+            $table->timestamp('ota_reported_at')->nullable()->after('ota_error');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('device_logs', function (Blueprint $table) {
+            $table->dropColumn(['ota_status', 'ota_error', 'ota_reported_at']);
+        });
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -17639,26 +18403,25 @@ class ShieldSeeder extends Seeder
             'guard_name' => 'web',
         ]);
 
-        // BARU iterasi ini - permission manual untuk LevelBadgeLog, sama
-        // alasannya dengan Eksemplar di atas: Resource ini dibuat manual
-        // setelah shield:generate terakhir dijalankan, sehingga permission-
-        // nya belum otomatis ter-generate. Jalankan `php artisan
-        // shield:generate` lagi kapan pun untuk memverifikasi/melengkapi
-        // daftar ini secara otomatis di masa depan.
+        // PERBAIKAN - permission Eksemplar TERLEWAT saat EksemplarPolicy
+        // dibuat sebelumnya. Eksemplar bukan Filament Resource sendiri
+        // (hanya diakses via RelationManager di BukuResource/RakResource),
+        // jadi shield:generate tidak pernah membuat permission ini secara
+        // otomatis - harus manual seperti LevelBadgeLog/FirmwareRelease.
         foreach (
             [
-                'ViewAny:LevelBadgeLog',
-                'View:LevelBadgeLog',
-                'Create:LevelBadgeLog',
-                'Update:LevelBadgeLog',
-                'Delete:LevelBadgeLog',
-                'DeleteAny:LevelBadgeLog',
-                'Restore:LevelBadgeLog',
-                'RestoreAny:LevelBadgeLog',
-                'ForceDelete:LevelBadgeLog',
-                'ForceDeleteAny:LevelBadgeLog',
-                'Replicate:LevelBadgeLog',
-                'Reorder:LevelBadgeLog',
+                'ViewAny:Eksemplar',
+                'View:Eksemplar',
+                'Create:Eksemplar',
+                'Update:Eksemplar',
+                'Delete:Eksemplar',
+                'DeleteAny:Eksemplar',
+                'Restore:Eksemplar',
+                'RestoreAny:Eksemplar',
+                'ForceDelete:Eksemplar',
+                'ForceDeleteAny:Eksemplar',
+                'Replicate:Eksemplar',
+                'Reorder:Eksemplar',
             ] as $permissionName
         ) {
             Permission::firstOrCreate([
@@ -18697,6 +19460,99 @@ return [
 
     </div>
 </x-filament-panels::page>
+
+```
+---
+
+## resources/views/pdf/label-barcode.blade.php
+```blade
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <title>Label Barcode Eksemplar</title>
+    <style>
+        @font-face {
+            font-family: 'Lexend';
+            src: url('{{ public_path('fonts/pdf/lexend-regular.woff2') }}') format('woff2');
+            font-weight: 400;
+        }
+
+        @font-face {
+            font-family: 'Lexend';
+            src: url('{{ public_path('fonts/pdf/lexend-bold.woff2') }}') format('woff2');
+            font-weight: 700;
+        }
+
+        * {
+            font-family: 'Lexend', sans-serif;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 8mm 6mm;
+        }
+
+        table.grid {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table.grid td {
+            width: 33.33%;
+            padding: 2mm;
+            vertical-align: top;
+        }
+
+        .label-box {
+            border: 1px dashed #999;
+            padding: 3mm;
+            text-align: center;
+            height: 32mm;
+            overflow: hidden;
+        }
+
+        .label-box .judul {
+            font-size: 9px;
+            font-weight: 700;
+            margin-bottom: 2mm;
+            height: 10mm;
+            overflow: hidden;
+        }
+
+        .label-box img {
+            width: 100%;
+            max-height: 12mm;
+        }
+
+        .label-box .kode-text {
+            font-size: 8px;
+            margin-top: 1mm;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <table class="grid">
+        @foreach (array_chunk($labels, 3) as $baris)
+            <tr>
+                @foreach ($baris as $label)
+                    <td>
+                        <div class="label-box">
+                            <div class="judul">{{ $label['judul'] }}</div>
+                            <img src="{{ $label['gambar'] }}" alt="barcode">
+                            <div class="kode-text">{{ $label['barcode'] }}</div>
+                        </div>
+                    </td>
+                @endforeach
+                @for ($i = count($baris); $i < 3; $i++)
+                    <td></td>
+                @endfor
+            </tr>
+        @endforeach
+    </table>
+</body>
+</html>
 
 ```
 ---

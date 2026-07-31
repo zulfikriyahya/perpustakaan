@@ -12,6 +12,7 @@
 │   │   ├── SourceKunjungan.php
 │   │   ├── StatusAkademik.php
 │   │   ├── StatusEksemplar.php
+│   │   ├── StatusOtaFirmware.php
 │   │   ├── StatusPeminjaman.php
 │   │   ├── StatusRefund.php
 │   │   ├── StatusRiwayatKelas.php
@@ -73,6 +74,11 @@
 │   │   │   ├── DendaResource
 │   │   │   │   └── Pages
 │   │   │   │       └── ListDendas.php
+│   │   │   ├── FirmwareResource
+│   │   │   │   └── Pages
+│   │   │   │       ├── CreateFirmwareRelease.php
+│   │   │   │       ├── EditFirmwareRelease.php
+│   │   │   │       └── ListFirmwareReleases.php
 │   │   │   ├── JurusanResource
 │   │   │   │   └── Pages
 │   │   │   │       ├── CreateJurusan.php
@@ -157,6 +163,7 @@
 │   │   │   │       └── ListUsers.php
 │   │   │   ├── BukuResource.php
 │   │   │   ├── DendaResource.php
+│   │   │   ├── FirmwareResource.php
 │   │   │   ├── JurusanResource.php
 │   │   │   ├── KategoriResource.php
 │   │   │   ├── KelasResource.php
@@ -188,6 +195,7 @@
 │   │   └── Middleware
 │   │       └── AuthenticateDeviceApiKey.php
 │   ├── Jobs
+│   │   ├── GenerateLabelBarcodePdfJob.php
 │   │   └── KirimNotifikasiWhatsapp.php
 │   ├── Models
 │   │   ├── BukuKategori.php
@@ -225,6 +233,7 @@
 │   │   ├── BukuPolicy.php
 │   │   ├── DendaPolicy.php
 │   │   ├── EksemplarPolicy.php
+│   │   ├── FirmwareReleasePolicy.php
 │   │   ├── JurusanPolicy.php
 │   │   ├── KategoriPolicy.php
 │   │   ├── KelasPolicy.php
@@ -252,6 +261,7 @@
 │   │   └── FormatKartuRfid.php
 │   └── Services
 │       ├── KenaikanKelasService.php
+│       ├── LabelBarcodeService.php
 │       ├── LaporanBulananService.php
 │       ├── PasswordResetOtpService.php
 │       ├── PeminjamanService.php
@@ -344,7 +354,9 @@
 │   │   ├── 2026_08_02_000003_alter_bukus_table_drop_barcode_rak_stok.php
 │   │   ├── 2026_08_02_000004_alter_peminjamans_table_buku_to_eksemplar.php
 │   │   ├── 2026_08_02_000005_add_tahun_terbit_to_bukus_table.php
-│   │   └── 2026_08_02_000006_create_level_badge_logs_table.php
+│   │   ├── 2026_08_02_000006_create_level_badge_logs_table.php
+│   │   ├── 2026_08_02_000007_make_eksemplar_id_nullable_in_peminjamans_table.php
+│   │   └── 2026_08_02_000008_add_ota_report_columns_to_device_logs_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
@@ -370,6 +382,7 @@
 │       │       ├── proses-kenaikan-kelas.blade.php
 │       │       └── transaksi-cepat.blade.php
 │       ├── pdf
+│       │   ├── label-barcode.blade.php
 │       │   └── laporan-bulanan.blade.php
 │       └── welcome.blade.php
 ├── routes
@@ -399,4 +412,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-90 directories, 310 files
+92 directories, 321 files

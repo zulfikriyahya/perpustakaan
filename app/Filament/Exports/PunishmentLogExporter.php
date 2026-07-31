@@ -23,10 +23,10 @@ class PunishmentLogExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Riwayat Punishment selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+        $body = 'Export Riwayat Punishment selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
         }
 
         return $body;

@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
+use App\Filament\Exports\DendaExporter;
 use App\Filament\Resources\DendaResource\Pages;
 use App\Models\Denda;
 use Filament\Actions\Action;
@@ -57,8 +58,8 @@ class DendaResource extends Resource
         return $table
             ->headerActions([
                 ExportAction::make()
-                    ->exporter(\App\Filament\Exports\DendaExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Denda::class) ?? false),
+                    ->exporter(DendaExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Denda::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')

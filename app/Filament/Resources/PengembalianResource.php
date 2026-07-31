@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Enums\KondisiBuku;
+use App\Filament\Exports\PengembalianExporter;
 use App\Filament\Resources\PengembalianResource\Pages;
 use App\Models\Pengembalian;
 use App\Services\PeminjamanService;
@@ -54,8 +55,8 @@ class PengembalianResource extends Resource
         return $table
             ->headerActions([
                 ExportAction::make()
-                    ->exporter(\App\Filament\Exports\PengembalianExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Pengembalian::class) ?? false),
+                    ->exporter(PengembalianExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Pengembalian::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('peminjaman.user.nama')

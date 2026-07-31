@@ -162,7 +162,7 @@ class ShieldSeeder extends Seeder
         Role::firstOrCreate(['name' => 'pegawai', 'guard_name' => 'web']);
 
         User::where('role', RoleUser::Admin)->each(
-            fn($user) => $user->syncRoles(['super_admin'])
+            fn ($user) => $user->syncRoles(['super_admin'])
         );
     }
 }

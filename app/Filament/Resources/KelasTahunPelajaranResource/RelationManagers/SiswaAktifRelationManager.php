@@ -64,11 +64,11 @@ class SiswaAktifRelationManager extends RelationManager
 
                         User::query()->whereIn('id', $data['user_ids'])
                             ->get()
-                            ->each(fn(User $user) => $service->assignKelas($user, $ktp));
+                            ->each(fn (User $user) => $service->assignKelas($user, $ktp));
 
                         Notification::make()
                             ->success()
-                            ->title(count($data['user_ids']) . ' siswa berhasil ditambahkan ke kelas.')
+                            ->title(count($data['user_ids']).' siswa berhasil ditambahkan ke kelas.')
                             ->send();
                     }),
             ])

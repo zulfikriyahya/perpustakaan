@@ -36,7 +36,7 @@ class PunishmentLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(PunishmentLogExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', PunishmentLog::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', PunishmentLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),

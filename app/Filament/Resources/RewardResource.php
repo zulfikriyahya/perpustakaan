@@ -10,8 +10,8 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ImportAction;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -55,10 +55,10 @@ class RewardResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(RewardImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Reward::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Reward::class) ?? false),
                 ExportAction::make()
                     ->exporter(RewardExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Reward::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Reward::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),

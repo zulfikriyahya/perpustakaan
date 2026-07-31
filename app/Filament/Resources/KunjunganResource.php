@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Enums\SourceKunjungan;
+use App\Filament\Exports\KunjunganExporter;
 use App\Filament\Resources\KunjunganResource\Pages;
 use App\Models\Kunjungan;
 use Filament\Actions\DeleteAction;
@@ -42,8 +43,8 @@ class KunjunganResource extends Resource
         return $table
             ->headerActions([
                 ExportAction::make()
-                    ->exporter(\App\Filament\Exports\KunjunganExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Kunjungan::class) ?? false),
+                    ->exporter(KunjunganExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Kunjungan::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')

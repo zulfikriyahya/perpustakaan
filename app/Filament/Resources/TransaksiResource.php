@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Enums\JenisTransaksi;
+use App\Filament\Exports\TransaksiExporter;
 use App\Filament\Resources\TransaksiResource\Pages;
 use App\Filament\Resources\TransaksiResource\RelationManagers\PeminjamansRelationManager;
 use App\Models\Transaksi;
@@ -46,8 +47,8 @@ class TransaksiResource extends Resource
         return $table
             ->headerActions([
                 ExportAction::make()
-                    ->exporter(\App\Filament\Exports\TransaksiExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Transaksi::class) ?? false),
+                    ->exporter(TransaksiExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Transaksi::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')

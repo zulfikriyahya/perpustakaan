@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Enums\KondisiBuku;
 use App\Enums\StatusPeminjaman;
+use App\Filament\Exports\PeminjamanExporter;
 use App\Filament\Resources\PeminjamanResource\Pages;
 use App\Models\Buku;
 use App\Models\Peminjaman;
@@ -69,8 +70,8 @@ class PeminjamanResource extends Resource
         return $table
             ->headerActions([
                 ExportAction::make()
-                    ->exporter(\App\Filament\Exports\PeminjamanExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Peminjaman::class) ?? false),
+                    ->exporter(PeminjamanExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Peminjaman::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')

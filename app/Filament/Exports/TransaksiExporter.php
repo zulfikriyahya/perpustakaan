@@ -24,10 +24,10 @@ class TransaksiExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Transaksi selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+        $body = 'Export Transaksi selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
         }
 
         return $body;

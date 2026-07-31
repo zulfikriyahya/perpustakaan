@@ -42,7 +42,7 @@ class RewardLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(RewardLogExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),

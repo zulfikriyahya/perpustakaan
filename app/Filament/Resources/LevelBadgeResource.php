@@ -60,10 +60,10 @@ class LevelBadgeResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(LevelBadgeImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', LevelBadge::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', LevelBadge::class) ?? false),
                 ExportAction::make()
                     ->exporter(LevelBadgeExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', LevelBadge::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', LevelBadge::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('icon')->circular(),

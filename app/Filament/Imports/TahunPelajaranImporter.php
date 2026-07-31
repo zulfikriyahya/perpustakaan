@@ -16,14 +16,20 @@ class TahunPelajaranImporter extends Importer
     {
         return [
             ImportColumn::make('nama')
+                ->label('Nama (mis. 2025/2026)')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('2025/2026'),
             ImportColumn::make('tanggal_mulai')
+                ->helperText('Gunakan format tanggal YYYY-MM-DD (mis. 2025-07-14) supaya tidak salah baca oleh Excel/Google Sheets di komputer dengan format regional berbeda.')
                 ->requiredMapping()
-                ->rules(['required', 'date']),
+                ->rules(['required', 'date'])
+                ->example('2025-07-14'),
             ImportColumn::make('tanggal_selesai')
+                ->helperText('Format sama dengan Tanggal Mulai (YYYY-MM-DD), harus sama atau setelah Tanggal Mulai.')
                 ->requiredMapping()
-                ->rules(['required', 'date', 'after_or_equal:tanggal_mulai']),
+                ->rules(['required', 'date', 'after_or_equal:tanggal_mulai'])
+                ->example('2026-06-30'),
         ];
     }
 
@@ -38,10 +44,10 @@ class TahunPelajaranImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Tahun Pelajaran selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Tahun Pelajaran selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;

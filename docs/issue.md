@@ -99,9 +99,8 @@ Ketentuan:
 ---
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
-- Finalkan Fitur Import dan Eksport
-- Finalkan Fitur Laporan PDF
-- Perbaiki UI Transaksi Cepat [Tambahkan Rate Limit 15 Detik Untuk Peminjaman/Pengembalian dengan User yang sama agar tidak terjadi pengembalian dan peminjaman Ulang karena buku yang sama ter scan 2 kali]
+- Finalkan Fitur Import dan Eksport [Berikan Contoh Import dan mudah digunakan untuk pemula/admin instansi]
+- Tambahkan Import Password dan Avatar untuk User
 
 ---
 

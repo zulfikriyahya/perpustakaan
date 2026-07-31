@@ -10,14 +10,13 @@ use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
 /**
- * TODO: ASUMSI - upsert berdasarkan kombinasi ('nama', 'jurusan_id'),
- * BUKAN 'nama' saja, karena migration tidak memberi unique constraint
- * pada Kelas.nama sendiri (dua Kelas beda jurusan bisa punya nama sama).
- * Jika sumber data ternyata menjamin nama Kelas unik global, upsert key
- * ini bisa disederhanakan - konfirmasi dulu sebelum dianggap final.
+ * Upsert berdasarkan 'nama' SAJA (dikonfirmasi: nama Kelas unik secara
+ * global lintas Jurusan - lihat migration
+ * 2026_08_02_000001_add_unique_nama_to_kelas_table). Sebelumnya upsert
+ * key adalah kombinasi (nama, jurusan_id) - DIUBAH sesuai konfirmasi ini.
  *
- * TODO: ASUMSI - referensi Jurusan dari kolom 'jurusan_kode' (via kode
- * unik Jurusan), bukan nama Jurusan, untuk menghindari ambiguitas nama.
+ * 'jurusan_kode' tetap direferensikan via kode unik Jurusan (bukan nama)
+ * untuk menghindari ambiguitas nama Jurusan.
  */
 class KelasImporter extends Importer
 {
@@ -27,21 +26,28 @@ class KelasImporter extends Importer
     {
         return [
             ImportColumn::make('nama')
+                ->label('Nama kelas (mis. X IPA 1)')
+                ->helperText('Harus unik secara global - tidak boleh ada 2 Kelas dengan nama sama meski beda Jurusan.')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255']),
+                ->rules(['required', 'string', 'max:255'])
+                ->example('X IPA 1'),
             ImportColumn::make('tingkat')
+                ->helperText('Angka tingkat, mis. 10, 11, 12 - dipakai untuk urutan proses Kenaikan Kelas.')
                 ->requiredMapping()
                 ->numeric()
-                ->rules(['required', 'integer', 'min:1']),
+                ->rules(['required', 'integer', 'min:1'])
+                ->example('10'),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode Jurusan (opsional)')
-                ->rules(['nullable', 'string', 'max:255']),
+                ->helperText('Lihat daftar kode di menu Master Data > Jurusan. Kosongkan jika kelas ini tidak terikat jurusan tertentu.')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('IPA'),
         ];
     }
 
     public function resolveRecord(): ?Kelas
     {
-        $jurusanId = null;
+        $record = Kelas::query()->firstOrNew(['nama' => trim($this->data['nama'])]);
 
         if (! empty($this->data['jurusan_kode'])) {
             $jurusan = Jurusan::query()->where('kode', $this->data['jurusan_kode'])->first();
@@ -50,21 +56,26 @@ class KelasImporter extends Importer
                 throw new RowImportFailedException("Jurusan dengan kode \"{$this->data['jurusan_kode']}\" tidak ditemukan.");
             }
 
-            $jurusanId = $jurusan->id;
+            $record->jurusan_id = $jurusan->id;
+        } else {
+            // DIKONFIRMASI: kolom jurusan_kode dikosongkan (baik saat
+            // create maupun UPDATE Kelas existing) -> jurusan_id
+            // di-null-kan/dilepas, BUKAN dibiarkan tidak berubah. Admin
+            // yang re-import Kelas untuk update field lain (mis. hanya
+            // 'tingkat') WAJIB tetap mengisi jurusan_kode di file jika
+            // tidak ingin assignment Jurusan-nya ikut terhapus.
+            $record->jurusan_id = null;
         }
 
-        return Kelas::query()->firstOrNew([
-            'nama' => $this->data['nama'],
-            'jurusan_id' => $jurusanId,
-        ]);
+        return $record;
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Kelas selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Kelas selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;

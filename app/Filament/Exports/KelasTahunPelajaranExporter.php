@@ -15,6 +15,12 @@ class KelasTahunPelajaranExporter extends Exporter
     {
         return [
             ExportColumn::make('kelas.nama')->label('Kelas'),
+            // BARU iterasi ini - KelasTahunPelajaranImporter MEWAJIBKAN
+            // kolom jurusan_kode (lihat catatan "PERUBAHAN KONTRAK" di
+            // Importer). Tanpa kolom ini di hasil export, admin tidak
+            // bisa langsung mengimpor ulang file yang sama - harus
+            // mencari kode jurusan secara manual dulu di resource lain.
+            ExportColumn::make('kelas.jurusan.kode')->label('Kode Jurusan'),
             ExportColumn::make('tahunPelajaran.nama')->label('Tahun Pelajaran'),
             ExportColumn::make('waliKelas.nama')->label('Wali Kelas'),
             ExportColumn::make('waliKelas.nip')->label('NIP Wali Kelas'),
@@ -23,10 +29,10 @@ class KelasTahunPelajaranExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Kelas per Tahun Pelajaran selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+        $body = 'Export Kelas per Tahun Pelajaran selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
         }
 
         return $body;

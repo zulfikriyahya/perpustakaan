@@ -15,6 +15,8 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -25,8 +27,42 @@ use Illuminate\Support\Str;
  * Upsert berdasarkan 'nisn' jika ada, fallback 'nip' - baris tanpa
  * keduanya akan gagal (lihat rules 'required_without').
  *
- * Password digenerate random - TIDAK ada mekanisme kirim WA/email
- * notifikasi password ke user baru dalam iterasi ini.
+ * Kolom 'password' (dikonfirmasi masuk ke import, plaintext, di-hash
+ * bcrypt otomatis lewat cast 'hashed' di Model User):
+ * - Diisi -> password user (baru maupun existing) diganti sesuai isian.
+ * - Dikosongkan, user BARU -> tetap auto-generate random 12 karakter
+ *   (perilaku lama dipertahankan, TIDAK ada mekanisme kirim WA/email
+ *   notifikasi password ke user baru dalam iterasi ini).
+ * - Dikosongkan, user EXISTING -> password lama TIDAK diubah sama sekali.
+ *
+ * PERINGATAN KEAMANAN (dikonfirmasi, RISIKO DITERIMA SADAR - bukan
+ * kealpaan): resolveAvatar() di bawah bisa (a) menyalin FILE APA PUN
+ * yang bisa dibaca proses PHP di server ke folder publik jika diisi
+ * path absolut (risiko path traversal / kebocoran file sensitif mis.
+ * .env), dan (b) melakukan HTTP request ke alamat mana pun termasuk
+ * jaringan internal jika diisi URL (risiko SSRF). Fitur ini SENGAJA
+ * tidak dibatasi karena hanya super_admin yang punya akses Import User
+ * (lihat authorize() di UserResource) - JANGAN perluas permission
+ * import ini ke role lain tanpa meninjau ulang dua risiko ini.
+ *
+ * Kolom 'avatar_path' (dikonfirmasi masuk ke import, menerima URL ATAU
+ * path - lihat resolveAvatar()):
+ * - Diisi URL (http/https) -> file diunduh lalu disimpan ke disk 'public'
+ *   folder 'user-avatar/' (SAMA dengan direktori FileUpload::make('avatar')
+ *   di UserResource, Aturan poin 3 - satu sumber kebenaran lokasi file).
+ * - Diisi path yang SUDAH ada di disk 'public' (mis. hasil upload manual
+ *   sebelumnya) -> dipakai langsung sebagai nilai kolom avatar.
+ * - Diisi path absolut yang ada di filesystem server (mis. hasil transfer
+ *   file massal oleh admin sebelum import) -> disalin ke disk 'public'
+ *   folder 'user-avatar/'.
+ * - Tidak ditemukan di ketiga kemungkinan di atas -> baris GAGAL
+ *   (RowImportFailedException), bukan diam-diam dilewati.
+ * - Dikosongkan -> avatar lama (jika ada) TIDAK diubah.
+ * TODO: GAP-SPEC - algoritma resolusi "path" di atas (cek disk 'public'
+ * dulu, baru cek filesystem absolut) adalah ASUMSI untuk memudahkan admin
+ * pemula (cukup isi nama file atau URL, tidak perlu tahu detail storage
+ * disk). Perlu dikonfirmasi apakah ini sudah cukup atau butuh dukungan
+ * sumber lain (mis. path relatif ke disk selain 'public').
  *
  * Kolom 'no_kartu_rfid' (dikonfirmasi masuk ke import, sebelumnya
  * sengaja dikeluarkan demi keamanan) - aturan MENGIKAT kontrak firmware
@@ -92,6 +128,16 @@ class UserImporter extends Importer
                 ->helperText('PERHATIAN: kosongkan HANYA jika memang ingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
                 ->rules(['nullable', new FormatKartuRfid])
                 ->example('1234567890'),
+            ImportColumn::make('password')
+                ->label('Password (opsional)')
+                ->helperText('Isi plaintext (otomatis di-hash saat disimpan). Kosongkan: user baru tetap dapat password random, user lama password TIDAK berubah.')
+                ->rules(['nullable', 'string', 'min:8', 'max:255'])
+                ->example(''),
+            ImportColumn::make('avatar_path')
+                ->label('Avatar - URL atau path (opsional)')
+                ->helperText('Isi URL gambar (https://...) atau path file yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
+                ->rules(['nullable', 'string', 'max:2048'])
+                ->example('https://contoh-sekolah.id/foto/siswa1.jpg'),
         ];
     }
 
@@ -115,7 +161,6 @@ class UserImporter extends Importer
 
         if (! $record->exists) {
             $record->role = RoleUser::Siswa;
-            $record->password = Str::random(12); // di-hash otomatis via cast 'hashed'
         }
 
         return $record;
@@ -129,6 +174,9 @@ class UserImporter extends Importer
      */
     protected function beforeSave(): void
     {
+        $this->resolvePassword();
+        $this->resolveAvatar();
+
         $nomorBaru = trim((string) ($this->data['no_kartu_rfid'] ?? ''));
 
         if ($nomorBaru === '') {
@@ -142,7 +190,7 @@ class UserImporter extends Importer
 
         $dipakaiUserLain = User::query()
             ->where('no_kartu_rfid', $nomorBaru)
-            ->when($this->record->exists, fn ($q) => $q->whereKeyNot($this->record->id))
+            ->when($this->record->exists, fn($q) => $q->whereKeyNot($this->record->id))
             ->exists();
 
         if ($dipakaiUserLain) {
@@ -150,6 +198,77 @@ class UserImporter extends Importer
         }
 
         $this->record->no_kartu_rfid = $nomorBaru;
+    }
+
+    /**
+     * Password diisi -> dipakai apa adanya (di-hash otomatis via cast
+     * 'hashed' saat $record->save()). Kosong & user baru -> random 12
+     * karakter (perilaku lama). Kosong & user existing -> tidak disentuh.
+     */
+    protected function resolvePassword(): void
+    {
+        $passwordBaru = trim((string) ($this->data['password'] ?? ''));
+
+        if ($passwordBaru !== '') {
+            $this->record->password = $passwordBaru; // di-hash otomatis via cast 'hashed'
+
+            return;
+        }
+
+        if (! $this->record->exists) {
+            $this->record->password = Str::random(12); // di-hash otomatis via cast 'hashed'
+        }
+    }
+
+    /**
+     * TODO: GAP-SPEC - lihat catatan algoritma resolusi di docblock class.
+     * Urutan resolusi: (1) URL http/https -> unduh, (2) sudah ada di disk
+     * 'public' -> pakai langsung, (3) path absolut di filesystem server ->
+     * salin ke disk 'public'. Kosong -> avatar lama tidak diubah.
+     */
+    protected function resolveAvatar(): void
+    {
+        $nilai = trim((string) ($this->data['avatar_path'] ?? ''));
+
+        if ($nilai === '') {
+            return;
+        }
+
+        if (Str::startsWith($nilai, ['http://', 'https://'])) {
+            try {
+                $response = Http::timeout(15)->get($nilai);
+            } catch (\Throwable $e) {
+                throw new RowImportFailedException("Gagal mengunduh avatar dari URL \"{$nilai}\": {$e->getMessage()}");
+            }
+
+            if (! $response->successful()) {
+                throw new RowImportFailedException("URL avatar \"{$nilai}\" tidak bisa diakses (HTTP {$response->status()}).");
+            }
+
+            $ekstensi = pathinfo(parse_url($nilai, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION) ?: 'jpg';
+            $namaFile = 'user-avatar/' . Str::uuid() . '.' . $ekstensi;
+            Storage::disk('public')->put($namaFile, $response->body());
+            $this->record->avatar = $namaFile;
+
+            return;
+        }
+
+        if (Storage::disk('public')->exists($nilai)) {
+            $this->record->avatar = $nilai;
+
+            return;
+        }
+
+        if (is_file($nilai)) {
+            $ekstensi = pathinfo($nilai, PATHINFO_EXTENSION) ?: 'jpg';
+            $namaFile = 'user-avatar/' . Str::uuid() . '.' . $ekstensi;
+            Storage::disk('public')->put($namaFile, file_get_contents($nilai));
+            $this->record->avatar = $namaFile;
+
+            return;
+        }
+
+        throw new RowImportFailedException("Avatar \"{$nilai}\" tidak ditemukan (bukan URL valid, bukan file di storage, bukan path lokal di server).");
     }
 
     protected function afterSave(): void
@@ -200,10 +319,10 @@ class UserImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import User selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         $kartuDihapus = (int) Cache::get("import-{$import->id}-kartu-dihapus", 0);

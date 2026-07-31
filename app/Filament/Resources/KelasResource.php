@@ -33,6 +33,11 @@ class KelasResource extends Resource
         return $schema->components([
             TextInput::make('nama')
                 ->label('Nama Kelas (mis. X IPA 1)')
+                // BARU iterasi ini - unik secara global (dikonfirmasi),
+                // lihat migration 2026_08_02_000001_add_unique_nama_to_kelas_table
+                // dan KelasImporter (Aturan poin 3/11 - validasi
+                // konsisten antara form manual dan import).
+                ->unique(ignoreRecord: true)
                 ->required()
                 ->maxLength(255),
             TextInput::make('tingkat')
@@ -55,10 +60,10 @@ class KelasResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(KelasImporter::class)
-                    ->authorize(fn () => auth()->user()?->can('create', Kelas::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('create', Kelas::class) ?? false),
                 ExportAction::make()
                     ->exporter(KelasExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Kelas::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Kelas::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),

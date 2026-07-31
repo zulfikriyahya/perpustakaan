@@ -99,7 +99,8 @@ Ketentuan:
 ---
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
-- Finalkan Fitur Import dan Export Buku, dan Eksemplar
+- Finalkan Fitur TransaksiCepat agar dapat meminjamkan dan mengembalikan karena ia berfungsi hanya ketika state aktif (dan mengembalikan
+Eksemplar barcode '9789793062792-2' tidak tersedia (status: dipinjam).) ketika sudah direfresh halaman (padahal user itu yang meminjam buku atau eksemplar ini)
 
 ---
 

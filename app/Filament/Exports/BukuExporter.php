@@ -6,6 +6,7 @@ use App\Models\Buku;
 use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * BUG FIX (iterasi ini, pola sama dengan bug 'kategoris' sebelumnya):
@@ -21,10 +22,23 @@ use Filament\Actions\Exports\Models\Export;
  * selisih stok import itu), jadi hasil export TIDAK bisa diimpor ulang
  * mentah-mentah kalau satu judul buku punya eksemplar di rak berbeda-beda.
  * Admin perlu edit manual jadi satu nama rak sebelum import ulang.
+ *
+ * PERFORMA (BARU iterasi ini): modifyQuery() eager-load 'kategoris' dan
+ * 'eksemplars.rak' supaya kolom 'rak'/'kategoris' di bawah tidak memicu
+ * query terpisah per baris (N+1) saat export ratusan/ribuan judul buku -
+ * TODO: verifikasi signature modifyQuery() terhadap filament/filament
+ * ^5.7 di composer.json (dikonfirmasi ada di dokumentasi resmi untuk
+ * versi 3.x, method statis override di kelas Exporter; belum diverifikasi
+ * langsung terhadap changelog 5.7 apakah signature berubah).
  */
 class BukuExporter extends Exporter
 {
     protected static ?string $model = Buku::class;
+
+    public static function modifyQuery(Builder $query): Builder
+    {
+        return $query->with(['kategoris', 'eksemplars.rak']);
+    }
 
     public static function getColumns(): array
     {
@@ -36,12 +50,10 @@ class BukuExporter extends Exporter
             ExportColumn::make('tahun_terbit')->label('Tahun Terbit'),
             ExportColumn::make('eksemplars')
                 ->label('Jumlah Eksemplar')
-                ->formatStateUsing(fn (Buku $record) => (string) $record->eksemplars()->count()),
+                ->formatStateUsing(fn (Buku $record) => (string) $record->eksemplars->count()),
             ExportColumn::make('rak')
                 ->label('Rak (distinct, lihat catatan)')
-                ->formatStateUsing(fn (Buku $record) => $record->eksemplars()
-                    ->with('rak')
-                    ->get()
+                ->formatStateUsing(fn (Buku $record) => $record->eksemplars
                     ->pluck('rak.nama')
                     ->filter()
                     ->unique()

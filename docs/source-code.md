@@ -283,6 +283,7 @@ use App\Models\Buku;
 use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * BUG FIX (iterasi ini, pola sama dengan bug 'kategoris' sebelumnya):
@@ -298,10 +299,23 @@ use Filament\Actions\Exports\Models\Export;
  * selisih stok import itu), jadi hasil export TIDAK bisa diimpor ulang
  * mentah-mentah kalau satu judul buku punya eksemplar di rak berbeda-beda.
  * Admin perlu edit manual jadi satu nama rak sebelum import ulang.
+ *
+ * PERFORMA (BARU iterasi ini): modifyQuery() eager-load 'kategoris' dan
+ * 'eksemplars.rak' supaya kolom 'rak'/'kategoris' di bawah tidak memicu
+ * query terpisah per baris (N+1) saat export ratusan/ribuan judul buku -
+ * TODO: verifikasi signature modifyQuery() terhadap filament/filament
+ * ^5.7 di composer.json (dikonfirmasi ada di dokumentasi resmi untuk
+ * versi 3.x, method statis override di kelas Exporter; belum diverifikasi
+ * langsung terhadap changelog 5.7 apakah signature berubah).
  */
 class BukuExporter extends Exporter
 {
     protected static ?string $model = Buku::class;
+
+    public static function modifyQuery(Builder $query): Builder
+    {
+        return $query->with(['kategoris', 'eksemplars.rak']);
+    }
 
     public static function getColumns(): array
     {
@@ -313,19 +327,17 @@ class BukuExporter extends Exporter
             ExportColumn::make('tahun_terbit')->label('Tahun Terbit'),
             ExportColumn::make('eksemplars')
                 ->label('Jumlah Eksemplar')
-                ->formatStateUsing(fn (Buku $record) => (string) $record->eksemplars()->count()),
+                ->formatStateUsing(fn(Buku $record) => (string) $record->eksemplars->count()),
             ExportColumn::make('rak')
                 ->label('Rak (distinct, lihat catatan)')
-                ->formatStateUsing(fn (Buku $record) => $record->eksemplars()
-                    ->with('rak')
-                    ->get()
+                ->formatStateUsing(fn(Buku $record) => $record->eksemplars
                     ->pluck('rak.nama')
                     ->filter()
                     ->unique()
                     ->implode('; ')),
             ExportColumn::make('kategoris')
                 ->label('Kategori')
-                ->formatStateUsing(fn (Buku $record) => $record->kategoris->pluck('nama')->implode('; ')),
+                ->formatStateUsing(fn(Buku $record) => $record->kategoris->pluck('nama')->implode('; ')),
             ExportColumn::make('harga_ganti')->label('Harga Ganti'),
             ExportColumn::make('deskripsi'),
         ];
@@ -333,10 +345,10 @@ class BukuExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Buku selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+        $body = 'Export Buku selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
         }
 
         return $body;
@@ -1132,7 +1144,6 @@ use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
-use Illuminate\Support\Str;
 
 /**
  * resolveRecord() upsert berdasarkan 'isbn' (barcode kini per eksemplar,
@@ -1197,18 +1208,18 @@ class BukuImporter extends Importer
                 ->example('2008'),
             ImportColumn::make('rak')
                 ->label('Rak (nama, opsional)')
-                ->helperText('Isi persis sesuai nama Rak yang sudah ada di Master Data > Rak. Jika tidak ditemukan, buku diimpor tanpa lokasi rak (bukan dibuatkan Rak baru otomatis).')
+                ->helperText('Isi persis sesuai nama Rak yang sudah ada diMaster Data > Rak. Jika tidak ditemukan, buku diimpor tanpa lokasi rak (bukan dibuatkan Rak baru otomatis).')
                 ->rules(['nullable', 'string'])
                 ->example('Rak A')
                 // BUG FIX - lookup-only, lihat docblock class.
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
                 ->helperText('Isi persis sesuai nama Kategori yang sudah ada di Master Data > Kategori. Contoh 2 kategori: "Fiksi;Sains". Kategori yang tidak ditemukan namanya akan membuat baris GAGAL.')
                 ->rules(['nullable', 'string'])
                 ->example('Fiksi;Sastra Indonesia')
                 // BUG FIX - lookup-only, lihat docblock class.
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('harga_ganti')
                 ->label('Harga Ganti')
                 ->helperText('WAJIB diisi manual - dipakai sebagai basis perhitungan Denda kerusakan/kehilangan. Baris tanpa nilai ini akan GAGAL, tidak ada default otomatis.')
@@ -1219,7 +1230,16 @@ class BukuImporter extends Importer
                 ->helperText('Jumlah eksemplar fisik untuk ISBN ini. Import ulang ISBN yang sama akan MENAMBAH eksemplar sejumlah selisih (stok baru - jumlah eksemplar existing), tidak pernah mengurangi eksemplar yang sudah ada.')
                 ->numeric()
                 ->rules(['required', 'integer', 'min:0'])
-                ->example('3'),
+                ->example('3')
+                // BUG FIX (ditemukan iterasi ini, PENYEBAB ERROR "Unknown
+                // column 'stok'"): kolom 'stok' bukan kolom asli tabel
+                // 'bukus' (di-drop migration 2026_08_02_000003) - ini
+                // murni input agregat yang dikonsumsi manual di afterSave()
+                // untuk menghitung selisih eksemplar. Sama pola dengan
+                // 'rak'/'kategori' - HARUS lookup-only, kalau tidak
+                // Filament mencoba assign $record->stok sebelum save() dan
+                // memicu SQL error "Unknown column 'stok' in 'INSERT INTO'".
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('deskripsi')
                 ->rules(['nullable', 'string'])
                 ->example('Novel tentang perjuangan anak-anak Belitung mengejar pendidikan.'),
@@ -1249,7 +1269,7 @@ class BukuImporter extends Importer
             $namaTidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
 
             if (! empty($namaTidakDitemukan)) {
-                throw new RowImportFailedException('Kategori tidak ditemukan: "'.implode('", "', $namaTidakDitemukan).'". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
+                throw new RowImportFailedException('Kategori tidak ditemukan: "' . implode('", "', $namaTidakDitemukan) . '". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
             }
 
             $this->kategoriIdsTerresolve = $kategoris->pluck('id')->all();
@@ -1262,10 +1282,11 @@ class BukuImporter extends Importer
             $this->record->kategoris()->sync($this->kategoriIdsTerresolve);
         }
 
-        // GAP-SPEC ditutup: format barcode auto-generate FINAL:
-        // "{ISBN-or-JUDULSLUG}-{urutan}". Konfirmasi sebelumnya: stok
-        // diakumulasi (tambah eksemplar sejumlah selisih), tidak pernah
-        // mengurangi eksemplar existing meski stok di file diturunkan.
+        // GAP-SPEC ditutup: format barcode auto-generate FINAL, kini
+        // terpusat di Eksemplar::generateBarcodeUntuk() (Aturan poin 3).
+        // Konfirmasi sebelumnya: stok diakumulasi (tambah eksemplar
+        // sejumlah selisih), tidak pernah mengurangi eksemplar existing
+        // meski stok di file diturunkan.
         $rak = ! empty($this->data['rak'])
             ? Rak::query()->where('nama', trim($this->data['rak']))->first()
             : null;
@@ -1275,18 +1296,8 @@ class BukuImporter extends Importer
         $selisih = $stokDiminta - $eksemplarSaatIni;
 
         for ($i = 0; $i < $selisih; $i++) {
-            $barcode = strtoupper(($this->record->isbn ?: Str::slug($this->record->judul)).'-'.($eksemplarSaatIni + $i + 1));
-
-            // Pengaman tambahan: barcode kolom unique - kalau ternyata sudah
-            // dipakai (mis. import diulang setelah barcode existing diedit
-            // manual jadi format lain yang kebetulan bentrok), fallback ke
-            // suffix UUID pendek supaya baris tidak gagal total.
-            if (Eksemplar::query()->where('barcode', $barcode)->exists()) {
-                $barcode .= '-'.strtoupper(Str::random(4));
-            }
-
             $this->record->eksemplars()->create([
-                'barcode' => $barcode,
+                'barcode' => Eksemplar::generateBarcodeUntuk($this->record, $eksemplarSaatIni + $i + 1),
                 'rak_id' => $rak?->id,
                 'status' => StatusEksemplar::Tersedia,
             ]);
@@ -1295,10 +1306,10 @@ class BukuImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Buku selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Buku selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;
@@ -3553,7 +3564,6 @@ use App\Filament\Resources\BukuResource;
 use App\Models\Eksemplar;
 use App\Models\Rak;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Str;
 
 class CreateBuku extends CreateRecord
 {
@@ -3567,9 +3577,9 @@ class CreateBuku extends CreateRecord
     /**
      * GAP-SPEC ditutup: buku bisa langsung dibuat sekaligus dengan N
      * Eksemplar awal (field 'jumlah_eksemplar_awal' non-persisten, lihat
-     * BukuResource::form()). Logika generate barcode SENGAJA disamakan
-     * persis dengan BukuImporter::afterSave() - satu sumber kebenaran
-     * format barcode (Aturan poin 3), bukan duplikasi logika terpisah.
+     * BukuResource::form()). Format barcode kini SATU SUMBER KEBENARAN
+     * lewat Eksemplar::generateBarcodeUntuk() - sebelumnya kode generate
+     * barcode disalin persis dari BukuImporter::afterSave() (Aturan poin 3).
      */
     protected function afterCreate(): void
     {
@@ -3585,16 +3595,8 @@ class CreateBuku extends CreateRecord
             : null;
 
         for ($i = 0; $i < $jumlah; $i++) {
-            $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)).'-'.($i + 1));
-
-            // Pengaman sama seperti BukuImporter - hindari gagal karena
-            // unique constraint kalau barcode kebetulan sudah dipakai.
-            if (Eksemplar::query()->where('barcode', $barcode)->exists()) {
-                $barcode .= '-'.strtoupper(Str::random(4));
-            }
-
             $buku->eksemplars()->create([
-                'barcode' => $barcode,
+                'barcode' => Eksemplar::generateBarcodeUntuk($buku, $i + 1),
                 'rak_id' => $rak?->id,
                 'status' => StatusEksemplar::Tersedia,
             ]);
@@ -6945,7 +6947,8 @@ class EditUser extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make(),
+            DeleteAction::make()
+                ->hidden(fn($record) => $record && $record->hasRole('super_admin')),
         ];
     }
 }
@@ -8170,6 +8173,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Eksemplar extends Model
 {
@@ -8202,6 +8206,25 @@ class Eksemplar extends Model
     public function peminjamans(): HasMany
     {
         return $this->hasMany(Peminjaman::class);
+    }
+
+    /**
+     * Satu sumber kebenaran format barcode auto-generate (Aturan poin 3
+     * - DRY). SEBELUMNYA duplikat persis di BukuImporter::afterSave() dan
+     * CreateBuku::afterCreate() - kedua caller sekarang memanggil ini.
+     * Format: "{ISBN-atau-JUDULSLUG}-{urutan}", fallback suffix random
+     * kalau barcode hasil generate kebetulan sudah dipakai (unique
+     * constraint kolom 'barcode').
+     */
+    public static function generateBarcodeUntuk(Buku $buku, int $urutan): string
+    {
+        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)) . '-' . $urutan);
+
+        if (static::query()->where('barcode', $barcode)->exists()) {
+            $barcode .= '-' . strtoupper(Str::random(4));
+        }
+
+        return $barcode;
     }
 }
 
@@ -9441,14 +9464,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -9508,8 +9531,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-}
 
+}
 ```
 ---
 
@@ -9521,14 +9544,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -9588,8 +9611,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-}
 
+}
 ```
 ---
 
@@ -9689,14 +9712,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -9756,8 +9779,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-}
 
+}
 ```
 ---
 
@@ -9769,14 +9792,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -9836,8 +9859,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-}
 
+}
 ```
 ---
 
@@ -9849,14 +9872,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -9916,8 +9939,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-}
 
+}
 ```
 ---
 
@@ -9929,14 +9952,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -9996,8 +10019,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -10009,14 +10032,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -10076,8 +10099,8 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-}
 
+}
 ```
 ---
 
@@ -10089,14 +10112,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -10156,8 +10179,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-}
 
+}
 ```
 ---
 
@@ -10169,14 +10192,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -10236,8 +10259,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-}
 
+}
 ```
 ---
 
@@ -10249,14 +10272,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -10316,8 +10339,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-}
 
+}
 ```
 ---
 
@@ -10329,14 +10352,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -10396,8 +10419,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-}
 
+}
 ```
 ---
 
@@ -10409,14 +10432,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -10476,8 +10499,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-}
 
+}
 ```
 ---
 
@@ -10489,14 +10512,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -10556,8 +10579,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-}
 
+}
 ```
 ---
 
@@ -10569,14 +10592,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -10636,8 +10659,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-}
 
+}
 ```
 ---
 
@@ -10649,14 +10672,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -10716,8 +10739,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-}
 
+}
 ```
 ---
 
@@ -10729,14 +10752,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -10796,8 +10819,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-}
 
+}
 ```
 ---
 
@@ -10809,14 +10832,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -10876,8 +10899,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-}
 
+}
 ```
 ---
 
@@ -10889,14 +10912,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -10956,8 +10979,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -10969,14 +10992,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -11036,8 +11059,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-}
 
+}
 ```
 ---
 
@@ -11047,13 +11070,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -11113,8 +11136,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-}
 
+}
 ```
 ---
 

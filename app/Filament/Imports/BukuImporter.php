@@ -11,7 +11,6 @@ use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
-use Illuminate\Support\Str;
 
 /**
  * resolveRecord() upsert berdasarkan 'isbn' (barcode kini per eksemplar,
@@ -76,7 +75,7 @@ class BukuImporter extends Importer
                 ->example('2008'),
             ImportColumn::make('rak')
                 ->label('Rak (nama, opsional)')
-                ->helperText('Isi persis sesuai nama Rak yang sudah ada di Master Data > Rak. Jika tidak ditemukan, buku diimpor tanpa lokasi rak (bukan dibuatkan Rak baru otomatis).')
+                ->helperText('Isi persis sesuai nama Rak yang sudah ada diMaster Data > Rak. Jika tidak ditemukan, buku diimpor tanpa lokasi rak (bukan dibuatkan Rak baru otomatis).')
                 ->rules(['nullable', 'string'])
                 ->example('Rak A')
                 // BUG FIX - lookup-only, lihat docblock class.
@@ -98,7 +97,16 @@ class BukuImporter extends Importer
                 ->helperText('Jumlah eksemplar fisik untuk ISBN ini. Import ulang ISBN yang sama akan MENAMBAH eksemplar sejumlah selisih (stok baru - jumlah eksemplar existing), tidak pernah mengurangi eksemplar yang sudah ada.')
                 ->numeric()
                 ->rules(['required', 'integer', 'min:0'])
-                ->example('3'),
+                ->example('3')
+                // BUG FIX (ditemukan iterasi ini, PENYEBAB ERROR "Unknown
+                // column 'stok'"): kolom 'stok' bukan kolom asli tabel
+                // 'bukus' (di-drop migration 2026_08_02_000003) - ini
+                // murni input agregat yang dikonsumsi manual di afterSave()
+                // untuk menghitung selisih eksemplar. Sama pola dengan
+                // 'rak'/'kategori' - HARUS lookup-only, kalau tidak
+                // Filament mencoba assign $record->stok sebelum save() dan
+                // memicu SQL error "Unknown column 'stok' in 'INSERT INTO'".
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('deskripsi')
                 ->rules(['nullable', 'string'])
                 ->example('Novel tentang perjuangan anak-anak Belitung mengejar pendidikan.'),
@@ -141,10 +149,11 @@ class BukuImporter extends Importer
             $this->record->kategoris()->sync($this->kategoriIdsTerresolve);
         }
 
-        // GAP-SPEC ditutup: format barcode auto-generate FINAL:
-        // "{ISBN-or-JUDULSLUG}-{urutan}". Konfirmasi sebelumnya: stok
-        // diakumulasi (tambah eksemplar sejumlah selisih), tidak pernah
-        // mengurangi eksemplar existing meski stok di file diturunkan.
+        // GAP-SPEC ditutup: format barcode auto-generate FINAL, kini
+        // terpusat di Eksemplar::generateBarcodeUntuk() (Aturan poin 3).
+        // Konfirmasi sebelumnya: stok diakumulasi (tambah eksemplar
+        // sejumlah selisih), tidak pernah mengurangi eksemplar existing
+        // meski stok di file diturunkan.
         $rak = ! empty($this->data['rak'])
             ? Rak::query()->where('nama', trim($this->data['rak']))->first()
             : null;
@@ -154,18 +163,8 @@ class BukuImporter extends Importer
         $selisih = $stokDiminta - $eksemplarSaatIni;
 
         for ($i = 0; $i < $selisih; $i++) {
-            $barcode = strtoupper(($this->record->isbn ?: Str::slug($this->record->judul)).'-'.($eksemplarSaatIni + $i + 1));
-
-            // Pengaman tambahan: barcode kolom unique - kalau ternyata sudah
-            // dipakai (mis. import diulang setelah barcode existing diedit
-            // manual jadi format lain yang kebetulan bentrok), fallback ke
-            // suffix UUID pendek supaya baris tidak gagal total.
-            if (Eksemplar::query()->where('barcode', $barcode)->exists()) {
-                $barcode .= '-'.strtoupper(Str::random(4));
-            }
-
             $this->record->eksemplars()->create([
-                'barcode' => $barcode,
+                'barcode' => Eksemplar::generateBarcodeUntuk($this->record, $eksemplarSaatIni + $i + 1),
                 'rak_id' => $rak?->id,
                 'status' => StatusEksemplar::Tersedia,
             ]);

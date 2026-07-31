@@ -7,7 +7,6 @@ use App\Filament\Resources\BukuResource;
 use App\Models\Eksemplar;
 use App\Models\Rak;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Str;
 
 class CreateBuku extends CreateRecord
 {
@@ -21,9 +20,9 @@ class CreateBuku extends CreateRecord
     /**
      * GAP-SPEC ditutup: buku bisa langsung dibuat sekaligus dengan N
      * Eksemplar awal (field 'jumlah_eksemplar_awal' non-persisten, lihat
-     * BukuResource::form()). Logika generate barcode SENGAJA disamakan
-     * persis dengan BukuImporter::afterSave() - satu sumber kebenaran
-     * format barcode (Aturan poin 3), bukan duplikasi logika terpisah.
+     * BukuResource::form()). Format barcode kini SATU SUMBER KEBENARAN
+     * lewat Eksemplar::generateBarcodeUntuk() - sebelumnya kode generate
+     * barcode disalin persis dari BukuImporter::afterSave() (Aturan poin 3).
      */
     protected function afterCreate(): void
     {
@@ -39,16 +38,8 @@ class CreateBuku extends CreateRecord
             : null;
 
         for ($i = 0; $i < $jumlah; $i++) {
-            $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)).'-'.($i + 1));
-
-            // Pengaman sama seperti BukuImporter - hindari gagal karena
-            // unique constraint kalau barcode kebetulan sudah dipakai.
-            if (Eksemplar::query()->where('barcode', $barcode)->exists()) {
-                $barcode .= '-'.strtoupper(Str::random(4));
-            }
-
             $buku->eksemplars()->create([
-                'barcode' => $barcode,
+                'barcode' => Eksemplar::generateBarcodeUntuk($buku, $i + 1),
                 'rak_id' => $rak?->id,
                 'status' => StatusEksemplar::Tersedia,
             ]);

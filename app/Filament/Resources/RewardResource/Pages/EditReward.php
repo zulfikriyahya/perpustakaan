@@ -10,6 +10,11 @@ class EditReward extends EditRecord
 {
     protected static string $resource = RewardResource::class;
 
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
     protected function getHeaderActions(): array
     {
         return [DeleteAction::make()];

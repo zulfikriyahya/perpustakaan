@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\EventTypePoint;
 use App\Models\LevelBadge;
+use App\Models\LevelBadgeLog;
 use App\Models\Point;
 use App\Models\Punishment;
 use App\Models\PunishmentLog;
@@ -60,7 +61,11 @@ class PointService
     }
 
     /**
-     * Update level_badge_id user jika akumulasi_point masuk rentang badge lain.
+     * Update level_badge_id user jika akumulasi_point masuk rentang badge
+     * lain. Setiap perubahan JUGA dicatat ke LevelBadgeLog (Aturan poin 3,
+     * DRY - mengikuti pola RewardLog/PunishmentLog) sebagai riwayat
+     * historis, terpisah dari users.level_badge_id yang tetap jadi
+     * snapshot terkini.
      */
     protected function cekBadge(User $user): void
     {
@@ -76,8 +81,17 @@ class PointService
         if ($badge && $badge->id !== $user->level_badge_id) {
             $user->update(['level_badge_id' => $badge->id]);
 
+            LevelBadgeLog::create([
+                'user_id' => $user->id,
+                'level_badge_id' => $badge->id,
+                'tanggal_didapat' => now(),
+            ]);
+
             // eventCode 'badge_naik' - TODO: ASUMSI, samakan dengan Setting
             // wa_template_badge_naik yang harus diisi Admin di panel WA Gateway.
+            // TODO: GAP-SPEC - eventCode ini terpicu di SETIAP perubahan badge,
+            // termasuk kalau badge turun (bukan hanya naik) - belum
+            // dikonfirmasi apakah perlu dipisah jadi badge_naik/badge_turun.
             $this->whatsappService->kirimEvent(
                 eventCode: 'badge_naik',
                 nomorTujuan: $user->no_telepon,

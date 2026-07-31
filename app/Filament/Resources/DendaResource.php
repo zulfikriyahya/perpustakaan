@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources;
 
+use App\Enums\JenisTransaksi;
 use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
 use App\Filament\Exports\DendaExporter;
 use App\Filament\Resources\DendaResource\Pages;
 use App\Models\Denda;
+use App\Models\Transaksi;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -145,6 +147,17 @@ class DendaResource extends Resource
                             'status_lunas' => true,
                             'tanggal_lunas' => $data['tanggal_lunas'],
                             'keterangan' => $data['keterangan'] ?? $record->keterangan,
+                        ]);
+
+                        // FITUR BARU: catat Transaksi jenis pembayaran_denda -
+                        // satu sumber kebenaran pembuatan Transaksi tipe ini,
+                        // jangan duplikasi di tempat lain (Aturan poin 3).
+                        Transaksi::create([
+                            'user_id' => $record->user_id,
+                            'jenis' => JenisTransaksi::PembayaranDenda,
+                            'diproses_oleh' => auth()->id(),
+                            'tanggal' => $data['tanggal_lunas'],
+                            'keterangan' => "Pembayaran Denda {$record->tipe->value} sebesar Rp".number_format((float) $record->nominal, 0, ',', '.'),
                         ]);
 
                         Notification::make()

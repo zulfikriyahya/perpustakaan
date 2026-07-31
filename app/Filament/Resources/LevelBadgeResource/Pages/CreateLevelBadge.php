@@ -8,4 +8,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateLevelBadge extends CreateRecord
 {
     protected static string $resource = LevelBadgeResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }

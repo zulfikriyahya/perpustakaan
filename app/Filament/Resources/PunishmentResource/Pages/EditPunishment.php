@@ -10,6 +10,11 @@ class EditPunishment extends EditRecord
 {
     protected static string $resource = PunishmentResource::class;
 
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
     protected function getHeaderActions(): array
     {
         return [DeleteAction::make()];

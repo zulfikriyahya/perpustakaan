@@ -29,6 +29,7 @@
 │   │   │   ├── KelasTahunPelajaranExporter.php
 │   │   │   ├── KunjunganExporter.php
 │   │   │   ├── LevelBadgeExporter.php
+│   │   │   ├── LevelBadgeLogExporter.php
 │   │   │   ├── PeminjamanExporter.php
 │   │   │   ├── PengembalianExporter.php
 │   │   │   ├── PunishmentExporter.php
@@ -97,6 +98,9 @@
 │   │   │   ├── KunjunganResource
 │   │   │   │   └── Pages
 │   │   │   │       └── ListKunjungans.php
+│   │   │   ├── LevelBadgeLogResource
+│   │   │   │   └── Pages
+│   │   │   │       └── ListLevelBadgeLogs.php
 │   │   │   ├── LevelBadgeResource
 │   │   │   │   └── Pages
 │   │   │   │       ├── CreateLevelBadge.php
@@ -158,6 +162,7 @@
 │   │   │   ├── KelasResource.php
 │   │   │   ├── KelasTahunPelajaranResource.php
 │   │   │   ├── KunjunganResource.php
+│   │   │   ├── LevelBadgeLogResource.php
 │   │   │   ├── LevelBadgeResource.php
 │   │   │   ├── PeminjamanResource.php
 │   │   │   ├── PengembalianResource.php
@@ -196,6 +201,7 @@
 │   │   ├── Kelas.php
 │   │   ├── KelasTahunPelajaran.php
 │   │   ├── Kunjungan.php
+│   │   ├── LevelBadgeLog.php
 │   │   ├── LevelBadge.php
 │   │   ├── PasswordResetOtp.php
 │   │   ├── Peminjaman.php
@@ -224,6 +230,7 @@
 │   │   ├── KelasPolicy.php
 │   │   ├── KelasTahunPelajaranPolicy.php
 │   │   ├── KunjunganPolicy.php
+│   │   ├── LevelBadgeLogPolicy.php
 │   │   ├── LevelBadgePolicy.php
 │   │   ├── PeminjamanPolicy.php
 │   │   ├── PengembalianPolicy.php
@@ -336,7 +343,8 @@
 │   │   ├── 2026_08_02_000002_create_eksemplars_table.php
 │   │   ├── 2026_08_02_000003_alter_bukus_table_drop_barcode_rak_stok.php
 │   │   ├── 2026_08_02_000004_alter_peminjamans_table_buku_to_eksemplar.php
-│   │   └── 2026_08_02_000005_add_tahun_terbit_to_bukus_table.php
+│   │   ├── 2026_08_02_000005_add_tahun_terbit_to_bukus_table.php
+│   │   └── 2026_08_02_000006_create_level_badge_logs_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
@@ -391,4 +399,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-88 directories, 304 files
+90 directories, 310 files

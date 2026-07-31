@@ -1,19 +1,100 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
     <meta charset="utf-8">
+    <title>Laporan Bulanan Perpustakaan</title>
     <style>
-        body { font-family: sans-serif; font-size: 11px; color: #111; }
-        h1 { font-size: 16px; margin-bottom: 0; }
-        h2 { font-size: 13px; margin-top: 24px; margin-bottom: 6px; border-bottom: 1px solid #999; padding-bottom: 4px; }
-        .subheading { color: #555; margin-top: 2px; margin-bottom: 16px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-        th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
-        th { background: #f0f0f0; }
-        .ringkasan-box { margin-bottom: 8px; }
-        .ringkasan-box span { display: inline-block; margin-right: 16px; }
-        .section { page-break-after: always; }
-        .section:last-child { page-break-after: auto; }
+        @font-face {
+            font-family: 'Lexend';
+            src: url('{{ public_path('fonts/pdf/lexend-regular.woff2') }}') format('woff2');
+            font-weight: 400;
+        }
+
+        @font-face {
+            font-family: 'Lexend';
+            src: url('{{ public_path('fonts/pdf/lexend-bold.woff2') }}') format('woff2');
+            font-weight: 700;
+        }
+
+        * {
+            font-family: 'Lexend', sans-serif;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-size: 11px;
+            color: #111;
+            margin: 10px 20px;
+        }
+
+        h1 {
+            font-size: 16px;
+            margin-bottom: 0;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-size: 13px;
+            margin-top: 24px;
+            margin-bottom: 6px;
+            padding: 6px 8px;
+            background-color: #D0F0C0;
+            font-weight: 700;
+        }
+
+        .subheading {
+            color: #555;
+            text-align: center;
+            margin-top: 2px;
+            margin-bottom: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+        }
+
+        th, td {
+            border: 1px solid #D0F0C0;
+            padding: 4px 6px;
+            text-align: left;
+        }
+
+        th {
+            background: #D0F0C0;
+            font-weight: 700;
+        }
+
+        .ringkasan-box {
+            margin-bottom: 8px;
+            background-color: #f9f9f9;
+            border: 1px solid #D0F0C0;
+            padding: 6px 8px;
+        }
+
+        .ringkasan-box span {
+            display: inline-block;
+            margin-right: 16px;
+        }
+
+        .section {
+            page-break-after: always;
+        }
+
+        .section:last-child {
+            page-break-after: auto;
+        }
+
+        .badge-list, .reward-list, .punishment-list {
+            margin: 0;
+            padding-left: 14px;
+        }
+
+        .badge-list li, .reward-list li, .punishment-list li {
+            margin-bottom: 2px;
+        }
     </style>
 </head>
 <body>
@@ -182,6 +263,68 @@
                     </tr>
                 @empty
                     <tr><td colspan="5">Tidak ada data.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    {{-- BADGE, REWARD, PUNISHMENT --}}
+    <div class="section">
+        <h2>User Pemilik Badge, Reward &amp; Punishment</h2>
+        <div class="ringkasan-box">
+            <span><strong>Total Badge Baru:</strong> {{ $poin_reward_punishment['total_badge'] }}</span>
+            <span><strong>Total Reward Didapat:</strong> {{ $poin_reward_punishment['total_reward'] }}</span>
+            <span><strong>Total Punishment Diterapkan:</strong> {{ $poin_reward_punishment['total_punishment'] }}</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 18%;">User</th>
+                    <th style="width: 27%;">Riwayat Badge</th>
+                    <th style="width: 27%;">Riwayat Reward</th>
+                    <th style="width: 28%;">Riwayat Punishment</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($poin_reward_punishment['per_user'] as $userId => $data)
+                    <tr>
+                        <td>{{ $data['nama'] }}</td>
+                        <td>
+                            @if ($data['badge']->isEmpty())
+                                -
+                            @else
+                                <ul class="badge-list">
+                                    @foreach ($data['badge'] as $b)
+                                        <li>{{ $b->levelBadge->nama_badge }} ({{ $b->tanggal_didapat->format('d-m-Y') }})</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </td>
+                        <td>
+                            @if ($data['reward']->isEmpty())
+                                -
+                            @else
+                                <ul class="reward-list">
+                                    @foreach ($data['reward'] as $r)
+                                        <li>{{ $r->reward->nama }} ({{ $r->tanggal_didapat->format('d-m-Y') }})</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </td>
+                        <td>
+                            @if ($data['punishment']->isEmpty())
+                                -
+                            @else
+                                <ul class="punishment-list">
+                                    @foreach ($data['punishment'] as $pl)
+                                        <li>{{ $pl->punishment->nama }} ({{ $pl->tanggal_diterapkan->format('d-m-Y') }})</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="4">Tidak ada data badge/reward/punishment bulan ini.</td></tr>
                 @endforelse
             </tbody>
         </table>

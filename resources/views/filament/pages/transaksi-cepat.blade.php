@@ -56,16 +56,16 @@
                     </div>
                 @endif
 
-                <div x-data x-init="$refs.barcode.focus()" style="width: 100%; margin-bottom: 1rem;">
+                <div x-data x-init="$refs.kode.focus()" style="width: 100%; margin-bottom: 1rem;">
                     <input
-                        x-ref="barcode"
+                        x-ref="kode"
                         type="text"
-                        wire:model="barcodeInput"
-                        wire:keydown.enter="scanBarcode"
+                        wire:model="kodeInput"
+                        wire:keydown.enter="scanKode"
                         autofocus
                         class="fi-input"
                         style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem; font-size: 1rem;"
-                        placeholder="Scan barcode buku..."
+                        placeholder="Scan barcode eksemplar atau ISBN buku..."
                     />
                 </div>
 

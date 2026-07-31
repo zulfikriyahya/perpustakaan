@@ -10,6 +10,11 @@ class EditLevelBadge extends EditRecord
 {
     protected static string $resource = LevelBadgeResource::class;
 
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
     protected function getHeaderActions(): array
     {
         return [DeleteAction::make()];

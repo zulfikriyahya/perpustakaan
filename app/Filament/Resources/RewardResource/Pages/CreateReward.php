@@ -8,4 +8,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateReward extends CreateRecord
 {
     protected static string $resource = RewardResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }

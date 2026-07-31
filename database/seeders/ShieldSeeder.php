@@ -29,28 +29,26 @@ class ShieldSeeder extends Seeder
             'guard_name' => 'web',
         ]);
 
-        // BARU iterasi ini - permission manual untuk Eksemplar, karena
-        // Eksemplar bukan Filament Resource sendiri (hanya RelationManager
-        // di bawah BukuResource) sehingga Shield tidak auto-generate
-        // permission untuknya. Dibutuhkan agar EksemplarPolicy (yang
-        // dipakai EksemplarsRelationManager - termasuk tombol Import/
-        // Export Eksemplar yang sekarang HANYA ada di sini, tidak lagi
-        // duplikat di BukuResource header) benar-benar bisa memberi akses,
-        // bukan selalu menolak karena permission belum pernah dibuat.
+        // BARU iterasi ini - permission manual untuk LevelBadgeLog, sama
+        // alasannya dengan Eksemplar di atas: Resource ini dibuat manual
+        // setelah shield:generate terakhir dijalankan, sehingga permission-
+        // nya belum otomatis ter-generate. Jalankan `php artisan
+        // shield:generate` lagi kapan pun untuk memverifikasi/melengkapi
+        // daftar ini secara otomatis di masa depan.
         foreach (
             [
-                'ViewAny:Eksemplar',
-                'View:Eksemplar',
-                'Create:Eksemplar',
-                'Update:Eksemplar',
-                'Delete:Eksemplar',
-                'DeleteAny:Eksemplar',
-                'Restore:Eksemplar',
-                'RestoreAny:Eksemplar',
-                'ForceDelete:Eksemplar',
-                'ForceDeleteAny:Eksemplar',
-                'Replicate:Eksemplar',
-                'Reorder:Eksemplar',
+                'ViewAny:LevelBadgeLog',
+                'View:LevelBadgeLog',
+                'Create:LevelBadgeLog',
+                'Update:LevelBadgeLog',
+                'Delete:LevelBadgeLog',
+                'DeleteAny:LevelBadgeLog',
+                'Restore:LevelBadgeLog',
+                'RestoreAny:LevelBadgeLog',
+                'ForceDelete:LevelBadgeLog',
+                'ForceDeleteAny:LevelBadgeLog',
+                'Replicate:LevelBadgeLog',
+                'Reorder:LevelBadgeLog',
             ] as $permissionName
         ) {
             Permission::firstOrCreate([
@@ -71,6 +69,9 @@ class ShieldSeeder extends Seeder
         ]);
         $pustakawan->syncPermissions(
             Permission::whereIn('name', [
+                'ViewAny:LevelBadgeLog',
+                'View:LevelBadgeLog',
+
                 'ViewAny:Buku',
                 'View:Buku',
                 'Create:Buku',

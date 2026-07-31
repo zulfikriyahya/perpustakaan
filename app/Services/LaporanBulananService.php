@@ -4,9 +4,12 @@ namespace App\Services;
 
 use App\Models\Denda;
 use App\Models\Kunjungan;
+use App\Models\LevelBadgeLog;
 use App\Models\Peminjaman;
 use App\Models\Pengembalian;
 use App\Models\Point;
+use App\Models\PunishmentLog;
+use App\Models\RewardLog;
 use Illuminate\Support\Carbon;
 
 /**
@@ -15,9 +18,11 @@ use Illuminate\Support\Carbon;
  *
  * TODO: GAP-SPEC - filter tanggal per domain memakai kolom "kejadian"
  * masing-masing (tanggal_pinjam, tanggal_kembali, created_at untuk
- * Denda/Point, tanggal untuk Kunjungan) - bukan tanggal_lunas untuk Denda.
- * Perlu dikonfirmasi jika laporan dimaksudkan sebagai laporan kas/arus
- * pemasukan (yang mestinya pakai tanggal_lunas), bukan laporan aktivitas.
+ * Denda/Point, tanggal untuk Kunjungan, tanggal_didapat untuk
+ * RewardLog/LevelBadgeLog, tanggal_diterapkan untuk PunishmentLog) - bukan
+ * tanggal_lunas untuk Denda. Perlu dikonfirmasi jika laporan dimaksudkan
+ * sebagai laporan kas/arus pemasukan (yang mestinya pakai tanggal_lunas),
+ * bukan laporan aktivitas.
  */
 class LaporanBulananService
 {
@@ -35,6 +40,7 @@ class LaporanBulananService
             'denda' => $this->dataDenda($awal, $akhir),
             'kunjungan' => $this->dataKunjungan($awal, $akhir),
             'point' => $this->dataPoint($awal, $akhir),
+            'poin_reward_punishment' => $this->dataPoinRewardPunishment($awal, $akhir),
         ];
     }
 
@@ -71,7 +77,7 @@ class LaporanBulananService
     protected function dataDenda(Carbon $awal, Carbon $akhir): array
     {
         $records = Denda::query()
-            ->with(['user', 'peminjaman.buku'])
+            ->with(['user', 'peminjaman.eksemplar.buku'])
             ->whereBetween('created_at', [$awal, $akhir])
             ->orderBy('created_at')
             ->get();
@@ -121,6 +127,63 @@ class LaporanBulananService
                 'total_nilai' => $g->sum('nilai'),
             ]),
             'detail' => $records,
+        ];
+    }
+
+    /**
+     * Riwayat Badge (LevelBadgeLog), Reward (RewardLog), dan Punishment
+     * (PunishmentLog) dalam periode - dikelompokkan per User supaya PDF
+     * bisa menampilkan "User X: dapat Badge Y tgl sekian, Reward Z tgl
+     * sekian, kena Punishment W tgl sekian" dalam satu baris/blok.
+     *
+     * TODO: GAP-SPEC - badge yang nempel ke user SEBELUM tabel
+     * level_badge_logs dibuat tidak akan muncul di sini (tidak ada
+     * histori sebelum migration berjalan) - dikonfirmasi user.
+     */
+    protected function dataPoinRewardPunishment(Carbon $awal, Carbon $akhir): array
+    {
+        $badgeLogs = LevelBadgeLog::query()
+            ->with(['user', 'levelBadge'])
+            ->whereBetween('tanggal_didapat', [$awal, $akhir])
+            ->orderBy('tanggal_didapat')
+            ->get();
+
+        $rewardLogs = RewardLog::query()
+            ->with(['user', 'reward'])
+            ->whereBetween('tanggal_didapat', [$awal, $akhir])
+            ->orderBy('tanggal_didapat')
+            ->get();
+
+        $punishmentLogs = PunishmentLog::query()
+            ->with(['user', 'punishment'])
+            ->whereBetween('tanggal_diterapkan', [$awal, $akhir])
+            ->orderBy('tanggal_diterapkan')
+            ->get();
+
+        $userIds = $badgeLogs->pluck('user_id')
+            ->merge($rewardLogs->pluck('user_id'))
+            ->merge($punishmentLogs->pluck('user_id'))
+            ->unique();
+
+        $perUser = $userIds->mapWithKeys(function ($userId) use ($badgeLogs, $rewardLogs, $punishmentLogs) {
+            $nama = $badgeLogs->firstWhere('user_id', $userId)?->user?->nama
+                ?? $rewardLogs->firstWhere('user_id', $userId)?->user?->nama
+                ?? $punishmentLogs->firstWhere('user_id', $userId)?->user?->nama
+                ?? '-';
+
+            return [$userId => [
+                'nama' => $nama,
+                'badge' => $badgeLogs->where('user_id', $userId)->values(),
+                'reward' => $rewardLogs->where('user_id', $userId)->values(),
+                'punishment' => $punishmentLogs->where('user_id', $userId)->values(),
+            ]];
+        });
+
+        return [
+            'total_badge' => $badgeLogs->count(),
+            'total_reward' => $rewardLogs->count(),
+            'total_punishment' => $punishmentLogs->count(),
+            'per_user' => $perUser,
         ];
     }
 }

@@ -15,7 +15,7 @@ class DendaExporter extends Exporter
     {
         return [
             ExportColumn::make('user.nama')->label('User'),
-            ExportColumn::make('peminjaman.buku.judul')->label('Buku'),
+            ExportColumn::make('peminjaman.eksemplar.buku.judul')->label('Buku'), // FIX: relasi buku dipindah ke eksemplar (lihat migration alter_peminjamans_table_buku_to_eksemplar)
             ExportColumn::make('tipe'),
             ExportColumn::make('nominal'),
             ExportColumn::make('status_lunas'),

@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\EventTypePoint;
+use App\Enums\JenisTransaksi;
 use App\Enums\SourceKunjungan;
 use App\Http\Controllers\Controller;
 use App\Models\DeviceLog;
 use App\Models\FirmwareRelease;
 use App\Models\Kunjungan;
 use App\Models\Setting;
+use App\Models\Transaksi;
 use App\Models\User;
 use App\Services\PointService;
 use App\Services\RfidResolverService;
@@ -22,6 +24,19 @@ use Illuminate\Http\Response;
  * firmware v2.3.1 (lihat internal/... referensi firmware). SETIAP perubahan
  * response shape di sini WAJIB dicek ulang terhadap parsing firmware
  * (mis. downloadRfidDb() parsing baris per baris plain text, BUKAN JSON).
+ *
+ * FITUR BARU (iterasi ini): setiap Kunjungan yang berhasil tercatat (baik
+ * lewat syncBulk() maupun kirimLangsung()) sekarang JUGA membuat 1
+ * Transaksi (jenis: kunjungan) - lihat catatTransaksiKunjungan(). Ini
+ * TIDAK mengubah response/HTTP status yang dikirim ke device sama sekali
+ * (kontrak firmware poin 17 Aturan tetap utuh) - murni penambahan log di
+ * sisi server setelah Kunjungan berhasil dibuat.
+ *
+ * TODO: GAP-SPEC - Transaksi hasil ini TIDAK menyimpan FK balik ke
+ * Kunjungan (tabel kunjungans tidak punya kolom transaksi_id, sengaja
+ * tidak ditambah migration baru - lihat diskusi terkait). Transaksi
+ * murni log independen, keterangan berisi ringkasan (jam tap + device_id)
+ * untuk audit manual.
  */
 class PerpustakaanDeviceController extends Controller
 {
@@ -142,6 +157,8 @@ class PerpustakaanDeviceController extends Controller
             $kunjungan->id,
         );
 
+        $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
+
         return response()->json(['status' => 'ok'], 200);
     }
 
@@ -251,7 +268,26 @@ class PerpustakaanDeviceController extends Controller
             $kunjungan->id,
         );
 
+        $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
+
         return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'ok'];
+    }
+
+    /**
+     * Satu sumber kebenaran pembuatan Transaksi jenis 'kunjungan' - dipanggil
+     * dari prosesSatuTap() (batch) maupun kirimLangsung() (real-time),
+     * jangan duplikasi query Transaksi::create() di tempat lain (Aturan
+     * poin 3).
+     */
+    protected function catatTransaksiKunjungan(User $user, Kunjungan $kunjungan, string $deviceId): Transaksi
+    {
+        return Transaksi::create([
+            'user_id' => $user->id,
+            'jenis' => JenisTransaksi::Kunjungan,
+            'diproses_oleh' => null, // otomatis oleh device, bukan staff
+            'tanggal' => now(),
+            'keterangan' => "Kunjungan RFID jam {$kunjungan->jam_tap} via device '{$deviceId}'.",
+        ]);
     }
 
     protected function parseTanggalDariTimestamp(string $timestamp): string

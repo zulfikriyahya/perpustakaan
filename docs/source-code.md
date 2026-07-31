@@ -327,17 +327,17 @@ class BukuExporter extends Exporter
             ExportColumn::make('tahun_terbit')->label('Tahun Terbit'),
             ExportColumn::make('eksemplars')
                 ->label('Jumlah Eksemplar')
-                ->formatStateUsing(fn(Buku $record) => (string) $record->eksemplars->count()),
+                ->formatStateUsing(fn (Buku $record) => (string) $record->eksemplars->count()),
             ExportColumn::make('rak')
                 ->label('Rak (distinct, lihat catatan)')
-                ->formatStateUsing(fn(Buku $record) => $record->eksemplars
+                ->formatStateUsing(fn (Buku $record) => $record->eksemplars
                     ->pluck('rak.nama')
                     ->filter()
                     ->unique()
                     ->implode('; ')),
             ExportColumn::make('kategoris')
                 ->label('Kategori')
-                ->formatStateUsing(fn(Buku $record) => $record->kategoris->pluck('nama')->implode('; ')),
+                ->formatStateUsing(fn (Buku $record) => $record->kategoris->pluck('nama')->implode('; ')),
             ExportColumn::make('harga_ganti')->label('Harga Ganti'),
             ExportColumn::make('deskripsi'),
         ];
@@ -345,10 +345,10 @@ class BukuExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Buku selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+        $body = 'Export Buku selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
         }
 
         return $body;
@@ -377,7 +377,7 @@ class DendaExporter extends Exporter
     {
         return [
             ExportColumn::make('user.nama')->label('User'),
-            ExportColumn::make('peminjaman.buku.judul')->label('Buku'),
+            ExportColumn::make('peminjaman.eksemplar.buku.judul')->label('Buku'), // FIX: relasi buku dipindah ke eksemplar (lihat migration alter_peminjamans_table_buku_to_eksemplar)
             ExportColumn::make('tipe'),
             ExportColumn::make('nominal'),
             ExportColumn::make('status_lunas'),
@@ -676,6 +676,45 @@ class LevelBadgeExporter extends Exporter
     public static function getCompletedNotificationBody(Export $export): string
     {
         $body = 'Export Level Badge selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/LevelBadgeLogExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\LevelBadgeLog;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class LevelBadgeLogExporter extends Exporter
+{
+    protected static ?string $model = LevelBadgeLog::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('user.nama')->label('User'),
+            ExportColumn::make('levelBadge.nama_badge')->label('Badge'),
+            ExportColumn::make('tanggal_didapat'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Riwayat Badge selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
             $body .= ' '.number_format($failedRowsCount).' baris gagal.';
@@ -1212,14 +1251,14 @@ class BukuImporter extends Importer
                 ->rules(['nullable', 'string'])
                 ->example('Rak A')
                 // BUG FIX - lookup-only, lihat docblock class.
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
                 ->helperText('Isi persis sesuai nama Kategori yang sudah ada di Master Data > Kategori. Contoh 2 kategori: "Fiksi;Sains". Kategori yang tidak ditemukan namanya akan membuat baris GAGAL.')
                 ->rules(['nullable', 'string'])
                 ->example('Fiksi;Sastra Indonesia')
                 // BUG FIX - lookup-only, lihat docblock class.
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('harga_ganti')
                 ->label('Harga Ganti')
                 ->helperText('WAJIB diisi manual - dipakai sebagai basis perhitungan Denda kerusakan/kehilangan. Baris tanpa nilai ini akan GAGAL, tidak ada default otomatis.')
@@ -1239,7 +1278,7 @@ class BukuImporter extends Importer
                 // 'rak'/'kategori' - HARUS lookup-only, kalau tidak
                 // Filament mencoba assign $record->stok sebelum save() dan
                 // memicu SQL error "Unknown column 'stok' in 'INSERT INTO'".
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('deskripsi')
                 ->rules(['nullable', 'string'])
                 ->example('Novel tentang perjuangan anak-anak Belitung mengejar pendidikan.'),
@@ -1269,7 +1308,7 @@ class BukuImporter extends Importer
             $namaTidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
 
             if (! empty($namaTidakDitemukan)) {
-                throw new RowImportFailedException('Kategori tidak ditemukan: "' . implode('", "', $namaTidakDitemukan) . '". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
+                throw new RowImportFailedException('Kategori tidak ditemukan: "'.implode('", "', $namaTidakDitemukan).'". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
             }
 
             $this->kategoriIdsTerresolve = $kategoris->pluck('id')->all();
@@ -1306,10 +1345,10 @@ class BukuImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Buku selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Buku selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;
@@ -2892,6 +2931,8 @@ use App\Services\LaporanBulananService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 
@@ -2925,33 +2966,48 @@ class LaporanBulanan extends Page
         ]);
     }
 
+    // TODO: verifikasi signature Section/Grid terhadap versi filament/filament
+    // di composer.lock - keduanya diasumsikan tersedia di
+    // Filament\Schemas\Components sejalan dengan Schema yang sudah dipakai
+    // project ini (Filament v5.7), belum pernah dipakai di file lain project
+    // untuk dikonfirmasi persis.
     public function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('bulan')
-                ->label('Bulan')
-                ->options([
-                    1 => 'Januari',
-                    2 => 'Februari',
-                    3 => 'Maret',
-                    4 => 'April',
-                    5 => 'Mei',
-                    6 => 'Juni',
-                    7 => 'Juli',
-                    8 => 'Agustus',
-                    9 => 'September',
-                    10 => 'Oktober',
-                    11 => 'November',
-                    12 => 'Desember',
-                ])
-                ->required(),
-            Select::make('tahun')
-                ->label('Tahun')
-                ->options(
-                    collect(range((int) now()->format('Y'), 2024))
-                        ->mapWithKeys(fn ($y) => [$y => $y])
-                )
-                ->required(),
+            Section::make('Pilih Periode')
+                ->description('Laporan mencakup Peminjaman, Pengembalian, Denda, Kunjungan, Point, serta riwayat Badge/Reward/Punishment pada bulan yang dipilih.')
+                ->icon('heroicon-o-calendar-days')
+                ->schema([
+                    Grid::make(2)
+                        ->schema([
+                            Select::make('bulan')
+                                ->label('Bulan')
+                                ->native(false)
+                                ->options([
+                                    1 => 'Januari',
+                                    2 => 'Februari',
+                                    3 => 'Maret',
+                                    4 => 'April',
+                                    5 => 'Mei',
+                                    6 => 'Juni',
+                                    7 => 'Juli',
+                                    8 => 'Agustus',
+                                    9 => 'September',
+                                    10 => 'Oktober',
+                                    11 => 'November',
+                                    12 => 'Desember',
+                                ])
+                                ->required(),
+                            Select::make('tahun')
+                                ->label('Tahun')
+                                ->native(false)
+                                ->options(
+                                    collect(range((int) now()->format('Y'), 2024))
+                                        ->mapWithKeys(fn ($y) => [$y => $y])
+                                )
+                                ->required(),
+                        ]),
+                ]),
         ])->statePath('data');
     }
 
@@ -3341,6 +3397,7 @@ namespace App\Filament\Pages;
 use App\Enums\KondisiBuku;
 use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
+use App\Models\Buku;
 use App\Models\Eksemplar;
 use App\Models\Peminjaman;
 use App\Models\User;
@@ -3353,18 +3410,25 @@ use RuntimeException;
 
 /**
  * Halaman transaksi cepat: scan kartu (identifikasi user) -> scan barcode
- * EKSEMPLAR satu per satu -> sistem OTOMATIS deteksi pinjam/kembali per
- * eksemplar, diproses langsung tiap scan (TIDAK dikumpulkan dulu, sesuai
- * keputusan QA). Seluruh logic bisnis (limit, stok, Denda, Point, WA) tetap
- * lewat PeminjamanService - halaman ini murni orkestrasi UI (Aturan poin 3).
+ * EKSEMPLAR atau ISBN buku satu per satu -> sistem OTOMATIS deteksi
+ * pinjam/kembali per eksemplar, diproses langsung tiap scan (TIDAK
+ * dikumpulkan dulu, sesuai keputusan QA). Seluruh logic bisnis (limit,
+ * stok, Denda, Point, WA) tetap lewat PeminjamanService - halaman ini
+ * murni orkestrasi UI (Aturan poin 3).
  *
- * BUG FIX (iterasi ini): sebelumnya scan barcode query ke Buku.barcode dan
- * Peminjaman.buku_id - keduanya sudah tidak ada lagi sejak migration
- * 2026_08_02_000002-000004 (barcode & relasi pinjam kini per Eksemplar,
- * bukan per judul Buku). Diganti total ke Eksemplar.barcode dan
- * Peminjaman.eksemplar_id. Parameter ke PeminjamanService::pinjamBuku()
- * juga diperbaiki dari 'bukuIds' (tidak sesuai signature) jadi
- * 'eksemplarIds'.
+ * FITUR BARU (iterasi ini): sebelumnya input hanya dicocokkan ke
+ * Eksemplar.barcode. Sekarang jika tidak match barcode eksemplar manapun,
+ * input dicoba resolve sebagai Buku.isbn (lihat resolveEksemplarDariIsbn())
+ * - karena satu ISBN bisa punya banyak Eksemplar/copy fisik, sistem
+ * otomatis memilih eksemplar yang relevan (lihat TODO: GAP-SPEC di
+ * method tersebut untuk aturan pemilihannya). Property/method di-rename
+ * dari $barcodeInput/scanBarcode() menjadi $kodeInput/scanKode() karena
+ * sekarang menerima barcode ATAU ISBN, ditelusuri ke seluruh pemakaian
+ * termasuk blade (Aturan poin 11).
+ *
+ * BUG FIX (iterasi sebelumnya): scan barcode sudah dipindah dari query
+ * Buku.barcode/Peminjaman.buku_id (sudah tidak ada sejak migration
+ * 2026_08_02_000002-000004) ke Eksemplar.barcode/Peminjaman.eksemplar_id.
  *
  * Reader RFID di komputer = USB keyboard-wedge (ketik ke input fokus,
  * seperti barcode scanner), BUKAN endpoint device Attendance Machine -
@@ -3373,11 +3437,9 @@ use RuntimeException;
  * Otorisasi: reuse Policy existing, tidak ada permission baru untuk
  * halaman ini sendiri - akses digerbang oleh Create:Peminjaman.
  *
- * Rate limit anti-scan-ganda: barcode yang sama untuk user aktif yang
- * sama tidak boleh diproses ulang dalam window RATE_LIMIT_DETIK detik
- * (mencegah pinjam->kembali->pinjam tidak sengaja akibat eksemplar
- * ter-scan 2x, mis. scanner bouncing atau operator tidak sadar sudah
- * masuk). Diguard via Cache (bukan DB), TTL pendek, tidak butuh migration.
+ * Rate limit anti-scan-ganda: eksemplar yang sama (setelah diresolve dari
+ * barcode ATAU ISBN) untuk user aktif yang sama tidak boleh diproses ulang
+ * dalam window RATE_LIMIT_DETIK detik.
  *
  * TODO: GAP-SPEC - window rate limit di-key per (user_id, eksemplar_id),
  * BUKAN global per eksemplar - asumsi: 2 user berbeda scan eksemplar yang
@@ -3404,18 +3466,18 @@ class TransaksiCepat extends Page
     /**
      * Window rate limit anti-scan-ganda (detik). Lihat catatan class di atas.
      */
-    protected const RATE_LIMIT_DETIK = 15;
+    protected const RATE_LIMIT_DETIK = 60;
 
     public ?string $kartuInput = '';
 
-    public ?string $barcodeInput = '';
+    public ?string $kodeInput = '';
 
     public ?User $user = null;
 
     public bool $bisaMeminjam = false;
 
     /**
-     * @var array<int, array{barcode: string, judul: string, aksi: string, pesan: string, sukses: bool}>
+     * @var array<int, array{barcode: string, judul: string, aksi: string,pesan: string, sukses: bool}>
      */
     public array $riwayatScan = [];
 
@@ -3453,31 +3515,36 @@ class TransaksiCepat extends Page
         }
     }
 
-    public function scanBarcode(): void
+    public function scanKode(): void
     {
-        $barcode = trim((string) $this->barcodeInput);
-        $this->barcodeInput = '';
+        $kode = trim((string) $this->kodeInput);
+        $this->kodeInput = '';
 
-        if ($barcode === '' || ! $this->user) {
+        if ($kode === '' || ! $this->user) {
             return;
         }
 
-        $eksemplar = Eksemplar::query()->where('barcode', $barcode)->with('buku')->first();
+        $eksemplar = Eksemplar::query()->where('barcode', $kode)->with('buku')->first();
 
         if (! $eksemplar) {
-            $this->tambahRiwayat($barcode, '-', 'error', 'Barcode tidak ditemukan.', false);
+            $eksemplar = $this->resolveEksemplarDariIsbn($kode);
+        }
+
+        if (! $eksemplar) {
+            $this->tambahRiwayat($kode, '-', 'error', 'Barcode/ISBN tidak ditemukan.', false);
 
             return;
         }
 
         // Rate limit anti-scan-ganda - dicek SEBELUM logic pinjam/kembali,
-        // supaya eksemplar yang sama ter-scan 2x dalam window tidak memicu
-        // toggle pinjam->kembali->pinjam yang tidak diinginkan.
+        // supaya eksemplar yang sama (baik diresolve dari barcode maupun
+        // ISBN) ter-scan 2x dalam window tidak memicu toggle
+        // pinjam->kembali->pinjam yang tidak diinginkan.
         $rateLimitKey = "transaksi-cepat-scan:{$this->user->id}:{$eksemplar->id}";
 
         if (Cache::has($rateLimitKey)) {
             $this->tambahRiwayat(
-                $barcode,
+                $eksemplar->barcode,
                 $eksemplar->buku->judul,
                 'ditolak',
                 'Eksemplar ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
@@ -3506,10 +3573,16 @@ class TransaksiCepat extends Page
                     kondisi: KondisiBuku::Baik, // default, koreksi manual lewat PengembalianResource jika perlu
                     diprosesOleh: auth()->user(),
                 );
-                $this->tambahRiwayat($barcode, $eksemplar->buku->judul, 'dikembalikan', 'Berhasil dikembalikan (kondisi: baik).', true);
+                $this->tambahRiwayat($eksemplar->barcode, $eksemplar->buku->judul, 'dikembalikan', 'Berhasil dikembalikan (kondisi: baik).', true);
             } else {
                 if ($eksemplar->status !== StatusEksemplar::Tersedia) {
-                    throw new RuntimeException("Eksemplar barcode '{$eksemplar->barcode}' tidak tersedia (status: {$eksemplar->status->value}).");
+                    // UX: pesan dipertegas - ini SANGAT mungkin eksemplar/copy
+                    // fisik lain dari judul yang sama, sedang dipinjam user lain,
+                    // bukan berarti transaksi user saat ini bermasalah/bug.
+                    throw new RuntimeException(
+                        "Eksemplar barcode '{$eksemplar->barcode}' ({$eksemplar->buku->judul}) sedang tidak tersedia (status: {$eksemplar->status->value}). ".
+                            'Jika Anda mengira eksemplar ini seharusnya dikembalikan oleh user ini, periksa apakah barcode/ISBN yang di-scan sesuai dengan yang tadi dipinjam - satu judul buku bisa punya beberapa copy/eksemplar dengan barcode berbeda.'
+                    );
                 }
 
                 $service->pinjamBuku(
@@ -3517,16 +3590,65 @@ class TransaksiCepat extends Page
                     eksemplarIds: [$eksemplar->id],
                     diprosesOleh: auth()->user(),
                 );
-                $this->tambahRiwayat($barcode, $eksemplar->buku->judul, 'dipinjamkan', 'Berhasil dipinjamkan.', true);
+                $this->tambahRiwayat($eksemplar->barcode, $eksemplar->buku->judul, 'dipinjamkan', 'Berhasil dipinjamkan.', true);
             }
         } catch (RuntimeException $e) {
             // Gagal diproses - buka kembali rate limit supaya operator bisa
             // langsung retry tanpa perlu menunggu window habis.
             Cache::forget($rateLimitKey);
-            $this->tambahRiwayat($barcode, $eksemplar->buku->judul, 'error', $e->getMessage(), false);
+            $this->tambahRiwayat($eksemplar->barcode, $eksemplar->buku->judul, 'error', $e->getMessage(), false);
         }
 
         $this->bisaMeminjam = app(PeminjamanService::class)->bisaMeminjam($this->user->fresh());
+    }
+
+    /**
+     * Resolve input sebagai ISBN Buku (dipanggil ketika input tidak match
+     * barcode Eksemplar manapun) -> pilih SATU Eksemplar yang relevan.
+     *
+     * TODO: GAP-SPEC - aturan pemilihan eksemplar saat scan ISBN (bukan
+     * barcode eksemplar spesifik):
+     *  1. PENGEMBALIAN: jika user ini punya Peminjaman aktif/terlambat atas
+     *     eksemplar manapun dari Buku ber-ISBN ini, ambil yang PALING LAMA
+     *     dipinjam (created_at terkecil). Asumsi: user jarang pinjam >1
+     *     eksemplar dari judul yang sama secara bersamaan; kalau itu
+     *     terjadi, operator TIDAK diminta memilih - sistem otomatis pilih
+     *     yang tertua. Jika perilaku yang diinginkan adalah selalu minta
+     *     scan barcode eksemplar spesifik ketika ambigu (bukan auto-pick),
+     *     ubah logic ini untuk melempar RuntimeException alih-alih memilih.
+     *  2. PEMINJAMAN BARU: ambil 1 Eksemplar berstatus Tersedia dari Buku
+     *     ini secara FIFO (created_at terkecil) - operator TIDAK memilih
+     *     eksemplar/copy fisik spesifik, sistem yang menentukan. Ini
+     *     konsisten dengan premis gap ("barcode identik dengan ISBN yang
+     *     dipinjam" - dianggap tidak ada preferensi copy tertentu).
+     */
+    protected function resolveEksemplarDariIsbn(string $isbn): ?Eksemplar
+    {
+        $buku = Buku::query()->where('isbn', $isbn)->first();
+
+        if (! $buku) {
+            return null;
+        }
+
+        $eksemplarDipinjamUser = Eksemplar::query()
+            ->where('buku_id', $buku->id)
+            ->whereHas('peminjamans', fn ($q) => $q
+                ->where('user_id', $this->user->id)
+                ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat]))
+            ->with('buku')
+            ->oldest('created_at')
+            ->first();
+
+        if ($eksemplarDipinjamUser) {
+            return $eksemplarDipinjamUser;
+        }
+
+        return Eksemplar::query()
+            ->where('buku_id', $buku->id)
+            ->where('status', StatusEksemplar::Tersedia)
+            ->with('buku')
+            ->oldest('created_at')
+            ->first();
     }
 
     public function selesai(): void
@@ -3535,7 +3657,7 @@ class TransaksiCepat extends Page
         $this->riwayatScan = [];
         $this->bisaMeminjam = false;
         $this->kartuInput = '';
-        $this->barcodeInput = '';
+        $this->kodeInput = '';
     }
 
     protected function tambahRiwayat(string $barcode, string $judul, string $aksi, string $pesan, bool $sukses): void
@@ -3965,11 +4087,13 @@ class ListDendas extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Enums\JenisTransaksi;
 use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
 use App\Filament\Exports\DendaExporter;
 use App\Filament\Resources\DendaResource\Pages;
 use App\Models\Denda;
+use App\Models\Transaksi;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -4108,6 +4232,17 @@ class DendaResource extends Resource
                             'status_lunas' => true,
                             'tanggal_lunas' => $data['tanggal_lunas'],
                             'keterangan' => $data['keterangan'] ?? $record->keterangan,
+                        ]);
+
+                        // FITUR BARU: catat Transaksi jenis pembayaran_denda -
+                        // satu sumber kebenaran pembuatan Transaksi tipe ini,
+                        // jangan duplikasi di tempat lain (Aturan poin 3).
+                        Transaksi::create([
+                            'user_id' => $record->user_id,
+                            'jenis' => JenisTransaksi::PembayaranDenda,
+                            'diproses_oleh' => auth()->id(),
+                            'tanggal' => $data['tanggal_lunas'],
+                            'keterangan' => "Pembayaran Denda {$record->tipe->value} sebesar Rp".number_format((float) $record->nominal, 0, ',', '.'),
                         ]);
 
                         Notification::make()
@@ -5074,6 +5209,92 @@ class KunjunganResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/LevelBadgeLogResource/Pages/ListLevelBadgeLogs.php
+```php
+<?php
+
+namespace App\Filament\Resources\LevelBadgeLogResource\Pages;
+
+use App\Filament\Resources\LevelBadgeLogResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListLevelBadgeLogs extends ListRecords
+{
+    protected static string $resource = LevelBadgeLogResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/LevelBadgeLogResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Exports\LevelBadgeLogExporter;
+use App\Filament\Resources\LevelBadgeLogResource\Pages;
+use App\Models\LevelBadgeLog;
+use Filament\Actions\ExportAction;
+use Filament\Resources\Resource;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+/**
+ * Read-only - LevelBadgeLog HANYA dihasilkan otomatis oleh
+ * PointService::cekBadge() saat badge user berubah (Aturan poin 3, DRY).
+ * Tidak ada Import - insert manual akan melewati validasi rentang
+ * min_point/max_point di PointService. Pola identik dengan
+ * RewardLogResource/PunishmentLogResource.
+ */
+class LevelBadgeLogResource extends Resource
+{
+    protected static ?string $model = LevelBadgeLog::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-star';
+
+    protected static ?string $navigationLabel = 'Riwayat Badge';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Poin & Reward';
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(LevelBadgeLogExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false),
+            ])
+            ->columns([
+                TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
+                TextColumn::make('levelBadge.nama_badge')->label('Badge')->searchable()->sortable(),
+                TextColumn::make('tanggal_didapat')->dateTime()->sortable(),
+            ])
+            ->filters([
+                SelectFilter::make('level_badge_id')->label('Badge')->relationship('levelBadge', 'nama_badge'),
+            ])
+            ->defaultSort('tanggal_didapat', 'desc')
+            ->recordActions([])
+            ->toolbarActions([]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListLevelBadgeLogs::route('/'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/LevelBadgeResource/Pages/CreateLevelBadge.php
 ```php
 <?php
@@ -5086,6 +5307,11 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateLevelBadge extends CreateRecord
 {
     protected static string $resource = LevelBadgeResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }
 
 ```
@@ -5105,6 +5331,11 @@ class EditLevelBadge extends EditRecord
 {
     protected static string $resource = LevelBadgeResource::class;
 
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
     protected function getHeaderActions(): array
     {
         return [DeleteAction::make()];
@@ -5121,11 +5352,17 @@ class EditLevelBadge extends EditRecord
 namespace App\Filament\Resources\LevelBadgeResource\Pages;
 
 use App\Filament\Resources\LevelBadgeResource;
+use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
 class ListLevelBadges extends ListRecords
 {
     protected static string $resource = LevelBadgeResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [CreateAction::make()];
+    }
 }
 
 ```
@@ -5777,6 +6014,11 @@ use Filament\Resources\Pages\CreateRecord;
 class CreatePunishment extends CreateRecord
 {
     protected static string $resource = PunishmentResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }
 
 ```
@@ -5796,6 +6038,11 @@ class EditPunishment extends EditRecord
 {
     protected static string $resource = PunishmentResource::class;
 
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
     protected function getHeaderActions(): array
     {
         return [DeleteAction::make()];
@@ -5812,11 +6059,17 @@ class EditPunishment extends EditRecord
 namespace App\Filament\Resources\PunishmentResource\Pages;
 
 use App\Filament\Resources\PunishmentResource;
+use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
 class ListPunishments extends ListRecords
 {
     protected static string $resource = PunishmentResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [CreateAction::make()];
+    }
 }
 
 ```
@@ -6272,6 +6525,11 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateReward extends CreateRecord
 {
     protected static string $resource = RewardResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
 }
 
 ```
@@ -6291,6 +6549,11 @@ class EditReward extends EditRecord
 {
     protected static string $resource = RewardResource::class;
 
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
     protected function getHeaderActions(): array
     {
         return [DeleteAction::make()];
@@ -6307,11 +6570,17 @@ class EditReward extends EditRecord
 namespace App\Filament\Resources\RewardResource\Pages;
 
 use App\Filament\Resources\RewardResource;
+use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
 class ListRewards extends ListRecords
 {
     protected static string $resource = RewardResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [CreateAction::make()];
+    }
 }
 
 ```
@@ -6948,7 +7217,7 @@ class EditUser extends EditRecord
     {
         return [
             DeleteAction::make()
-                ->hidden(fn($record) => $record && $record->hasRole('super_admin')),
+                ->hidden(fn ($record) => $record && $record->hasRole('super_admin')),
         ];
     }
 }
@@ -7533,12 +7802,14 @@ class TrenKunjunganChartWidget extends ChartWidget
 namespace App\Http\Controllers\Api;
 
 use App\Enums\EventTypePoint;
+use App\Enums\JenisTransaksi;
 use App\Enums\SourceKunjungan;
 use App\Http\Controllers\Controller;
 use App\Models\DeviceLog;
 use App\Models\FirmwareRelease;
 use App\Models\Kunjungan;
 use App\Models\Setting;
+use App\Models\Transaksi;
 use App\Models\User;
 use App\Services\PointService;
 use App\Services\RfidResolverService;
@@ -7552,6 +7823,19 @@ use Illuminate\Http\Response;
  * firmware v2.3.1 (lihat internal/... referensi firmware). SETIAP perubahan
  * response shape di sini WAJIB dicek ulang terhadap parsing firmware
  * (mis. downloadRfidDb() parsing baris per baris plain text, BUKAN JSON).
+ *
+ * FITUR BARU (iterasi ini): setiap Kunjungan yang berhasil tercatat (baik
+ * lewat syncBulk() maupun kirimLangsung()) sekarang JUGA membuat 1
+ * Transaksi (jenis: kunjungan) - lihat catatTransaksiKunjungan(). Ini
+ * TIDAK mengubah response/HTTP status yang dikirim ke device sama sekali
+ * (kontrak firmware poin 17 Aturan tetap utuh) - murni penambahan log di
+ * sisi server setelah Kunjungan berhasil dibuat.
+ *
+ * TODO: GAP-SPEC - Transaksi hasil ini TIDAK menyimpan FK balik ke
+ * Kunjungan (tabel kunjungans tidak punya kolom transaksi_id, sengaja
+ * tidak ditambah migration baru - lihat diskusi terkait). Transaksi
+ * murni log independen, keterangan berisi ringkasan (jam tap + device_id)
+ * untuk audit manual.
  */
 class PerpustakaanDeviceController extends Controller
 {
@@ -7672,6 +7956,8 @@ class PerpustakaanDeviceController extends Controller
             $kunjungan->id,
         );
 
+        $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
+
         return response()->json(['status' => 'ok'], 200);
     }
 
@@ -7781,7 +8067,26 @@ class PerpustakaanDeviceController extends Controller
             $kunjungan->id,
         );
 
+        $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
+
         return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'ok'];
+    }
+
+    /**
+     * Satu sumber kebenaran pembuatan Transaksi jenis 'kunjungan' - dipanggil
+     * dari prosesSatuTap() (batch) maupun kirimLangsung() (real-time),
+     * jangan duplikasi query Transaksi::create() di tempat lain (Aturan
+     * poin 3).
+     */
+    protected function catatTransaksiKunjungan(User $user, Kunjungan $kunjungan, string $deviceId): Transaksi
+    {
+        return Transaksi::create([
+            'user_id' => $user->id,
+            'jenis' => JenisTransaksi::Kunjungan,
+            'diproses_oleh' => null, // otomatis oleh device, bukan staff
+            'tanggal' => now(),
+            'keterangan' => "Kunjungan RFID jam {$kunjungan->jam_tap} via device '{$deviceId}'.",
+        ]);
     }
 
     protected function parseTanggalDariTimestamp(string $timestamp): string
@@ -8218,10 +8523,10 @@ class Eksemplar extends Model
      */
     public static function generateBarcodeUntuk(Buku $buku, int $urutan): string
     {
-        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)) . '-' . $urutan);
+        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)).'-'.$urutan);
 
         if (static::query()->where('barcode', $barcode)->exists()) {
-            $barcode .= '-' . strtoupper(Str::random(4));
+            $barcode .= '-'.strtoupper(Str::random(4));
         }
 
         return $barcode;
@@ -8488,6 +8793,50 @@ class Kunjungan extends Model
 ```
 ---
 
+## app/Models/LevelBadgeLog.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class LevelBadgeLog extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $fillable = [
+        'user_id',
+        'level_badge_id',
+        'tanggal_didapat',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'user_id' => 'integer',
+            'tanggal_didapat' => 'datetime',
+        ];
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function levelBadge(): BelongsTo
+    {
+        return $this->belongsTo(LevelBadge::class);
+    }
+}
+
+```
+---
+
 ## app/Models/LevelBadge.php
 ```php
 <?php
@@ -8504,11 +8853,6 @@ class LevelBadge extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'nama_badge',
         'min_point',
@@ -8520,6 +8864,11 @@ class LevelBadge extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function levelBadgeLogs(): HasMany
+    {
+        return $this->hasMany(LevelBadgeLog::class);
     }
 }
 
@@ -9464,14 +9813,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -9531,8 +9880,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-
 }
+
 ```
 ---
 
@@ -9544,14 +9893,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -9611,8 +9960,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-
 }
+
 ```
 ---
 
@@ -9712,14 +10061,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -9779,8 +10128,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-
 }
+
 ```
 ---
 
@@ -9792,14 +10141,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -9859,8 +10208,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-
 }
+
 ```
 ---
 
@@ -9872,14 +10221,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -9939,8 +10288,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-
 }
+
 ```
 ---
 
@@ -9952,14 +10301,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -10019,8 +10368,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -10032,14 +10381,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -10099,8 +10448,88 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-
 }
+
+```
+---
+
+## app/Policies/LevelBadgeLogPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use App\Models\LevelBadgeLog;
+use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
+
+class LevelBadgeLogPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:LevelBadgeLog');
+    }
+
+    public function view(AuthUser $authUser, LevelBadgeLog $levelBadgeLog): bool
+    {
+        return $authUser->can('View:LevelBadgeLog');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:LevelBadgeLog');
+    }
+
+    public function update(AuthUser $authUser, LevelBadgeLog $levelBadgeLog): bool
+    {
+        return $authUser->can('Update:LevelBadgeLog');
+    }
+
+    public function delete(AuthUser $authUser, LevelBadgeLog $levelBadgeLog): bool
+    {
+        return $authUser->can('Delete:LevelBadgeLog');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:LevelBadgeLog');
+    }
+
+    public function restore(AuthUser $authUser, LevelBadgeLog $levelBadgeLog): bool
+    {
+        return $authUser->can('Restore:LevelBadgeLog');
+    }
+
+    public function forceDelete(AuthUser $authUser, LevelBadgeLog $levelBadgeLog): bool
+    {
+        return $authUser->can('ForceDelete:LevelBadgeLog');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:LevelBadgeLog');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:LevelBadgeLog');
+    }
+
+    public function replicate(AuthUser $authUser, LevelBadgeLog $levelBadgeLog): bool
+    {
+        return $authUser->can('Replicate:LevelBadgeLog');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:LevelBadgeLog');
+    }
+}
+
 ```
 ---
 
@@ -10112,14 +10541,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -10179,8 +10608,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-
 }
+
 ```
 ---
 
@@ -10192,14 +10621,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -10259,8 +10688,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-
 }
+
 ```
 ---
 
@@ -10272,14 +10701,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -10339,8 +10768,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-
 }
+
 ```
 ---
 
@@ -10352,14 +10781,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -10419,8 +10848,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-
 }
+
 ```
 ---
 
@@ -10432,14 +10861,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -10499,8 +10928,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-
 }
+
 ```
 ---
 
@@ -10512,14 +10941,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -10579,8 +11008,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-
 }
+
 ```
 ---
 
@@ -10592,14 +11021,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -10659,8 +11088,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-
 }
+
 ```
 ---
 
@@ -10672,14 +11101,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -10739,8 +11168,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-
 }
+
 ```
 ---
 
@@ -10752,14 +11181,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -10819,8 +11248,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-
 }
+
 ```
 ---
 
@@ -10832,14 +11261,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
-use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -10899,8 +11328,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-
 }
+
 ```
 ---
 
@@ -10912,14 +11341,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -10979,8 +11408,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -10992,14 +11421,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -11059,8 +11488,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-
 }
+
 ```
 ---
 
@@ -11070,13 +11499,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -11136,8 +11565,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-
 }
+
 ```
 ---
 
@@ -11514,9 +11943,12 @@ namespace App\Services;
 
 use App\Models\Denda;
 use App\Models\Kunjungan;
+use App\Models\LevelBadgeLog;
 use App\Models\Peminjaman;
 use App\Models\Pengembalian;
 use App\Models\Point;
+use App\Models\PunishmentLog;
+use App\Models\RewardLog;
 use Illuminate\Support\Carbon;
 
 /**
@@ -11525,9 +11957,11 @@ use Illuminate\Support\Carbon;
  *
  * TODO: GAP-SPEC - filter tanggal per domain memakai kolom "kejadian"
  * masing-masing (tanggal_pinjam, tanggal_kembali, created_at untuk
- * Denda/Point, tanggal untuk Kunjungan) - bukan tanggal_lunas untuk Denda.
- * Perlu dikonfirmasi jika laporan dimaksudkan sebagai laporan kas/arus
- * pemasukan (yang mestinya pakai tanggal_lunas), bukan laporan aktivitas.
+ * Denda/Point, tanggal untuk Kunjungan, tanggal_didapat untuk
+ * RewardLog/LevelBadgeLog, tanggal_diterapkan untuk PunishmentLog) - bukan
+ * tanggal_lunas untuk Denda. Perlu dikonfirmasi jika laporan dimaksudkan
+ * sebagai laporan kas/arus pemasukan (yang mestinya pakai tanggal_lunas),
+ * bukan laporan aktivitas.
  */
 class LaporanBulananService
 {
@@ -11545,6 +11979,7 @@ class LaporanBulananService
             'denda' => $this->dataDenda($awal, $akhir),
             'kunjungan' => $this->dataKunjungan($awal, $akhir),
             'point' => $this->dataPoint($awal, $akhir),
+            'poin_reward_punishment' => $this->dataPoinRewardPunishment($awal, $akhir),
         ];
     }
 
@@ -11581,7 +12016,7 @@ class LaporanBulananService
     protected function dataDenda(Carbon $awal, Carbon $akhir): array
     {
         $records = Denda::query()
-            ->with(['user', 'peminjaman.buku'])
+            ->with(['user', 'peminjaman.eksemplar.buku'])
             ->whereBetween('created_at', [$awal, $akhir])
             ->orderBy('created_at')
             ->get();
@@ -11631,6 +12066,63 @@ class LaporanBulananService
                 'total_nilai' => $g->sum('nilai'),
             ]),
             'detail' => $records,
+        ];
+    }
+
+    /**
+     * Riwayat Badge (LevelBadgeLog), Reward (RewardLog), dan Punishment
+     * (PunishmentLog) dalam periode - dikelompokkan per User supaya PDF
+     * bisa menampilkan "User X: dapat Badge Y tgl sekian, Reward Z tgl
+     * sekian, kena Punishment W tgl sekian" dalam satu baris/blok.
+     *
+     * TODO: GAP-SPEC - badge yang nempel ke user SEBELUM tabel
+     * level_badge_logs dibuat tidak akan muncul di sini (tidak ada
+     * histori sebelum migration berjalan) - dikonfirmasi user.
+     */
+    protected function dataPoinRewardPunishment(Carbon $awal, Carbon $akhir): array
+    {
+        $badgeLogs = LevelBadgeLog::query()
+            ->with(['user', 'levelBadge'])
+            ->whereBetween('tanggal_didapat', [$awal, $akhir])
+            ->orderBy('tanggal_didapat')
+            ->get();
+
+        $rewardLogs = RewardLog::query()
+            ->with(['user', 'reward'])
+            ->whereBetween('tanggal_didapat', [$awal, $akhir])
+            ->orderBy('tanggal_didapat')
+            ->get();
+
+        $punishmentLogs = PunishmentLog::query()
+            ->with(['user', 'punishment'])
+            ->whereBetween('tanggal_diterapkan', [$awal, $akhir])
+            ->orderBy('tanggal_diterapkan')
+            ->get();
+
+        $userIds = $badgeLogs->pluck('user_id')
+            ->merge($rewardLogs->pluck('user_id'))
+            ->merge($punishmentLogs->pluck('user_id'))
+            ->unique();
+
+        $perUser = $userIds->mapWithKeys(function ($userId) use ($badgeLogs, $rewardLogs, $punishmentLogs) {
+            $nama = $badgeLogs->firstWhere('user_id', $userId)?->user?->nama
+                ?? $rewardLogs->firstWhere('user_id', $userId)?->user?->nama
+                ?? $punishmentLogs->firstWhere('user_id', $userId)?->user?->nama
+                ?? '-';
+
+            return [$userId => [
+                'nama' => $nama,
+                'badge' => $badgeLogs->where('user_id', $userId)->values(),
+                'reward' => $rewardLogs->where('user_id', $userId)->values(),
+                'punishment' => $punishmentLogs->where('user_id', $userId)->values(),
+            ]];
+        });
+
+        return [
+            'total_badge' => $badgeLogs->count(),
+            'total_reward' => $rewardLogs->count(),
+            'total_punishment' => $punishmentLogs->count(),
+            'per_user' => $perUser,
         ];
     }
 }
@@ -12149,6 +12641,7 @@ namespace App\Services;
 
 use App\Enums\EventTypePoint;
 use App\Models\LevelBadge;
+use App\Models\LevelBadgeLog;
 use App\Models\Point;
 use App\Models\Punishment;
 use App\Models\PunishmentLog;
@@ -12205,7 +12698,11 @@ class PointService
     }
 
     /**
-     * Update level_badge_id user jika akumulasi_point masuk rentang badge lain.
+     * Update level_badge_id user jika akumulasi_point masuk rentang badge
+     * lain. Setiap perubahan JUGA dicatat ke LevelBadgeLog (Aturan poin 3,
+     * DRY - mengikuti pola RewardLog/PunishmentLog) sebagai riwayat
+     * historis, terpisah dari users.level_badge_id yang tetap jadi
+     * snapshot terkini.
      */
     protected function cekBadge(User $user): void
     {
@@ -12221,8 +12718,17 @@ class PointService
         if ($badge && $badge->id !== $user->level_badge_id) {
             $user->update(['level_badge_id' => $badge->id]);
 
+            LevelBadgeLog::create([
+                'user_id' => $user->id,
+                'level_badge_id' => $badge->id,
+                'tanggal_didapat' => now(),
+            ]);
+
             // eventCode 'badge_naik' - TODO: ASUMSI, samakan dengan Setting
             // wa_template_badge_naik yang harus diisi Admin di panel WA Gateway.
+            // TODO: GAP-SPEC - eventCode ini terpicu di SETIAP perubahan badge,
+            // termasuk kalau badge turun (bukan hanya naik) - belum
+            // dikonfirmasi apakah perlu dipisah jadi badge_naik/badge_turun.
             $this->whatsappService->kirimEvent(
                 eventCode: 'badge_naik',
                 nomorTujuan: $user->no_telepon,
@@ -16934,6 +17440,49 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_08_02_000006_create_level_badge_logs_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Log historis perubahan LevelBadge user (Aturan poin 3 - DRY, mengikuti
+ * pola RewardLog/PunishmentLog). Kolom users.level_badge_id TETAP ada dan
+ * TETAP jadi sumber snapshot terkini (dipakai PointService::cekBadge()
+ * untuk cek cepat tanpa query log) - tabel ini murni tambahan append-only,
+ * TIDAK mengubah struktur/data tabel users.
+ *
+ * TODO: GAP-SPEC - histori baru mulai tercatat sejak migration ini
+ * dijalankan (dikonfirmasi user). Badge yang sudah nempel ke user
+ * SEBELUM migration ini tidak akan muncul di riwayat karena memang belum
+ * pernah ter-log.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('level_badge_logs', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignId('user_id')->constrained('users');
+            $table->foreignUuid('level_badge_id')->constrained('level_badges');
+            $table->dateTime('tanggal_didapat');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('level_badge_logs');
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -17090,28 +17639,26 @@ class ShieldSeeder extends Seeder
             'guard_name' => 'web',
         ]);
 
-        // BARU iterasi ini - permission manual untuk Eksemplar, karena
-        // Eksemplar bukan Filament Resource sendiri (hanya RelationManager
-        // di bawah BukuResource) sehingga Shield tidak auto-generate
-        // permission untuknya. Dibutuhkan agar EksemplarPolicy (yang
-        // dipakai EksemplarsRelationManager - termasuk tombol Import/
-        // Export Eksemplar yang sekarang HANYA ada di sini, tidak lagi
-        // duplikat di BukuResource header) benar-benar bisa memberi akses,
-        // bukan selalu menolak karena permission belum pernah dibuat.
+        // BARU iterasi ini - permission manual untuk LevelBadgeLog, sama
+        // alasannya dengan Eksemplar di atas: Resource ini dibuat manual
+        // setelah shield:generate terakhir dijalankan, sehingga permission-
+        // nya belum otomatis ter-generate. Jalankan `php artisan
+        // shield:generate` lagi kapan pun untuk memverifikasi/melengkapi
+        // daftar ini secara otomatis di masa depan.
         foreach (
             [
-                'ViewAny:Eksemplar',
-                'View:Eksemplar',
-                'Create:Eksemplar',
-                'Update:Eksemplar',
-                'Delete:Eksemplar',
-                'DeleteAny:Eksemplar',
-                'Restore:Eksemplar',
-                'RestoreAny:Eksemplar',
-                'ForceDelete:Eksemplar',
-                'ForceDeleteAny:Eksemplar',
-                'Replicate:Eksemplar',
-                'Reorder:Eksemplar',
+                'ViewAny:LevelBadgeLog',
+                'View:LevelBadgeLog',
+                'Create:LevelBadgeLog',
+                'Update:LevelBadgeLog',
+                'Delete:LevelBadgeLog',
+                'DeleteAny:LevelBadgeLog',
+                'Restore:LevelBadgeLog',
+                'RestoreAny:LevelBadgeLog',
+                'ForceDelete:LevelBadgeLog',
+                'ForceDeleteAny:LevelBadgeLog',
+                'Replicate:LevelBadgeLog',
+                'Reorder:LevelBadgeLog',
             ] as $permissionName
         ) {
             Permission::firstOrCreate([
@@ -17132,6 +17679,9 @@ class ShieldSeeder extends Seeder
         ]);
         $pustakawan->syncPermissions(
             Permission::whereIn('name', [
+                'ViewAny:LevelBadgeLog',
+                'View:LevelBadgeLog',
+
                 'ViewAny:Buku',
                 'View:Buku',
                 'Create:Buku',
@@ -17922,14 +18472,36 @@ return [
 ## resources/views/filament/pages/laporan-bulanan.blade.php
 ```blade
 <x-filament-panels::page>
-    <form wire:submit="generate">
-        {{ $this->form }}
-        <div style="margin-top: 1.5rem;">
-            <x-filament::button type="submit" icon="heroicon-o-document-arrow-down">
-                Generate & Download PDF
-            </x-filament::button>
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div class="lg:col-span-2">
+            <form wire:submit="generate">
+                {{ $this->form }}
+
+                <div style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.75rem;">
+                    <x-filament::button
+                        type="submit"
+                        icon="heroicon-o-document-arrow-down"
+                        size="lg"
+                        wire:loading.attr="disabled"
+                        wire:target="generate"
+                    >
+                        <span wire:loading.remove wire:target="generate">
+                            Generate &amp; Download PDF
+                        </span>
+                        <span wire:loading wire:target="generate">
+                            Menyusun laporan...
+                        </span>
+                    </x-filament::button>
+
+                    <x-filament::loading-indicator
+                        wire:loading
+                        wire:target="generate"
+                        class="h-5 w-5 text-primary-500"
+                    />
+                </div>
+            </form>
         </div>
-    </form>
+
 </x-filament-panels::page>
 
 ```
@@ -18046,16 +18618,16 @@ return [
                     </div>
                 @endif
 
-                <div x-data x-init="$refs.barcode.focus()" style="width: 100%; margin-bottom: 1rem;">
+                <div x-data x-init="$refs.kode.focus()" style="width: 100%; margin-bottom: 1rem;">
                     <input
-                        x-ref="barcode"
+                        x-ref="kode"
                         type="text"
-                        wire:model="barcodeInput"
-                        wire:keydown.enter="scanBarcode"
+                        wire:model="kodeInput"
+                        wire:keydown.enter="scanKode"
                         autofocus
                         class="fi-input"
                         style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem; font-size: 1rem;"
-                        placeholder="Scan barcode buku..."
+                        placeholder="Scan barcode eksemplar atau ISBN buku..."
                     />
                 </div>
 
@@ -18132,21 +18704,102 @@ return [
 ## resources/views/pdf/laporan-bulanan.blade.php
 ```blade
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
     <meta charset="utf-8">
+    <title>Laporan Bulanan Perpustakaan</title>
     <style>
-        body { font-family: sans-serif; font-size: 11px; color: #111; }
-        h1 { font-size: 16px; margin-bottom: 0; }
-        h2 { font-size: 13px; margin-top: 24px; margin-bottom: 6px; border-bottom: 1px solid #999; padding-bottom: 4px; }
-        .subheading { color: #555; margin-top: 2px; margin-bottom: 16px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-        th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
-        th { background: #f0f0f0; }
-        .ringkasan-box { margin-bottom: 8px; }
-        .ringkasan-box span { display: inline-block; margin-right: 16px; }
-        .section { page-break-after: always; }
-        .section:last-child { page-break-after: auto; }
+        @font-face {
+            font-family: 'Lexend';
+            src: url('{{ public_path('fonts/pdf/lexend-regular.woff2') }}') format('woff2');
+            font-weight: 400;
+        }
+
+        @font-face {
+            font-family: 'Lexend';
+            src: url('{{ public_path('fonts/pdf/lexend-bold.woff2') }}') format('woff2');
+            font-weight: 700;
+        }
+
+        * {
+            font-family: 'Lexend', sans-serif;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-size: 11px;
+            color: #111;
+            margin: 10px 20px;
+        }
+
+        h1 {
+            font-size: 16px;
+            margin-bottom: 0;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-size: 13px;
+            margin-top: 24px;
+            margin-bottom: 6px;
+            padding: 6px 8px;
+            background-color: #D0F0C0;
+            font-weight: 700;
+        }
+
+        .subheading {
+            color: #555;
+            text-align: center;
+            margin-top: 2px;
+            margin-bottom: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+        }
+
+        th, td {
+            border: 1px solid #D0F0C0;
+            padding: 4px 6px;
+            text-align: left;
+        }
+
+        th {
+            background: #D0F0C0;
+            font-weight: 700;
+        }
+
+        .ringkasan-box {
+            margin-bottom: 8px;
+            background-color: #f9f9f9;
+            border: 1px solid #D0F0C0;
+            padding: 6px 8px;
+        }
+
+        .ringkasan-box span {
+            display: inline-block;
+            margin-right: 16px;
+        }
+
+        .section {
+            page-break-after: always;
+        }
+
+        .section:last-child {
+            page-break-after: auto;
+        }
+
+        .badge-list, .reward-list, .punishment-list {
+            margin: 0;
+            padding-left: 14px;
+        }
+
+        .badge-list li, .reward-list li, .punishment-list li {
+            margin-bottom: 2px;
+        }
     </style>
 </head>
 <body>
@@ -18315,6 +18968,68 @@ return [
                     </tr>
                 @empty
                     <tr><td colspan="5">Tidak ada data.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    {{-- BADGE, REWARD, PUNISHMENT --}}
+    <div class="section">
+        <h2>User Pemilik Badge, Reward &amp; Punishment</h2>
+        <div class="ringkasan-box">
+            <span><strong>Total Badge Baru:</strong> {{ $poin_reward_punishment['total_badge'] }}</span>
+            <span><strong>Total Reward Didapat:</strong> {{ $poin_reward_punishment['total_reward'] }}</span>
+            <span><strong>Total Punishment Diterapkan:</strong> {{ $poin_reward_punishment['total_punishment'] }}</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 18%;">User</th>
+                    <th style="width: 27%;">Riwayat Badge</th>
+                    <th style="width: 27%;">Riwayat Reward</th>
+                    <th style="width: 28%;">Riwayat Punishment</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($poin_reward_punishment['per_user'] as $userId => $data)
+                    <tr>
+                        <td>{{ $data['nama'] }}</td>
+                        <td>
+                            @if ($data['badge']->isEmpty())
+                                -
+                            @else
+                                <ul class="badge-list">
+                                    @foreach ($data['badge'] as $b)
+                                        <li>{{ $b->levelBadge->nama_badge }} ({{ $b->tanggal_didapat->format('d-m-Y') }})</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </td>
+                        <td>
+                            @if ($data['reward']->isEmpty())
+                                -
+                            @else
+                                <ul class="reward-list">
+                                    @foreach ($data['reward'] as $r)
+                                        <li>{{ $r->reward->nama }} ({{ $r->tanggal_didapat->format('d-m-Y') }})</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </td>
+                        <td>
+                            @if ($data['punishment']->isEmpty())
+                                -
+                            @else
+                                <ul class="punishment-list">
+                                    @foreach ($data['punishment'] as $pl)
+                                        <li>{{ $pl->punishment->nama }} ({{ $pl->tanggal_diterapkan->format('d-m-Y') }})</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="4">Tidak ada data badge/reward/punishment bulan ini.</td></tr>
                 @endforelse
             </tbody>
         </table>

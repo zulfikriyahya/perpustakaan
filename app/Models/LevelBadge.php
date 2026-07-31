@@ -12,11 +12,6 @@ class LevelBadge extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'nama_badge',
         'min_point',
@@ -28,5 +23,10 @@ class LevelBadge extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function levelBadgeLogs(): HasMany
+    {
+        return $this->hasMany(LevelBadgeLog::class);
     }
 }

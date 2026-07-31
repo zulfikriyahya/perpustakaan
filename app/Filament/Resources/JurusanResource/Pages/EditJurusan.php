@@ -9,6 +9,7 @@ use Filament\Resources\Pages\EditRecord;
 class EditJurusan extends EditRecord
 {
     protected static string $resource = JurusanResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');

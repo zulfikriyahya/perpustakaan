@@ -7,13 +7,16 @@ use App\Services\PeminjamanService;
 use App\Services\PointService;
 use App\Services\WhatsappService;
 use Carbon\Carbon;
-use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
+use Tests\TestCase;
 
 /**
  * Mengunci perilaku hitungHariTelat() secara eksplisit - lihat catatan di
- * PeminjamanService::hitungHariTelat(). Tidak butuh DB (Peminjaman
- * diinstansiasi tanpa disimpan, hanya attribute tanggal_jatuh_tempo yang dibaca).
+ * PeminjamanService::hitungHariTelat(). Tidak melakukan query DB sungguhan
+ * (Peminjaman diinstansiasi tanpa disimpan) - TAPI tetap extends
+ * Tests\TestCase (bukan PHPUnit\Framework\TestCase murni) karena Eloquent
+ * membutuhkan aplikasi Laravel ter-boot supaya connection resolver
+ * ter-set, walau tidak ada query yang benar-benar dijalankan.
  */
 class PeminjamanServiceHariTelatTest extends TestCase
 {

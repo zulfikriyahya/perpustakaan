@@ -3,7 +3,10 @@
 namespace App\Filament\Imports;
 
 use App\Enums\RoleUser;
+use App\Models\KelasTahunPelajaran;
 use App\Models\User;
+use App\Services\KenaikanKelasService;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -18,12 +21,27 @@ use Illuminate\Support\Str;
  * keduanya akan gagal (lihat rules 'required_without').
  *
  * Password digenerate random - TIDAK ada mekanisme kirim WA/email
- * notifikasi password ke user baru dalam iterasi ini (lihat status
- * verifikasi di respons utama untuk gap ini).
+ * notifikasi password ke user baru dalam iterasi ini.
+ *
+ * TODO: GAP-SPEC - kolom 'kelas_tahun_pelajaran' berformat teks bebas
+ * "Nama Kelas - Nama Tahun Pelajaran" (mis. "X IPA 1 - 2025/2026"),
+ * dipisah pada tanda "-" TERAKHIR karena nama Kelas sendiri bisa
+ * mengandung "-". Format ini asumsi/keputusan sepihak karena belum ada
+ * spek resmi format Excel dari sekolah - jika format sumber data
+ * berbeda, sesuaikan resolveKtp() di bawah. Baris yang tidak match KTP
+ * manapun akan GAGAL divalidasi (RowImportFailedException, masuk
+ * failed-rows CSV) - TIDAK assignment diam-diam ke kelas yang salah.
  */
 class UserImporter extends Importer
 {
     protected static ?string $model = User::class;
+
+    /**
+     * KTP hasil resolve di resolveRecord(), dipakai lagi di afterSave()
+     * supaya logic parsing teks "kelas_tahun_pelajaran" tidak diduplikasi
+     * (Aturan poin 3, DRY - satu resolve, dua pemakaian).
+     */
+    protected ?KelasTahunPelajaran $ktpTerresolve = null;
 
     public static function getColumns(): array
     {
@@ -37,8 +55,10 @@ class UserImporter extends Importer
             ImportColumn::make('nip')
                 ->label('NIP')
                 ->rules(['nullable', 'required_without:nisn', 'string', 'max:255']),
-            ImportColumn::make('kelas')
-                ->rules(['nullable', 'string', 'max:255']),
+            ImportColumn::make('kelas_tahun_pelajaran')
+                ->label('Kelas (format: "Nama Kelas - Nama Tahun Pelajaran")')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('X IPA 1 - 2025/2026'),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255']),
             ImportColumn::make('no_telepon')
@@ -50,6 +70,16 @@ class UserImporter extends Importer
 
     public function resolveRecord(): ?User
     {
+        $teks = trim((string) ($this->data['kelas_tahun_pelajaran'] ?? ''));
+
+        if ($teks !== '') {
+            $this->ktpTerresolve = $this->parseKtp($teks);
+
+            if (! $this->ktpTerresolve) {
+                throw new RowImportFailedException("KTP tidak ditemukan untuk teks kelas_tahun_pelajaran: \"{$teks}\".");
+            }
+        }
+
         if (! empty($this->data['nisn'])) {
             $record = User::query()->firstOrNew(['nisn' => $this->data['nisn']]);
         } else {
@@ -62,6 +92,39 @@ class UserImporter extends Importer
         }
 
         return $record;
+    }
+
+    /**
+     * Assignment lewat service (bukan mass-assign kolom di resolveRecord)
+     * supaya RiwayatKelasSiswa tetap tercatat, dan hanya dijalankan
+     * SETELAH record dasar tersimpan (butuh $this->record->id).
+     */
+    protected function afterSave(): void
+    {
+        if ($this->ktpTerresolve) {
+            app(KenaikanKelasService::class)->assignKelas($this->record, $this->ktpTerresolve);
+        }
+    }
+
+    protected function parseKtp(string $teks): ?KelasTahunPelajaran
+    {
+        $posisi = strrpos($teks, '-');
+
+        if ($posisi === false) {
+            return null;
+        }
+
+        $namaKelas = trim(substr($teks, 0, $posisi));
+        $namaTahun = trim(substr($teks, $posisi + 1));
+
+        if ($namaKelas === '' || $namaTahun === '') {
+            return null;
+        }
+
+        return KelasTahunPelajaran::query()
+            ->whereHas('kelas', fn ($q) => $q->where('nama', $namaKelas))
+            ->whereHas('tahunPelajaran', fn ($q) => $q->where('nama', $namaTahun))
+            ->first();
     }
 
     public static function getCompletedNotificationBody(Import $import): string

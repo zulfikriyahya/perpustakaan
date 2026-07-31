@@ -2,11 +2,15 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\TahunPelajaranExporter;
+use App\Filament\Imports\TahunPelajaranImporter;
 use App\Filament\Resources\TahunPelajaranResource\Pages;
 use App\Models\TahunPelajaran;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -42,6 +46,14 @@ class TahunPelajaranResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(TahunPelajaranImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', TahunPelajaran::class) ?? false),
+                ExportAction::make()
+                    ->exporter(TahunPelajaranExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', TahunPelajaran::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('tanggal_mulai')->date(),

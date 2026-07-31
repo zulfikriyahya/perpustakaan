@@ -10,6 +10,9 @@ use Filament\Actions\Exports\Models\Export;
 /**
  * SENGAJA tidak menyertakan kolom 'password' - meski sudah $hidden di
  * Model, tetap dieksplisitkan di sini sebagai lapisan keamanan kedua.
+ *
+ * Kolom 'kelas' (string bebas) diganti relasi kelasTahunPelajaran sejak
+ * migration 2026_08_01_000006 - lihat kolom di bawah.
  */
 class UserExporter extends Exporter
 {
@@ -22,7 +25,9 @@ class UserExporter extends Exporter
             ExportColumn::make('role'),
             ExportColumn::make('nisn')->label('NISN'),
             ExportColumn::make('nip')->label('NIP'),
-            ExportColumn::make('kelas'),
+            ExportColumn::make('kelasTahunPelajaran.kelas.nama')->label('Kelas'),
+            ExportColumn::make('kelasTahunPelajaran.tahunPelajaran.nama')->label('Tahun Pelajaran'),
+            ExportColumn::make('status_akademik')->label('Status Akademik'),
             ExportColumn::make('jabatan'),
             ExportColumn::make('no_telepon')->label('No. Telepon'),
             ExportColumn::make('no_kartu_rfid')->label('No. Kartu RFID'),

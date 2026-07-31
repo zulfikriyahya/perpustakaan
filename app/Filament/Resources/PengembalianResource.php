@@ -7,6 +7,7 @@ use App\Filament\Resources\PengembalianResource\Pages;
 use App\Models\Pengembalian;
 use App\Services\PeminjamanService;
 use Filament\Actions\Action;
+use Filament\Actions\ExportAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -51,6 +52,11 @@ class PengembalianResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(\App\Filament\Exports\PengembalianExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Pengembalian::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('peminjaman.user.nama')
                     ->label('Peminjam')

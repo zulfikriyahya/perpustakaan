@@ -7,6 +7,7 @@ use App\Filament\Resources\KunjunganResource\Pages;
 use App\Models\Kunjungan;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -39,6 +40,11 @@ class KunjunganResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(\App\Filament\Exports\KunjunganExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Kunjungan::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('user.nama')
                     ->label('Pengunjung')

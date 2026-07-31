@@ -96,6 +96,61 @@ class ShieldSeeder extends Seeder
                 'ViewAny:Transaksi',
                 'View:Transaksi',
 
+                'ViewAny:RiwayatKelasSiswa',
+                'View:RiwayatKelasSiswa',
+
+                // BARU iterasi ini - LevelBadge/Reward/Punishment adalah
+                // master data (threshold badge & aturan reward/punishment),
+                // diberi CRUD penuh sama seperti Buku/Kategori/Rak -
+                // dikonfirmasi Pustakawan dapat akses ke 5 resource baru
+                // (poin & reward) ini.
+                'ViewAny:LevelBadge',
+                'View:LevelBadge',
+                'Create:LevelBadge',
+                'Update:LevelBadge',
+                'Delete:LevelBadge',
+                'DeleteAny:LevelBadge',
+                'Restore:LevelBadge',
+                'RestoreAny:LevelBadge',
+                'ForceDelete:LevelBadge',
+                'ForceDeleteAny:LevelBadge',
+                'Replicate:LevelBadge',
+                'Reorder:LevelBadge',
+
+                'ViewAny:Reward',
+                'View:Reward',
+                'Create:Reward',
+                'Update:Reward',
+                'Delete:Reward',
+                'DeleteAny:Reward',
+                'Restore:Reward',
+                'RestoreAny:Reward',
+                'ForceDelete:Reward',
+                'ForceDeleteAny:Reward',
+                'Replicate:Reward',
+                'Reorder:Reward',
+
+                'ViewAny:Punishment',
+                'View:Punishment',
+                'Create:Punishment',
+                'Update:Punishment',
+                'Delete:Punishment',
+                'DeleteAny:Punishment',
+                'Restore:Punishment',
+                'RestoreAny:Punishment',
+                'ForceDelete:Punishment',
+                'ForceDeleteAny:Punishment',
+                'Replicate:Punishment',
+                'Reorder:Punishment',
+
+                // RewardLog/PunishmentLog - read-only (dihasilkan otomatis
+                // oleh PointService), Pustakawan hanya diberi akses lihat,
+                // sama pola dengan Denda/Kunjungan di atas.
+                'ViewAny:RewardLog',
+                'View:RewardLog',
+                'ViewAny:PunishmentLog',
+                'View:PunishmentLog',
+
                 'ViewAny:LaporanBulanan',
 
                 // Catatan: 'ViewAny:PengaturanSistem' SENGAJA tidak
@@ -107,7 +162,7 @@ class ShieldSeeder extends Seeder
         Role::firstOrCreate(['name' => 'pegawai', 'guard_name' => 'web']);
 
         User::where('role', RoleUser::Admin)->each(
-            fn ($user) => $user->syncRoles(['super_admin'])
+            fn($user) => $user->syncRoles(['super_admin'])
         );
     }
 }

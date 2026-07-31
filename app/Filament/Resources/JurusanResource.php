@@ -2,10 +2,14 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\JurusanExporter;
+use App\Filament\Imports\JurusanImporter;
 use App\Filament\Resources\JurusanResource\Pages;
 use App\Models\Jurusan;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -33,6 +37,14 @@ class JurusanResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(JurusanImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', Jurusan::class) ?? false),
+                ExportAction::make()
+                    ->exporter(JurusanExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Jurusan::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('kode')->searchable(),

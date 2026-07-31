@@ -2,10 +2,14 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\KelasExporter;
+use App\Filament\Imports\KelasImporter;
 use App\Filament\Resources\KelasResource\Pages;
 use App\Models\Kelas;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
@@ -48,6 +52,14 @@ class KelasResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(KelasImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', Kelas::class) ?? false),
+                ExportAction::make()
+                    ->exporter(KelasExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Kelas::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('tingkat')->sortable(),

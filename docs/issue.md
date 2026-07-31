@@ -100,136 +100,109 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 - Finalkan Fitur Akademik [import dan eksport, assign siswa ke kelas, assign wali kelas dan sebagainya]
-- Perbaiki:
+- perbaiki:
 ```md
-# Illuminate\Contracts\Container\BindingResolutionException - Internal Server Error
+perpustakaan on main ≡  ?3 ~11 via  24.13.1
+➜ make pamfs
+php artisan migrate:fresh --seed && php artisan shield:generate --all
 
-Unable to resolve dependency [Parameter #0 [ <required> string $ktp ]] in class App\Filament\Pages\ProsesKenaikanKelas
+  Dropping all tables ..................................... 514.48ms DONE
 
-PHP 8.4.22
-Laravel 13.23.0
-localhost:8000
+   INFO  Preparing database.
 
-## Stack Trace
+  Creating migration table ................................. 14.31ms DONE
 
-0 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:200
-1 - vendor/livewire/livewire/src/ImplicitlyBoundMethod.php:29
-2 - vendor/livewire/livewire/src/ImplicitlyBoundMethod.php:15
-3 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:36
-4 - vendor/laravel/framework/src/Illuminate/Container/Util.php:43
-5 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:96
-6 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:35
-7 - vendor/livewire/livewire/src/Wrapped.php:23
-8 - vendor/livewire/livewire/src/Features/SupportLifecycleHooks/SupportLifecycleHooks.php:176
-9 - vendor/livewire/livewire/src/Features/SupportLifecycleHooks/SupportLifecycleHooks.php:35
-10 - vendor/livewire/livewire/src/ComponentHook.php:19
-11 - vendor/livewire/livewire/src/ComponentHookRegistry.php:45
-12 - vendor/livewire/livewire/src/EventBus.php:87
-13 - vendor/livewire/livewire/src/helpers.php:98
-14 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:79
-15 - vendor/livewire/livewire/src/LivewireManager.php:102
-16 - vendor/livewire/livewire/src/Features/SupportPageComponents/HandlesPageComponents.php:19
-17 - vendor/livewire/livewire/src/Features/SupportPageComponents/SupportPageComponents.php:118
-18 - vendor/livewire/livewire/src/Features/SupportPageComponents/HandlesPageComponents.php:14
-19 - vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php:46
-20 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:276
-21 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:216
-22 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:822
-23 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
-24 - vendor/filament/filament/src/Http/Middleware/DispatchServingFilamentEvent.php:15
-25 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-26 - vendor/filament/filament/src/Http/Middleware/DisableBladeIconComponents.php:14
-27 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-28 - vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php:52
-29 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-30 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php:104
-31 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-32 - vendor/laravel/framework/src/Illuminate/Session/Middleware/AuthenticateSession.php:70
-33 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-34 - vendor/laravel/framework/src/Illuminate/Auth/Middleware/Authenticate.php:63
-35 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-36 - vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php:48
-37 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-38 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:120
-39 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:63
-40 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-41 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php:36
-42 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-43 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php:74
-44 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-45 - vendor/filament/filament/src/Http/Middleware/SetUpPanel.php:19
-46 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-47 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
-48 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:821
-49 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:800
-50 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:764
-51 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:753
-52 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:200
-53 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
-54 - vendor/livewire/livewire/src/Features/SupportDisablingBackButtonCache/DisableBackButtonCacheMiddleware.php:19
-55 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-56 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php:21
-57 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php:31
-58 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-59 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php:21
-60 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php:51
-61 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-62 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php:27
-63 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-64 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php:109
-65 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-66 - vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php:61
-67 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-68 - vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php:58
-69 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-70 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php:22
-71 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-72 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePathEncoding.php:28
-73 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-74 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
-75 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:175
-76 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:144
-77 - vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1227
-78 - public/index.php:20
-79 - vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php:23
+   INFO  Running migrations.
+
+  0001_01_01_000001_create_cache_table ..................... 64.25ms DONE
+  0001_01_01_000002_create_jobs_table ...................... 92.25ms DONE
+  2026_07_29_180455_create_users_table ..................... 86.28ms DONE
+  2026_07_29_180456_create_kategoris_table .................. 9.64ms DONE
+  2026_07_29_180457_create_raks_table ...................... 21.89ms DONE
+  2026_07_29_180458_create_bukus_table ..................... 78.56ms DONE
+  2026_07_29_180459_create_transaksis_table ................ 70.78ms DONE
+  2026_07_29_180500_create_peminjamans_table .............. 101.58ms DONE
+  2026_07_29_180501_create_pengembalians_table ............. 68.59ms DONE
+  2026_07_29_180502_create_dendas_table .................... 69.18ms DONE
+  2026_07_29_180503_create_points_table .................... 35.38ms DONE
+  2026_07_29_180504_create_level_badges_table ............... 9.81ms DONE
+  2026_07_29_180505_create_rewards_table ................... 10.98ms DONE
+  2026_07_29_180506_create_reward_logs_table ............... 69.74ms DONE
+  2026_07_29_180507_create_punishments_table ............... 11.27ms DONE
+  2026_07_29_180508_create_punishment_logs_table ........... 70.11ms DONE
+  2026_07_29_180509_create_kunjungans_table ................ 38.65ms DONE
+  2026_07_29_180510_create_settings_table .................. 30.93ms DONE
+  2026_07_29_180511_create_buku_kategori_table ............. 57.69ms DONE
+  2026_07_29_180512_create_kategori_rak_table .............. 57.73ms DONE
+  2026_07_29_181943_add_level_badge_fk_to_users_table ...... 36.49ms DONE
+  2026_07_29_222935_create_permission_tables .............. 231.17ms DONE
+  2026_07_30_000001_add_unique_user_tanggal_to_kunjungans_table  20.38ms DONE
+  2026_07_30_000002_fix_unique_kunjungan_softdelete_aware .. 88.91ms DONE
+  2026_07_30_000003_rename_nis_to_nisn_in_users_table ...... 15.61ms DONE
+  2026_07_30_000004_create_device_logs_table ............... 28.94ms DONE
+  2026_07_30_000005_create_firmware_releases_table ......... 26.90ms DONE
+  2026_07_30_000006_create_password_reset_otps_table ....... 27.88ms DONE
+  2026_07_30_000007_add_indexes_untuk_performa_query ....... 73.08ms DONE
+  2026_07_30_000008_add_status_refund_to_dendas_table ...... 14.55ms DONE
+  2026_07_31_051302_create_imports_table ................... 30.96ms DONE
+  2026_07_31_051303_create_exports_table ................... 33.60ms DONE
+  2026_07_31_051304_create_failed_import_rows_table ........ 39.16ms DONE
+  2026_07_31_052251_create_notifications_table ............. 30.73ms DONE
+  2026_08_01_000001_create_jurusans_table .................. 47.70ms DONE
+  2026_08_01_000002_create_tahun_pelajarans_table .......... 32.02ms DONE
+  2026_08_01_000003_create_kelas_table ..................... 37.08ms DONE
+  2026_08_01_000004_create_kelas_tahun_pelajarans_table ... 131.52ms DONE
+  2026_08_01_000005_create_riwayat_kelas_siswas_table ...... 91.44ms DONE
+  2026_08_01_000006_replace_kelas_column_in_users_table .... 96.34ms DONE
 
 
-## Request
+   INFO  Seeding database.
 
-GET /dashboard/proses-kenaikan-kelas
+  Database\Seeders\SettingSeeder ................................ RUNNING
+  Database\Seeders\SettingSeeder ............................ 104 ms DONE
 
-## Headers
+  Database\Seeders\ShieldSeeder ................................. RUNNING
+  Database\Seeders\ShieldSeeder .............................. 30 ms DONE
 
-* **host**: localhost:8000
-* **user-agent**: Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0
-* **accept**: */*
-* **accept-language**: id,en-US;q=0.7,en;q=0.3
-* **accept-encoding**: gzip, deflate, br, zstd
-* **referer**: http://localhost:8000/dashboard/kelas-tahun-pelajarans
-* **x-livewire-navigate**: 1
-* **connection**: keep-alive
-* **cookie**: _ga=GA1.1.476939021.1778443708; perpustakaan-session=eyJpdiI6InRJRkJ0VnZ6ak1BVWFhaWlNdS8wbHc9PSIsInZhbHVlIjoiQjZGaWNGa1lPT2p6UjB4K0ZlSitiV1JteHpWY2lhZ2lHOTJURlVPbXdwSUVwdmp0d3RYaXg4Mmo3SGN5OWhzb0FLU0N4MzVaclkySS9IbnE1VElXUXVlbTJKckxRZW16d0YrYkF3Y1VId2UvS0FSMzk3TEwyc2lqTkp2dzI4YjAiLCJtYWMiOiI3MWFhN2IzOGU1ZGNhYmNjZmM5MDdiNmIyYzU4NjgxZjkwMDBlODY1N2YxOGQyODVhMDJhNmUwM2Q0ZGQzOGU1IiwidGFnIjoiIn0%3D; XSRF-TOKEN=eyJpdiI6IjRGdHREOXMxc3Z6ekpQRFY4QXpXcGc9PSIsInZhbHVlIjoibXlaQWJDZDluY1pqbmhQVEVrc0g0VFV0a2VWaUlaZklhNFJ5UkRmQ0p3V0p2RXRrQkkrWTFCdmVaZUhUcE0xWTVQUHZMNWVKN09WdlVScnFvNDZHNVRLYjNoK3g1OG1OOVBRSjJyeWsza09pSStVY2t2RmIxSFZTd2FPYWdJK2YiLCJtYWMiOiJjY2VjOGYxYTEyOTY1YTE3YjZmMzgyMTFiMDBhODIzZjY0MGU3NGYwMWZmMTczMTEyNjZhNWYyODVkOWFjMzE0IiwidGFnIjoiIn0%3D
-* **sec-fetch-dest**: empty
-* **sec-fetch-mode**: cors
-* **sec-fetch-site**: same-origin
-* **priority**: u=0
 
-## Route Context
+ ┌ Which panel do you want to generate permissions/policies for? ┐
+ │ dashboard                                                     │
+ └───────────────────────────────────────────────────────────────┘
 
-controller: App\Filament\Pages\ProsesKenaikanKelas
-route name: filament.dashboard.pages.proses-kenaikan-kelas
-middleware: panel:dashboard, Illuminate\Cookie\Middleware\EncryptCookies, Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse, Illuminate\Session\Middleware\StartSession, Filament\Http\Middleware\AuthenticateSession, Illuminate\View\Middleware\ShareErrorsFromSession, Illuminate\Foundation\Http\Middleware\PreventRequestForgery, Illuminate\Routing\Middleware\SubstituteBindings, Filament\Http\Middleware\DisableBladeIconComponents, Filament\Http\Middleware\DispatchServingFilamentEvent, Filament\Http\Middleware\Authenticate
+ ┌ Would you like to select what to generate (permissions, policies or … ┐
+ │ Yes                                                                   │
+ └───────────────────────────────────────────────────────────────────────┘
 
-## Route Parameters
+ ┌ What do you want to generate? ───────────────────────────────┐
+ │ Policies & Permissions                                       │
+ └──────────────────────────────────────────────────────────────┘
 
-No route parameter data available.
+  BukuPolicy ................................ app/Policies/BukuPolicy.php
+  DendaPolicy .............................. app/Policies/DendaPolicy.php
+  JurusanPolicy .......................... app/Policies/JurusanPolicy.php
+  KategoriPolicy ........................ app/Policies/KategoriPolicy.php
+  KelasPolicy .............................. app/Policies/KelasPolicy.php
+  KelasTahunPelajaranPolicy .. app/Policies/KelasTahunPelajaranPolicy.php
+  KunjunganPolicy ...................... app/Policies/KunjunganPolicy.php
+  PeminjamanPolicy .................... app/Policies/PeminjamanPolicy.php
+  PengembalianPolicy ................ app/Policies/PengembalianPolicy.php
+  RakPolicy .................................. app/Policies/RakPolicy.php
+  TahunPelajaranPolicy ............ app/Policies/TahunPelajaranPolicy.php
+  TransaksiPolicy ...................... app/Policies/TransaksiPolicy.php
+  UserPolicy ................................ app/Policies/UserPolicy.php
+  RolePolicy ........ app/Policies/RolePolicy.php (requires registration)
 
-## Database Queries
+   INFO  Policies marked "requires registration" are outside Laravel's policy discovery. Register them with FilamentShield::enforcePolicies() or Gate::policy() — see the "Policy Enforcement" section of the readme.
 
-* mysql - select * from `users` where `id` = 1 and `users`.`deleted_at` is null limit 1 (0.94 ms)
 
+ Summary:
+
+  # Policies generated ............................................... 14
+  # Permissions generated ........................................... 176
+  # Entities (Resources, Pages, Widgets) processed ................... 22
+perpustakaan on main ≡  ?3 ~11 via  24.13.1
+➜ 
 ```
-
 ---
 
 Lanjutkan/selesaikan implementasi proyek ini sesuai seluruh aturan di atas. Untuk setiap gap, jika penyelesaiannya memerlukan keputusan desain yang berdampak ke skema database, keamanan/otorisasi (Policy/Shield), atau kompatibilitas device RFID/firmware yang sudah terpasang di lapangan, **tanyakan secara eksplisit sebelum menulis kode** - jangan menebak lalu menyerahkan perubahan yang berisiko merusak data, akses user, atau koneksi device yang sudah berjalan di production.

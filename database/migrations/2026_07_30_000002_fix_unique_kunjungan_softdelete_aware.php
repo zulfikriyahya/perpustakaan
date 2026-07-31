@@ -4,10 +4,30 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * TODO: verifikasi signature terhadap versi package yang terpasang -
+ * cabang SQLite di bawah HANYA untuk kebutuhan testing (phpunit.xml
+ * memakai DB_CONNECTION=sqlite), TIDAK mengubah perilaku production
+ * yang berjalan di MariaDB sama sekali (Aturan poin 16/17 - skema
+ * production tidak berubah). SQLite mendukung partial unique index
+ * (WHERE clause) yang mencapai efek fungsional sama (unique aktif per
+ * user_id+tanggal, mengabaikan baris ter-soft-delete) tanpa perlu
+ * generated column STORED yang merupakan sintaks spesifik MariaDB/MySQL.
+ */
 return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            DB::statement('
+                CREATE UNIQUE INDEX kunjungans_unik_aktif_unique
+                ON kunjungans (user_id, tanggal)
+                WHERE deleted_at IS NULL
+            ');
+
+            return;
+        }
+
         // MariaDB mewajibkan index yang meng-cover kolom FK (user_id) selalu ada.
         // Index unique lama adalah satu-satunya index yang mencakup user_id, jadi
         // tambahkan index biasa dulu untuk user_id sebelum index lama di-drop,
@@ -45,6 +65,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            DB::statement('DROP INDEX kunjungans_unik_aktif_unique');
+
+            return;
+        }
+
         DB::statement('ALTER TABLE kunjungans DROP INDEX kunjungans_unik_aktif_unique');
         DB::statement('ALTER TABLE kunjungans DROP COLUMN unik_aktif');
 

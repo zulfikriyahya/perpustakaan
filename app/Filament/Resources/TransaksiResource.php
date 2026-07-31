@@ -8,6 +8,7 @@ use App\Filament\Resources\TransaksiResource\RelationManagers\PeminjamansRelatio
 use App\Models\Transaksi;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -43,6 +44,11 @@ class TransaksiResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(\App\Filament\Exports\TransaksiExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Transaksi::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('user.nama')
                     ->label('User')

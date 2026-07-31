@@ -9,6 +9,7 @@ use App\Models\Buku;
 use App\Models\Peminjaman;
 use App\Services\PeminjamanService;
 use Filament\Actions\Action;
+use Filament\Actions\ExportAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -66,6 +67,11 @@ class PeminjamanResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(\App\Filament\Exports\PeminjamanExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Peminjaman::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('user.nama')
                     ->label('Peminjam')

@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Enums\StatusRiwayatKelas;
+use App\Filament\Resources\KelasTahunPelajaranResource;
 use App\Models\KelasTahunPelajaran;
 use App\Services\KenaikanKelasService;
 use Filament\Forms\Components\Select;
@@ -18,7 +19,9 @@ use RuntimeException;
  * Diakses lewat Action 'proses_kenaikan' di KelasTahunPelajaranResource.
  *
  * Sengaja TIDAK didaftarkan ke navigasi (excludeFromNavigation) - hanya
- * dapat diakses via URL dengan parameter ?ktp=... dari Resource.
+ * dapat diakses via URL dengan parameter route {ktp} dari Resource
+ * (bukan query string - lihat $slug di bawah, wajib match dengan
+ * ProsesKenaikanKelas::getUrl(['ktp' => ...]) di KelasTahunPelajaranResource).
  */
 class ProsesKenaikanKelas extends Page
 {
@@ -27,6 +30,11 @@ class ProsesKenaikanKelas extends Page
     protected static bool $shouldRegisterNavigation = false;
 
     protected string $view = 'filament.pages.proses-kenaikan-kelas';
+
+    // Wajib ada {ktp} di sini agar getUrl(['ktp' => ...]) menghasilkan
+    // path parameter (bukan dibuang), dan Livewire bisa bind ke
+    // mount(string $ktp). Tanpa ini -> BindingResolutionException.
+    protected static ?string $slug = 'proses-kenaikan-kelas/{ktp}';
 
     public ?KelasTahunPelajaran $ktp = null;
 
@@ -44,7 +52,7 @@ class ProsesKenaikanKelas extends Page
             ->findOrFail($ktp);
 
         $this->form->fill(
-            $this->ktp->siswaAktif->mapWithKeys(fn($siswa) => [
+            $this->ktp->siswaAktif->mapWithKeys(fn ($siswa) => [
                 $siswa->id => StatusRiwayatKelas::Naik->value,
             ])->toArray()
         );
@@ -59,8 +67,8 @@ class ProsesKenaikanKelas extends Page
     {
         return $schema->components(
             $this->ktp->siswaAktif->map(
-                fn($siswa) => Select::make((string) $siswa->id)
-                    ->label($siswa->nama . ' (' . ($siswa->nisn ?? '-') . ')')
+                fn ($siswa) => Select::make((string) $siswa->id)
+                    ->label($siswa->nama.' ('.($siswa->nisn ?? '-').')')
                     ->options([
                         StatusRiwayatKelas::Naik->value => 'Naik Kelas',
                         StatusRiwayatKelas::Tinggal->value => 'Tinggal Kelas',
@@ -80,6 +88,7 @@ class ProsesKenaikanKelas extends Page
             $gagal = app(KenaikanKelasService::class)->prosesKenaikan($this->ktp, $keputusan);
         } catch (RuntimeException $e) {
             Notification::make()->danger()->title('Gagal memproses kenaikan kelas')->body($e->getMessage())->send();
+
             return;
         }
 
@@ -89,10 +98,10 @@ class ProsesKenaikanKelas extends Page
             Notification::make()
                 ->warning()
                 ->title('Sebagian siswa gagal diproses')
-                ->body(collect($gagal)->map(fn($pesan, $nama) => "{$nama}: {$pesan}")->implode('; '))
+                ->body(collect($gagal)->map(fn ($pesan, $nama) => "{$nama}:{$pesan}")->implode('; '))
                 ->send();
         }
 
-        $this->redirect(\App\Filament\Resources\KelasTahunPelajaranResource::getUrl());
+        $this->redirect(KelasTahunPelajaranResource::getUrl());
     }
 }

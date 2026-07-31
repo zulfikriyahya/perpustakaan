@@ -393,6 +393,9 @@ use Filament\Actions\Exports\Models\Export;
 /**
  * SENGAJA tidak menyertakan kolom 'password' - meski sudah $hidden di
  * Model, tetap dieksplisitkan di sini sebagai lapisan keamanan kedua.
+ *
+ * Kolom 'kelas' (string bebas) diganti relasi kelasTahunPelajaran sejak
+ * migration 2026_08_01_000006 - lihat kolom di bawah.
  */
 class UserExporter extends Exporter
 {
@@ -405,7 +408,9 @@ class UserExporter extends Exporter
             ExportColumn::make('role'),
             ExportColumn::make('nisn')->label('NISN'),
             ExportColumn::make('nip')->label('NIP'),
-            ExportColumn::make('kelas'),
+            ExportColumn::make('kelasTahunPelajaran.kelas.nama')->label('Kelas'),
+            ExportColumn::make('kelasTahunPelajaran.tahunPelajaran.nama')->label('Tahun Pelajaran'),
+            ExportColumn::make('status_akademik')->label('Status Akademik'),
             ExportColumn::make('jabatan'),
             ExportColumn::make('no_telepon')->label('No. Telepon'),
             ExportColumn::make('no_kartu_rfid')->label('No. Kartu RFID'),
@@ -416,10 +421,10 @@ class UserExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export User selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+        $body = 'Export User selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
         }
 
         return $body;
@@ -642,7 +647,10 @@ class RakImporter extends Importer
 namespace App\Filament\Imports;
 
 use App\Enums\RoleUser;
+use App\Models\KelasTahunPelajaran;
 use App\Models\User;
+use App\Services\KenaikanKelasService;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -657,12 +665,27 @@ use Illuminate\Support\Str;
  * keduanya akan gagal (lihat rules 'required_without').
  *
  * Password digenerate random - TIDAK ada mekanisme kirim WA/email
- * notifikasi password ke user baru dalam iterasi ini (lihat status
- * verifikasi di respons utama untuk gap ini).
+ * notifikasi password ke user baru dalam iterasi ini.
+ *
+ * TODO: GAP-SPEC - kolom 'kelas_tahun_pelajaran' berformat teks bebas
+ * "Nama Kelas - Nama Tahun Pelajaran" (mis. "X IPA 1 - 2025/2026"),
+ * dipisah pada tanda "-" TERAKHIR karena nama Kelas sendiri bisa
+ * mengandung "-". Format ini asumsi/keputusan sepihak karena belum ada
+ * spek resmi format Excel dari sekolah - jika format sumber data
+ * berbeda, sesuaikan resolveKtp() di bawah. Baris yang tidak match KTP
+ * manapun akan GAGAL divalidasi (RowImportFailedException, masuk
+ * failed-rows CSV) - TIDAK assignment diam-diam ke kelas yang salah.
  */
 class UserImporter extends Importer
 {
     protected static ?string $model = User::class;
+
+    /**
+     * KTP hasil resolve di resolveRecord(), dipakai lagi di afterSave()
+     * supaya logic parsing teks "kelas_tahun_pelajaran" tidak diduplikasi
+     * (Aturan poin 3, DRY - satu resolve, dua pemakaian).
+     */
+    protected ?KelasTahunPelajaran $ktpTerresolve = null;
 
     public static function getColumns(): array
     {
@@ -676,8 +699,10 @@ class UserImporter extends Importer
             ImportColumn::make('nip')
                 ->label('NIP')
                 ->rules(['nullable', 'required_without:nisn', 'string', 'max:255']),
-            ImportColumn::make('kelas')
-                ->rules(['nullable', 'string', 'max:255']),
+            ImportColumn::make('kelas_tahun_pelajaran')
+                ->label('Kelas (format: "Nama Kelas - Nama Tahun Pelajaran")')
+                ->rules(['nullable', 'string', 'max:255'])
+                ->example('X IPA 1 - 2025/2026'),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255']),
             ImportColumn::make('no_telepon')
@@ -689,6 +714,16 @@ class UserImporter extends Importer
 
     public function resolveRecord(): ?User
     {
+        $teks = trim((string) ($this->data['kelas_tahun_pelajaran'] ?? ''));
+
+        if ($teks !== '') {
+            $this->ktpTerresolve = $this->parseKtp($teks);
+
+            if (! $this->ktpTerresolve) {
+                throw new RowImportFailedException("KTP tidak ditemukan untuk teks kelas_tahun_pelajaran: \"{$teks}\".");
+            }
+        }
+
         if (! empty($this->data['nisn'])) {
             $record = User::query()->firstOrNew(['nisn' => $this->data['nisn']]);
         } else {
@@ -703,12 +738,45 @@ class UserImporter extends Importer
         return $record;
     }
 
+    /**
+     * Assignment lewat service (bukan mass-assign kolom di resolveRecord)
+     * supaya RiwayatKelasSiswa tetap tercatat, dan hanya dijalankan
+     * SETELAH record dasar tersimpan (butuh $this->record->id).
+     */
+    protected function afterSave(): void
+    {
+        if ($this->ktpTerresolve) {
+            app(KenaikanKelasService::class)->assignKelas($this->record, $this->ktpTerresolve);
+        }
+    }
+
+    protected function parseKtp(string $teks): ?KelasTahunPelajaran
+    {
+        $posisi = strrpos($teks, '-');
+
+        if ($posisi === false) {
+            return null;
+        }
+
+        $namaKelas = trim(substr($teks, 0, $posisi));
+        $namaTahun = trim(substr($teks, $posisi + 1));
+
+        if ($namaKelas === '' || $namaTahun === '') {
+            return null;
+        }
+
+        return KelasTahunPelajaran::query()
+            ->whereHas('kelas', fn($q) => $q->where('nama', $namaKelas))
+            ->whereHas('tahunPelajaran', fn($q) => $q->where('nama', $namaTahun))
+            ->first();
+    }
+
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import User selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;
@@ -1346,7 +1414,9 @@ use RuntimeException;
  * Diakses lewat Action 'proses_kenaikan' di KelasTahunPelajaranResource.
  *
  * Sengaja TIDAK didaftarkan ke navigasi (excludeFromNavigation) - hanya
- * dapat diakses via URL dengan parameter ?ktp=... dari Resource.
+ * dapat diakses via URL dengan parameter route {ktp} dari Resource
+ * (bukan query string - lihat $slug di bawah, wajib match dengan
+ * ProsesKenaikanKelas::getUrl(['ktp' => ...]) di KelasTahunPelajaranResource).
  */
 class ProsesKenaikanKelas extends Page
 {
@@ -1355,6 +1425,11 @@ class ProsesKenaikanKelas extends Page
     protected static bool $shouldRegisterNavigation = false;
 
     protected string $view = 'filament.pages.proses-kenaikan-kelas';
+
+    // Wajib ada {ktp} di sini agar getUrl(['ktp' => ...]) menghasilkan
+    // path parameter (bukan dibuang), dan Livewire bisa bind ke
+    // mount(string $ktp). Tanpa ini -> BindingResolutionException.
+    protected static ?string $slug = 'proses-kenaikan-kelas/{ktp}';
 
     public ?KelasTahunPelajaran $ktp = null;
 
@@ -1417,7 +1492,7 @@ class ProsesKenaikanKelas extends Page
             Notification::make()
                 ->warning()
                 ->title('Sebagian siswa gagal diproses')
-                ->body(collect($gagal)->map(fn($pesan, $nama) => "{$nama}: {$pesan}")->implode('; '))
+                ->body(collect($gagal)->map(fn($pesan, $nama) => "{$nama}:{$pesan}")->implode('; '))
                 ->send();
         }
 
@@ -2665,10 +2740,13 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 /**
- * Read-only - assignment siswa ke KTP dilakukan lewat UserResource
- * (edit user, pilih kelas_tahun_pelajaran_id) atau Action Kenaikan Kelas
- * massal (menyusul), BUKAN attach/detach di sini, karena relasi ini
- * belongsTo di sisi User (kelas_tahun_pelajaran_id), bukan pivot.
+ * Read-only - assignment siswa ke KTP dilakukan lewat bulk action
+ * 'assign_kelas' di UserResource (memanggil KenaikanKelasService), atau
+ * lewat proses Kenaikan Kelas massal (ProsesKenaikanKelas), BUKAN
+ * attach/detach di sini - relasi ini belongsTo di sisi User
+ * (kelas_tahun_pelajaran_id), bukan pivot, dan field tersebut tidak lagi
+ * bisa diedit langsung dari form UserResource (lihat komentar di sana)
+ * supaya RiwayatKelasSiswa selalu tercatat konsisten.
  */
 class SiswaAktifRelationManager extends RelationManager
 {
@@ -3812,6 +3890,8 @@ class PeminjamansRelationManager extends RelationManager
 namespace App\Filament\Resources\UserResource\Pages;
 
 use App\Filament\Resources\UserResource;
+use App\Models\KelasTahunPelajaran;
+use App\Services\KenaikanKelasService;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateUser extends CreateRecord
@@ -3821,6 +3901,37 @@ class CreateUser extends CreateRecord
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
+    }
+
+    /**
+     * Field 'assign_kelas_tahun_pelajaran_id' HANYA ada di form create
+     * (lihat UserResource::form(), visibleOn('create')) - bukan kolom
+     * User sungguhan, jadi wajib dibuang sebelum mass-assign, lalu
+     * assignment dilakukan di afterCreate() lewat KenaikanKelasService
+     * supaya RiwayatKelasSiswa tetap tercatat (Aturan poin 3, DRY).
+     */
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $this->assignKtpId = $data['assign_kelas_tahun_pelajaran_id'] ?? null;
+
+        unset($data['assign_kelas_tahun_pelajaran_id']);
+
+        return $data;
+    }
+
+    protected ?string $assignKtpId = null;
+
+    protected function afterCreate(): void
+    {
+        if (! $this->assignKtpId) {
+            return;
+        }
+
+        $ktp = KelasTahunPelajaran::query()->find($this->assignKtpId);
+
+        if ($ktp) {
+            app(KenaikanKelasService::class)->assignKelas($this->record, $ktp);
+        }
     }
 }
 
@@ -3889,6 +4000,7 @@ class ListUsers extends ListRecords
 namespace App\Filament\Resources;
 
 use App\Enums\RoleUser;
+use App\Enums\StatusAkademik;
 use App\Filament\Exports\UserExporter;
 use App\Filament\Imports\UserImporter;
 use App\Filament\Resources\UserResource\Pages;
@@ -3898,6 +4010,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ImportAction;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -3912,7 +4025,6 @@ use Filament\Tables\Table;
 use Illuminate\Support\Collection;
 use App\Services\KenaikanKelasService;
 use Filament\Actions\BulkAction;
-use Filament\Forms\Components\Select as FormSelect; // hindari bentrok nama jika perlu, atau pakai Select yang sudah ada
 use App\Models\KelasTahunPelajaran;
 
 /**
@@ -3949,8 +4061,53 @@ class UserResource extends Resource
                 ->label('NIP')
                 ->unique(ignoreRecord: true)
                 ->maxLength(255),
-            TextInput::make('kelas')
-                ->maxLength(255),
+            // Kolom 'kelas' (string bebas) sudah di-drop dari tabel users
+            // (migration 2026_08_01_000006), diganti relasi
+            // kelas_tahun_pelajaran_id. Ditampilkan read-only di sini -
+            // penetapan/perubahan kelas WAJIB lewat KenaikanKelasService
+            // (bulk action 'assign_kelas' di tabel bawah, atau proses
+            // kenaikan kelas massal) supaya RiwayatKelasSiswa selalu
+            // tercatat. Form ini sengaja TIDAK menyediakan input langsung
+            // untuk field ini agar tidak ada jalur kedua yang melewati
+            // service (Aturan poin 3, DRY).
+            // TODO: GAP-SPEC - pada 'create', user baru dibuat tanpa KTP
+            // (kelas_tahun_pelajaran_id null, status_akademik default
+            // 'aktif' dari migration). Assignment awal dilakukan setelah
+            // user tersimpan, lewat bulk action 'assign_kelas' di index.
+            // Perlu dikonfirmasi apakah alur ini sudah sesuai ekspektasi,
+            // atau dibutuhkan Select assignment langsung di form create.
+
+            Placeholder::make('kelas_tahun_pelajaran_id')
+                ->label('Kelas (Tahun Pelajaran)')
+                ->content(fn(?User $record) => $record?->kelasTahunPelajaran
+                    ? "{$record->kelasTahunPelajaran->kelas->nama} - {$record->kelasTahunPelajaran->tahunPelajaran->nama}"
+                    : 'Belum di-assign - gunakan aksi "Assign ke Kelas" di daftar User.')
+                ->visibleOn('edit'),
+            // Hanya tampil saat create - field virtual (bukan kolom User),
+            // dibuang & diproses lewat KenaikanKelasService::assignKelas()
+            // di CreateUser::afterCreate(). Assignment setelah create
+            // (bukan saat edit) tetap konsisten dengan alur bulk action
+            // 'assign_kelas' yang juga selalu lewat service ini.
+            Select::make('assign_kelas_tahun_pelajaran_id')
+                ->label('Assign ke Kelas (opsional)')
+                ->options(
+                    KelasTahunPelajaran::query()
+                        ->with(['kelas', 'tahunPelajaran'])
+                        ->get()
+                        ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
+                            $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
+                        ])
+                )
+                ->searchable()
+                ->helperText('Bisa dikosongkan, assign belakangan lewat aksi "Assign ke Kelas".')
+                ->dehydrated()
+                ->visibleOn('create'),
+            Select::make('status_akademik')
+                ->options(collect(StatusAkademik::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
+                ->disabled()
+                ->dehydrated(false)
+                ->helperText('Berubah otomatis lewat proses Kenaikan Kelas / assignment, tidak bisa diedit manual di sini.')
+                ->visibleOn('edit'),
             TextInput::make('jabatan')
                 ->maxLength(255),
             TextInput::make('no_telepon')
@@ -4007,6 +4164,18 @@ class UserResource extends Resource
                     ->label('NIP')
                     ->searchable()
                     ->toggleable(),
+                TextColumn::make('kelasTahunPelajaran.kelas.nama')
+                    ->label('Kelas')
+                    ->toggleable()
+                    ->placeholder('-'),
+                TextColumn::make('status_akademik')
+                    ->badge()
+                    ->toggleable()
+                    ->color(fn(StatusAkademik $state) => match ($state) {
+                        StatusAkademik::Aktif => 'success',
+                        StatusAkademik::Lulus => 'info',
+                        StatusAkademik::Keluar => 'gray',
+                    }),
                 TextColumn::make('no_telepon')
                     ->label('No. Telepon')
                     ->searchable(),
@@ -4035,6 +4204,8 @@ class UserResource extends Resource
             ->filters([
                 SelectFilter::make('role')
                     ->options(collect(RoleUser::cases())->mapWithKeys(fn($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
+                SelectFilter::make('status_akademik')
+                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
                 TernaryFilter::make('status_suspend')
                     ->label('Status Suspend'),
             ])
@@ -4057,7 +4228,7 @@ class UserResource extends Resource
                                     ->with(['kelas', 'tahunPelajaran'])
                                     ->get()
                                     ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
-                                        $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
+                                        $ktp->id => "{$ktp->kelas->nama} -{$ktp->tahunPelajaran->nama}",
                                     ])
                             )
                             ->searchable()
@@ -7327,6 +7498,7 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\Width;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -7340,6 +7512,7 @@ class DashboardPanelProvider extends PanelProvider
     {
         return $panel
             ->topNavigation()
+            ->maxContentWidth(Width::Full)
             ->globalSearch(false)
             ->default()
             ->databaseNotifications()
@@ -12117,10 +12290,30 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * TODO: verifikasi signature terhadap versi package yang terpasang -
+ * cabang SQLite di bawah HANYA untuk kebutuhan testing (phpunit.xml
+ * memakai DB_CONNECTION=sqlite), TIDAK mengubah perilaku production
+ * yang berjalan di MariaDB sama sekali (Aturan poin 16/17 - skema
+ * production tidak berubah). SQLite mendukung partial unique index
+ * (WHERE clause) yang mencapai efek fungsional sama (unique aktif per
+ * user_id+tanggal, mengabaikan baris ter-soft-delete) tanpa perlu
+ * generated column STORED yang merupakan sintaks spesifik MariaDB/MySQL.
+ */
 return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            DB::statement('
+                CREATE UNIQUE INDEX kunjungans_unik_aktif_unique
+                ON kunjungans (user_id, tanggal)
+                WHERE deleted_at IS NULL
+            ');
+
+            return;
+        }
+
         // MariaDB mewajibkan index yang meng-cover kolom FK (user_id) selalu ada.
         // Index unique lama adalah satu-satunya index yang mencakup user_id, jadi
         // tambahkan index biasa dulu untuk user_id sebelum index lama di-drop,
@@ -12158,6 +12351,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            DB::statement('DROP INDEX kunjungans_unik_aktif_unique');
+
+            return;
+        }
+
         DB::statement('ALTER TABLE kunjungans DROP INDEX kunjungans_unik_aktif_unique');
         DB::statement('ALTER TABLE kunjungans DROP COLUMN unik_aktif');
 

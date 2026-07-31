@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\StatusAkademik;
 use App\Enums\StatusRiwayatKelas;
+use App\Models\Kelas;
 use App\Models\KelasTahunPelajaran;
 use App\Models\RiwayatKelasSiswa;
 use App\Models\TahunPelajaran;
@@ -44,9 +45,35 @@ class KenaikanKelasService
     }
 
     /**
+     * Keluarkan siswa dari kelas aktifnya saat ini tanpa proses kenaikan
+     * massal (dipanggil dari SiswaAktifRelationManager, aksi per baris).
+     * Menggunakan status 'keluar' - BUKAN 'lulus', karena ini penghapusan
+     * assignment manual, bukan kelulusan resmi.
+     *
+     * // TODO: GAP-SPEC - status_akademik user ikut diubah ke Keluar di
+     * sini, sama seperti prosesKeluar() pada alur kenaikan massal, demi
+     * konsistensi. Jika maksud "keluarkan dari kelas" di RelationManager
+     * ini sebenarnya hanya "lepas assignment kelas" (mis. akan di-assign
+     * ulang segera) tanpa mengubah status_akademik, ini perlu dikoreksi -
+     * belum ada spek eksplisit yang membedakan dua kasus tersebut.
+     */
+    public function keluarkanDariKelas(User $user): void
+    {
+        DB::transaction(function () use ($user) {
+            $this->tutupRiwayatAktif($user, StatusRiwayatKelas::Keluar);
+
+            $user->update([
+                'kelas_tahun_pelajaran_id' => null,
+                'status_akademik' => StatusAkademik::Keluar,
+            ]);
+        });
+    }
+
+    /**
      * Proses kenaikan kelas massal dari satu KTP asal.
      *
      * @param  array<string, string>  $keputusan  [user_id => 'naik'|'tinggal'|'lulus'|'keluar']
+     *
      * @throws RuntimeException jika Tahun Pelajaran aktif tidak valid atau KTP tujuan tidak ditemukan
      */
     public function prosesKenaikan(KelasTahunPelajaran $ktpAsal, array $keputusan): array
@@ -92,9 +119,9 @@ class KenaikanKelasService
         return $gagal;
     }
 
-    protected function prosesNaik(User $user, \App\Models\Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
+    protected function prosesNaik(User $user, Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
     {
-        $kelasTujuan = \App\Models\Kelas::query()
+        $kelasTujuan = Kelas::query()
             ->where('tingkat', $kelasAsal->tingkat + 1)
             ->where('jurusan_id', $kelasAsal->jurusan_id)
             ->first();
@@ -109,13 +136,13 @@ class KenaikanKelasService
             ->first();
 
         if (! $ktpTujuan) {
-            throw new RuntimeException("KTP tujuan ({$kelasTujuan->nama} - {$tahunTujuan->nama}) belum dibuat.");
+            throw new RuntimeException("KTP tujuan ({$kelasTujuan->nama} -{$tahunTujuan->nama}) belum dibuat.");
         }
 
         $this->pindahKe($user, $ktpTujuan, StatusRiwayatKelas::Naik);
     }
 
-    protected function prosesTinggal(User $user, \App\Models\Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
+    protected function prosesTinggal(User $user, Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
     {
         $ktpTujuan = KelasTahunPelajaran::query()
             ->where('kelas_id', $kelasAsal->id)
@@ -143,12 +170,7 @@ class KenaikanKelasService
 
     protected function prosesKeluar(User $user): void
     {
-        $this->tutupRiwayatAktif($user, StatusRiwayatKelas::Keluar);
-
-        $user->update([
-            'kelas_tahun_pelajaran_id' => null,
-            'status_akademik' => StatusAkademik::Keluar,
-        ]);
+        $this->keluarkanDariKelas($user);
     }
 
     protected function pindahKe(User $user, KelasTahunPelajaran $ktpTujuan, StatusRiwayatKelas $statusPenutup): void

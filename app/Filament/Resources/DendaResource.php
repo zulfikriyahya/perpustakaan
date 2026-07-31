@@ -9,6 +9,7 @@ use App\Models\Denda;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -54,6 +55,11 @@ class DendaResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(\App\Filament\Exports\DendaExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', \App\Models\Denda::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('user.nama')
                     ->label('User')

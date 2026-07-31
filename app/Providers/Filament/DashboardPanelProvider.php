@@ -57,12 +57,7 @@ class DashboardPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
-            ->widgets([
-                // \App\Filament\Widgets\PeminjamanStatsWidget::class,
-                // \App\Filament\Widgets\TrenKunjunganChartWidget::class,
-                // \App\Filament\Widgets\PeminjamanJatuhTempoWidget::class,
-                // \App\Filament\Widgets\DendaTerbaruWidget::class,
-            ])
+            ->widgets([])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

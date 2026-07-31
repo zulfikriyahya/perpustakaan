@@ -302,6 +302,88 @@ class BukuExporter extends Exporter
 ```
 ---
 
+## app/Filament/Exports/DendaExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Denda;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class DendaExporter extends Exporter
+{
+    protected static ?string $model = Denda::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('user.nama')->label('User'),
+            ExportColumn::make('peminjaman.buku.judul')->label('Buku'),
+            ExportColumn::make('tipe'),
+            ExportColumn::make('nominal'),
+            ExportColumn::make('status_lunas'),
+            ExportColumn::make('tanggal_lunas'),
+            ExportColumn::make('status_refund'),
+            ExportColumn::make('keterangan'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Denda selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/JurusanExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Jurusan;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class JurusanExporter extends Exporter
+{
+    protected static ?string $model = Jurusan::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('nama'),
+            ExportColumn::make('kode'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Jurusan selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
 ## app/Filament/Exports/KategoriExporter.php
 ```php
 <?php
@@ -328,6 +410,330 @@ class KategoriExporter extends Exporter
     public static function getCompletedNotificationBody(Export $export): string
     {
         $body = 'Export Kategori selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/KelasExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Kelas;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class KelasExporter extends Exporter
+{
+    protected static ?string $model = Kelas::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('nama'),
+            ExportColumn::make('tingkat'),
+            ExportColumn::make('jurusan.kode')->label('Kode Jurusan'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Kelas selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/KelasTahunPelajaranExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\KelasTahunPelajaran;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class KelasTahunPelajaranExporter extends Exporter
+{
+    protected static ?string $model = KelasTahunPelajaran::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('kelas.nama')->label('Kelas'),
+            ExportColumn::make('tahunPelajaran.nama')->label('Tahun Pelajaran'),
+            ExportColumn::make('waliKelas.nama')->label('Wali Kelas'),
+            ExportColumn::make('waliKelas.nip')->label('NIP Wali Kelas'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Kelas per Tahun Pelajaran selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/KunjunganExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Kunjungan;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class KunjunganExporter extends Exporter
+{
+    protected static ?string $model = Kunjungan::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('user.nama')->label('Pengunjung'),
+            ExportColumn::make('tanggal'),
+            ExportColumn::make('jam_tap'),
+            ExportColumn::make('source'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Kunjungan selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/LevelBadgeExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\LevelBadge;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class LevelBadgeExporter extends Exporter
+{
+    protected static ?string $model = LevelBadge::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('nama_badge'),
+            ExportColumn::make('min_point'),
+            ExportColumn::make('max_point'),
+            ExportColumn::make('urutan'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Level Badge selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/PeminjamanExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Peminjaman;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class PeminjamanExporter extends Exporter
+{
+    protected static ?string $model = Peminjaman::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('user.nama')->label('Peminjam'),
+            ExportColumn::make('buku.judul')->label('Buku'),
+            ExportColumn::make('tanggal_pinjam'),
+            ExportColumn::make('tanggal_jatuh_tempo'),
+            ExportColumn::make('status'),
+            ExportColumn::make('diprosesOleh.nama')->label('Diproses Oleh'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Peminjaman selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/PengembalianExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Pengembalian;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class PengembalianExporter extends Exporter
+{
+    protected static ?string $model = Pengembalian::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('peminjaman.user.nama')->label('Peminjam'),
+            ExportColumn::make('peminjaman.buku.judul')->label('Buku'),
+            ExportColumn::make('tanggal_kembali'),
+            ExportColumn::make('kondisi'),
+            ExportColumn::make('catatan'),
+            ExportColumn::make('diprosesOleh.nama')->label('Diproses Oleh'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Pengembalian selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/PunishmentExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Punishment;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class PunishmentExporter extends Exporter
+{
+    protected static ?string $model = Punishment::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('nama'),
+            ExportColumn::make('deskripsi'),
+            ExportColumn::make('threshold_point_minus'),
+            ExportColumn::make('durasi_suspend_hari'),
+            ExportColumn::make('aktif'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Punishment selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/PunishmentLogExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\PunishmentLog;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class PunishmentLogExporter extends Exporter
+{
+    protected static ?string $model = PunishmentLog::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('user.nama')->label('User'),
+            ExportColumn::make('punishment.nama')->label('Punishment'),
+            ExportColumn::make('tanggal_diterapkan'),
+            ExportColumn::make('tanggal_berakhir'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Riwayat Punishment selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
             $body .= ' '.number_format($failedRowsCount).' baris gagal.';
@@ -367,6 +773,166 @@ class RakExporter extends Exporter
     public static function getCompletedNotificationBody(Export $export): string
     {
         $body = 'Export Rak selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/RewardExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Reward;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class RewardExporter extends Exporter
+{
+    protected static ?string $model = Reward::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('nama'),
+            ExportColumn::make('deskripsi'),
+            ExportColumn::make('threshold_point'),
+            ExportColumn::make('aktif'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Reward selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/RewardLogExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\RewardLog;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class RewardLogExporter extends Exporter
+{
+    protected static ?string $model = RewardLog::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('user.nama')->label('User'),
+            ExportColumn::make('reward.nama')->label('Reward'),
+            ExportColumn::make('tanggal_didapat'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Riwayat Reward selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/TahunPelajaranExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\TahunPelajaran;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class TahunPelajaranExporter extends Exporter
+{
+    protected static ?string $model = TahunPelajaran::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('nama'),
+            ExportColumn::make('tanggal_mulai'),
+            ExportColumn::make('tanggal_selesai'),
+            ExportColumn::make('aktif'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Tahun Pelajaran selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/TransaksiExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Transaksi;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class TransaksiExporter extends Exporter
+{
+    protected static ?string $model = Transaksi::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('user.nama')->label('User'),
+            ExportColumn::make('jenis'),
+            ExportColumn::make('diprosesOleh.nama')->label('Diproses Oleh'),
+            ExportColumn::make('tanggal'),
+            ExportColumn::make('keterangan'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Transaksi selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
             $body .= ' '.number_format($failedRowsCount).' baris gagal.';
@@ -421,10 +987,10 @@ class UserExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export User selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+        $body = 'Export User selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
         }
 
         return $body;
@@ -533,6 +1099,54 @@ class BukuImporter extends Importer
 ```
 ---
 
+## app/Filament/Imports/JurusanImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Models\Jurusan;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+// Upsert berdasarkan 'kode' (unique) - sama pola dengan KategoriImporter.
+class JurusanImporter extends Importer
+{
+    protected static ?string $model = Jurusan::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('nama')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('kode')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+        ];
+    }
+
+    public function resolveRecord(): ?Jurusan
+    {
+        return Jurusan::query()->firstOrNew(['kode' => $this->data['kode']]);
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Jurusan selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
 ## app/Filament/Imports/KategoriImporter.php
 ```php
 <?php
@@ -568,6 +1182,307 @@ class KategoriImporter extends Importer
     public static function getCompletedNotificationBody(Import $import): string
     {
         $body = 'Import Kategori selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/KelasImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Models\Jurusan;
+use App\Models\Kelas;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+/**
+ * TODO: ASUMSI - upsert berdasarkan kombinasi ('nama', 'jurusan_id'),
+ * BUKAN 'nama' saja, karena migration tidak memberi unique constraint
+ * pada Kelas.nama sendiri (dua Kelas beda jurusan bisa punya nama sama).
+ * Jika sumber data ternyata menjamin nama Kelas unik global, upsert key
+ * ini bisa disederhanakan - konfirmasi dulu sebelum dianggap final.
+ *
+ * TODO: ASUMSI - referensi Jurusan dari kolom 'jurusan_kode' (via kode
+ * unik Jurusan), bukan nama Jurusan, untuk menghindari ambiguitas nama.
+ */
+class KelasImporter extends Importer
+{
+    protected static ?string $model = Kelas::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('nama')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('tingkat')
+                ->requiredMapping()
+                ->numeric()
+                ->rules(['required', 'integer', 'min:1']),
+            ImportColumn::make('jurusan_kode')
+                ->label('Kode Jurusan (opsional)')
+                ->rules(['nullable', 'string', 'max:255']),
+        ];
+    }
+
+    public function resolveRecord(): ?Kelas
+    {
+        $jurusanId = null;
+
+        if (! empty($this->data['jurusan_kode'])) {
+            $jurusan = Jurusan::query()->where('kode', $this->data['jurusan_kode'])->first();
+
+            if (! $jurusan) {
+                throw new RowImportFailedException("Jurusan dengan kode \"{$this->data['jurusan_kode']}\" tidak ditemukan.");
+            }
+
+            $jurusanId = $jurusan->id;
+        }
+
+        return Kelas::query()->firstOrNew([
+            'nama' => $this->data['nama'],
+            'jurusan_id' => $jurusanId,
+        ]);
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Kelas selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/KelasTahunPelajaranImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Enums\RoleUser;
+use App\Models\Kelas;
+use App\Models\KelasTahunPelajaran;
+use App\Models\TahunPelajaran;
+use App\Models\User;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+/**
+ * Upsert berdasarkan (kelas_id, tahun_pelajaran_id) - sesuai unique
+ * index di migration kelas_tahun_pelajarans, bukan tebakan sepihak.
+ *
+ * Wali kelas direferensikan via NIP (dikonfirmasi Aturan), dan WAJIB
+ * bukan role super_admin (RoleUser::Admin) - konsisten dengan filter
+ * form KelasTahunPelajaranResource. Baris dengan NIP milik super_admin
+ * akan GAGAL divalidasi, bukan diproses diam-diam.
+ */
+class KelasTahunPelajaranImporter extends Importer
+{
+    protected static ?string $model = KelasTahunPelajaran::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('kelas_nama')
+                ->label('Nama Kelas')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('tahun_pelajaran_nama')
+                ->label('Nama Tahun Pelajaran')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255'])
+                ->example('2025/2026'),
+            ImportColumn::make('wali_kelas_nip')
+                ->label('NIP Wali Kelas (opsional)')
+                ->rules(['nullable', 'string', 'max:255']),
+        ];
+    }
+
+    public function resolveRecord(): ?KelasTahunPelajaran
+    {
+        $kelas = Kelas::query()->where('nama', $this->data['kelas_nama'])->first();
+
+        if (! $kelas) {
+            throw new RowImportFailedException("Kelas \"{$this->data['kelas_nama']}\" tidak ditemukan.");
+            // TODO: GAP-SPEC - jika nama Kelas tidak unik global (lihat
+            // catatan KelasImporter), where('nama', ...) di atas bisa
+            // mengambil baris yang salah tanpa error. Perlu kolom
+            // tambahan (mis. kode Jurusan) di sini juga bila kasus
+            // tersebut nyata terjadi di data sekolah.
+        }
+
+        $tahun = TahunPelajaran::query()->where('nama', $this->data['tahun_pelajaran_nama'])->first();
+
+        if (! $tahun) {
+            throw new RowImportFailedException("Tahun Pelajaran \"{$this->data['tahun_pelajaran_nama']}\" tidak ditemukan.");
+        }
+
+        return KelasTahunPelajaran::query()->firstOrNew([
+            'kelas_id' => $kelas->id,
+            'tahun_pelajaran_id' => $tahun->id,
+        ]);
+    }
+
+    protected function afterSave(): void
+    {
+        if (empty($this->data['wali_kelas_nip'])) {
+            return;
+        }
+
+        $waliKelas = User::query()->where('nip', $this->data['wali_kelas_nip'])->first();
+
+        if (! $waliKelas) {
+            throw new RowImportFailedException("User dengan NIP \"{$this->data['wali_kelas_nip']}\" tidak ditemukan.");
+        }
+
+        if ($waliKelas->role === RoleUser::Admin) {
+            throw new RowImportFailedException('User dengan role super_admin tidak boleh menjadi wali kelas.');
+        }
+
+        $this->record->update(['wali_kelas_id' => $waliKelas->id]);
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Kelas per Tahun Pelajaran selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/LevelBadgeImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Models\LevelBadge;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+/**
+ * TODO: GAP-SPEC - upsert berdasarkan 'nama_badge'. Migration tidak
+ * memberi unique constraint pada kolom ini (hanya di form Filament) -
+ * jika sumber data ternyata mengizinkan nama badge duplikat secara sah,
+ * upsert key ini perlu direvisi.
+ */
+class LevelBadgeImporter extends Importer
+{
+    protected static ?string $model = LevelBadge::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('nama_badge')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('min_point')
+                ->requiredMapping()
+                ->numeric()
+                ->rules(['required', 'integer']),
+            ImportColumn::make('max_point')
+                ->numeric()
+                ->rules(['nullable', 'integer']),
+            ImportColumn::make('urutan')
+                ->numeric()
+                ->rules(['nullable', 'integer']),
+        ];
+    }
+
+    public function resolveRecord(): ?LevelBadge
+    {
+        return LevelBadge::query()->firstOrNew(['nama_badge' => $this->data['nama_badge']]);
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Level Badge selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/PunishmentImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Models\Punishment;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+// Upsert berdasarkan 'nama' (unique di form).
+class PunishmentImporter extends Importer
+{
+    protected static ?string $model = Punishment::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('nama')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('deskripsi')
+                ->rules(['nullable', 'string']),
+            ImportColumn::make('threshold_point_minus')
+                ->requiredMapping()
+                ->numeric()
+                ->rules(['required', 'integer', 'max:0']),
+            ImportColumn::make('durasi_suspend_hari')
+                ->numeric()
+                ->rules(['nullable', 'integer', 'min:1']),
+            ImportColumn::make('aktif')
+                ->boolean()
+                ->rules(['nullable', 'boolean']),
+        ];
+    }
+
+    public function resolveRecord(): ?Punishment
+    {
+        return Punishment::query()->firstOrNew(['nama' => $this->data['nama']]);
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Punishment selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
             $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
@@ -628,6 +1543,115 @@ class RakImporter extends Importer
     public static function getCompletedNotificationBody(Import $import): string
     {
         $body = 'Import Rak selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/RewardImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Models\Reward;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+// Upsert berdasarkan 'nama' (unique di form, sama pola dengan Kategori).
+class RewardImporter extends Importer
+{
+    protected static ?string $model = Reward::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('nama')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('deskripsi')
+                ->rules(['nullable', 'string']),
+            ImportColumn::make('threshold_point')
+                ->requiredMapping()
+                ->numeric()
+                ->rules(['required', 'integer']),
+            ImportColumn::make('aktif')
+                ->boolean()
+                ->rules(['nullable', 'boolean']),
+        ];
+    }
+
+    public function resolveRecord(): ?Reward
+    {
+        return Reward::query()->firstOrNew(['nama' => $this->data['nama']]);
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Reward selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/TahunPelajaranImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Models\TahunPelajaran;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+// Upsert berdasarkan 'nama' (unique).
+class TahunPelajaranImporter extends Importer
+{
+    protected static ?string $model = TahunPelajaran::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('nama')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('tanggal_mulai')
+                ->requiredMapping()
+                ->rules(['required', 'date']),
+            ImportColumn::make('tanggal_selesai')
+                ->requiredMapping()
+                ->rules(['required', 'date', 'after_or_equal:tanggal_mulai']),
+        ];
+    }
+
+    public function resolveRecord(): ?TahunPelajaran
+    {
+        // 'aktif' SENGAJA tidak diimpor - perubahan Tahun Pelajaran aktif
+        // hanya lewat action "Jadikan Aktif" di TahunPelajaranResource,
+        // supaya logic "nonaktifkan yang lain" tetap terpusat di satu
+        // tempat (Aturan poin 3).
+        return TahunPelajaran::query()->firstOrNew(['nama' => $this->data['nama']]);
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Tahun Pelajaran selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
             $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
@@ -766,17 +1790,17 @@ class UserImporter extends Importer
         }
 
         return KelasTahunPelajaran::query()
-            ->whereHas('kelas', fn($q) => $q->where('nama', $namaKelas))
-            ->whereHas('tahunPelajaran', fn($q) => $q->where('nama', $namaTahun))
+            ->whereHas('kelas', fn ($q) => $q->where('nama', $namaKelas))
+            ->whereHas('tahunPelajaran', fn ($q) => $q->where('nama', $namaTahun))
             ->first();
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import User selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;
@@ -1399,6 +2423,7 @@ class PengaturanSistem extends Page
 namespace App\Filament\Pages;
 
 use App\Enums\StatusRiwayatKelas;
+use App\Filament\Resources\KelasTahunPelajaranResource;
 use App\Models\KelasTahunPelajaran;
 use App\Services\KenaikanKelasService;
 use Filament\Forms\Components\Select;
@@ -1447,7 +2472,7 @@ class ProsesKenaikanKelas extends Page
             ->findOrFail($ktp);
 
         $this->form->fill(
-            $this->ktp->siswaAktif->mapWithKeys(fn($siswa) => [
+            $this->ktp->siswaAktif->mapWithKeys(fn ($siswa) => [
                 $siswa->id => StatusRiwayatKelas::Naik->value,
             ])->toArray()
         );
@@ -1462,8 +2487,8 @@ class ProsesKenaikanKelas extends Page
     {
         return $schema->components(
             $this->ktp->siswaAktif->map(
-                fn($siswa) => Select::make((string) $siswa->id)
-                    ->label($siswa->nama . ' (' . ($siswa->nisn ?? '-') . ')')
+                fn ($siswa) => Select::make((string) $siswa->id)
+                    ->label($siswa->nama.' ('.($siswa->nisn ?? '-').')')
                     ->options([
                         StatusRiwayatKelas::Naik->value => 'Naik Kelas',
                         StatusRiwayatKelas::Tinggal->value => 'Tinggal Kelas',
@@ -1483,6 +2508,7 @@ class ProsesKenaikanKelas extends Page
             $gagal = app(KenaikanKelasService::class)->prosesKenaikan($this->ktp, $keputusan);
         } catch (RuntimeException $e) {
             Notification::make()->danger()->title('Gagal memproses kenaikan kelas')->body($e->getMessage())->send();
+
             return;
         }
 
@@ -1492,11 +2518,11 @@ class ProsesKenaikanKelas extends Page
             Notification::make()
                 ->warning()
                 ->title('Sebagian siswa gagal diproses')
-                ->body(collect($gagal)->map(fn($pesan, $nama) => "{$nama}:{$pesan}")->implode('; '))
+                ->body(collect($gagal)->map(fn ($pesan, $nama) => "{$nama}:{$pesan}")->implode('; '))
                 ->send();
         }
 
-        $this->redirect(\App\Filament\Resources\KelasTahunPelajaranResource::getUrl());
+        $this->redirect(KelasTahunPelajaranResource::getUrl());
     }
 }
 
@@ -1914,11 +2940,13 @@ namespace App\Filament\Resources;
 
 use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
+use App\Filament\Exports\DendaExporter;
 use App\Filament\Resources\DendaResource\Pages;
 use App\Models\Denda;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -1964,6 +2992,11 @@ class DendaResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(DendaExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Denda::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('user.nama')
                     ->label('User')
@@ -2110,6 +3143,7 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateJurusan extends CreateRecord
 {
     protected static string $resource = JurusanResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -2132,6 +3166,7 @@ use Filament\Resources\Pages\EditRecord;
 class EditJurusan extends EditRecord
 {
     protected static string $resource = JurusanResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -2175,10 +3210,14 @@ class ListJurusans extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\JurusanExporter;
+use App\Filament\Imports\JurusanImporter;
 use App\Filament\Resources\JurusanResource\Pages;
 use App\Models\Jurusan;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -2206,6 +3245,14 @@ class JurusanResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(JurusanImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', Jurusan::class) ?? false),
+                ExportAction::make()
+                    ->exporter(JurusanExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Jurusan::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('kode')->searchable(),
@@ -2423,6 +3470,7 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateKelas extends CreateRecord
 {
     protected static string $resource = KelasResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -2445,10 +3493,12 @@ use Filament\Resources\Pages\EditRecord;
 class EditKelas extends EditRecord
 {
     protected static string $resource = KelasResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
     }
+
     protected function getHeaderActions(): array
     {
         return [DeleteAction::make()];
@@ -2487,10 +3537,14 @@ class ListKelas extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\KelasExporter;
+use App\Filament\Imports\KelasImporter;
 use App\Filament\Resources\KelasResource\Pages;
 use App\Models\Kelas;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
@@ -2533,6 +3587,14 @@ class KelasResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(KelasImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', Kelas::class) ?? false),
+                ExportAction::make()
+                    ->exporter(KelasExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Kelas::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('tingkat')->sortable(),
@@ -2571,6 +3633,7 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateKelasTahunPelajaran extends CreateRecord
 {
     protected static string $resource = KelasTahunPelajaranResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -2593,10 +3656,12 @@ use Filament\Resources\Pages\EditRecord;
 class EditKelasTahunPelajaran extends EditRecord
 {
     protected static string $resource = KelasTahunPelajaranResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
     }
+
     protected function getHeaderActions(): array
     {
         return [DeleteAction::make()];
@@ -2635,6 +3700,8 @@ class ListKelasTahunPelajarans extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\KelasTahunPelajaranExporter;
+use App\Filament\Imports\KelasTahunPelajaranImporter;
 use App\Filament\Pages\ProsesKenaikanKelas;
 use App\Filament\Resources\KelasTahunPelajaranResource\Pages;
 use App\Filament\Resources\KelasTahunPelajaranResource\RelationManagers\SiswaAktifRelationManager;
@@ -2642,6 +3709,8 @@ use App\Models\KelasTahunPelajaran;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\Select;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -2680,7 +3749,11 @@ class KelasTahunPelajaranResource extends Resource
                 ->required(),
             Select::make('wali_kelas_id')
                 ->label('Wali Kelas')
-                ->relationship('waliKelas', 'nama', fn ($query) => $query->whereIn('role', ['pustakawan', 'pegawai', 'super_admin']))
+                // FIX: 'super_admin' (nilai RoleUser::Admin) DIHAPUS dari
+                // daftar ini - super_admin tidak boleh menjadi wali kelas
+                // (dikonfirmasi Aturan). Sebelumnya bug: role ini ikut
+                // tersaring masuk sebagai kandidat wali kelas.
+                ->relationship('waliKelas', 'nama', fn ($query) => $query->whereIn('role', ['pustakawan', 'pegawai']))
                 ->searchable()
                 ->preload(),
         ]);
@@ -2689,6 +3762,14 @@ class KelasTahunPelajaranResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(KelasTahunPelajaranImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', KelasTahunPelajaran::class) ?? false),
+                ExportAction::make()
+                    ->exporter(KelasTahunPelajaranExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', KelasTahunPelajaran::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('kelas.nama')->label('Kelas')->searchable()->sortable(),
                 TextColumn::make('tahunPelajaran.nama')->label('Tahun Pelajaran')->searchable()->sortable(),
@@ -2699,13 +3780,13 @@ class KelasTahunPelajaranResource extends Resource
                 SelectFilter::make('tahun_pelajaran_id')->label('Tahun Pelajaran')->relationship('tahunPelajaran', 'nama'),
             ])
             ->recordActions([
-            Action::make('proses_kenaikan')
-                ->label('Proses Kenaikan Kelas')
-                ->icon('heroicon-o-arrow-trending-up')
-                ->color('warning')
-                ->url(fn(KelasTahunPelajaran $record) => ProsesKenaikanKelas::getUrl(['ktp' => $record->id])),
-                DeleteAction::make()
-                ])
+                Action::make('proses_kenaikan')
+                    ->label('Proses Kenaikan Kelas')
+                    ->icon('heroicon-o-arrow-trending-up')
+                    ->color('warning')
+                    ->url(fn (KelasTahunPelajaran $record) => ProsesKenaikanKelas::getUrl(['ktp' => $record->id])),
+                DeleteAction::make(),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 
@@ -2735,18 +3816,29 @@ class KelasTahunPelajaranResource extends Resource
 
 namespace App\Filament\Resources\KelasTahunPelajaranResource\RelationManagers;
 
+use App\Enums\RoleUser;
+use App\Models\KelasTahunPelajaran;
+use App\Models\User;
+use App\Services\KenaikanKelasService;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 /**
- * Read-only - assignment siswa ke KTP dilakukan lewat bulk action
- * 'assign_kelas' di UserResource (memanggil KenaikanKelasService), atau
- * lewat proses Kenaikan Kelas massal (ProsesKenaikanKelas), BUKAN
- * attach/detach di sini - relasi ini belongsTo di sisi User
- * (kelas_tahun_pelajaran_id), bukan pivot, dan field tersebut tidak lagi
- * bisa diedit langsung dari form UserResource (lihat komentar di sana)
- * supaya RiwayatKelasSiswa selalu tercatat konsisten.
+ * Assignment/pelepasan siswa SELALU lewat KenaikanKelasService (Aturan
+ * poin 3, DRY) - tidak ada attach()/detach() pivot langsung di sini,
+ * karena relasi ini belongsTo di sisi User (kelas_tahun_pelajaran_id),
+ * bukan pivot, dan setiap perubahan wajib tercatat di RiwayatKelasSiswa.
+ *
+ * // TODO: GAP-SPEC - "Tambah Siswa" di sini memakai KenaikanKelasService::
+ * assignKelas() yang SAMA dengan bulk action UserResource - artinya jika
+ * siswa yang dipilih sudah aktif di KTP lain, riwayat lamanya otomatis
+ * ditutup status 'keluar' (bukan error/penolakan). Perlu dikonfirmasi
+ * apakah perilaku pindah-kelas-implisit ini yang diinginkan di titik
+ * masuk ini juga, atau harus menolak siswa yang sudah punya KTP aktif.
  */
 class SiswaAktifRelationManager extends RelationManager
 {
@@ -2762,8 +3854,54 @@ class SiswaAktifRelationManager extends RelationManager
                 TextColumn::make('nisn')->label('NISN')->searchable(),
                 TextColumn::make('status_akademik')->badge(),
             ])
-            ->headerActions([])
-            ->recordActions([])
+            ->headerActions([
+                Action::make('tambah_siswa')
+                    ->label('Tambah Siswa')
+                    ->icon('heroicon-o-user-plus')
+                    ->schema([
+                        Select::make('user_ids')
+                            ->label('Pilih Siswa')
+                            ->multiple()
+                            ->searchable()
+                            ->options(
+                                User::query()
+                                    ->where('role', RoleUser::Siswa)
+                                    ->pluck('nama', 'id')
+                            )
+                            ->required()
+                            ->helperText('Siswa yang sudah aktif di kelas lain akan otomatis dipindahkan ke kelas ini.'),
+                    ])
+                    ->action(function (array $data) {
+                        /** @var KelasTahunPelajaran $ktp */
+                        $ktp = $this->getOwnerRecord();
+                        $service = app(KenaikanKelasService::class);
+
+                        User::query()->whereIn('id', $data['user_ids'])
+                            ->get()
+                            ->each(fn (User $user) => $service->assignKelas($user, $ktp));
+
+                        Notification::make()
+                            ->success()
+                            ->title(count($data['user_ids']).' siswa berhasil ditambahkan ke kelas.')
+                            ->send();
+                    }),
+            ])
+            ->recordActions([
+                Action::make('keluarkan')
+                    ->label('Keluarkan dari Kelas')
+                    ->icon('heroicon-o-user-minus')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalDescription('Siswa akan dilepas dari kelas ini dan status akademik berubah menjadi Keluar. Aksi ini tercatat di riwayat.')
+                    ->action(function (User $record) {
+                        app(KenaikanKelasService::class)->keluarkanDariKelas($record);
+
+                        Notification::make()
+                            ->success()
+                            ->title("{$record->nama} dikeluarkan dari kelas.")
+                            ->send();
+                    }),
+            ])
             ->toolbarActions([]);
     }
 }
@@ -2795,10 +3933,12 @@ class ListKunjungans extends ListRecords
 namespace App\Filament\Resources;
 
 use App\Enums\SourceKunjungan;
+use App\Filament\Exports\KunjunganExporter;
 use App\Filament\Resources\KunjunganResource\Pages;
 use App\Models\Kunjungan;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -2831,6 +3971,11 @@ class KunjunganResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(KunjunganExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Kunjungan::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('user.nama')
                     ->label('Pengunjung')
@@ -2876,6 +4021,157 @@ class KunjunganResource extends Resource
     {
         return [
             'index' => Pages\ListKunjungans::route('/'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/LevelBadgeResource/Pages/CreateLevelBadge.php
+```php
+<?php
+
+namespace App\Filament\Resources\LevelBadgeResource\Pages;
+
+use App\Filament\Resources\LevelBadgeResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateLevelBadge extends CreateRecord
+{
+    protected static string $resource = LevelBadgeResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/LevelBadgeResource/Pages/EditLevelBadge.php
+```php
+<?php
+
+namespace App\Filament\Resources\LevelBadgeResource\Pages;
+
+use App\Filament\Resources\LevelBadgeResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditLevelBadge extends EditRecord
+{
+    protected static string $resource = LevelBadgeResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [DeleteAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/LevelBadgeResource/Pages/ListLevelBadges.php
+```php
+<?php
+
+namespace App\Filament\Resources\LevelBadgeResource\Pages;
+
+use App\Filament\Resources\LevelBadgeResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListLevelBadges extends ListRecords
+{
+    protected static string $resource = LevelBadgeResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/LevelBadgeResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Exports\LevelBadgeExporter;
+use App\Filament\Imports\LevelBadgeImporter;
+use App\Filament\Resources\LevelBadgeResource\Pages;
+use App\Models\LevelBadge;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\TextInput;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+class LevelBadgeResource extends Resource
+{
+    protected static ?string $model = LevelBadge::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-star';
+
+    protected static ?string $navigationLabel = 'Level Badge';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Poin & Reward';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('nama_badge')
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            TextInput::make('min_point')
+                ->numeric()
+                ->integer()
+                ->required(),
+            TextInput::make('max_point')
+                ->numeric()
+                ->integer()
+                ->helperText('Kosongkan jika badge tertinggi (tidak ada batas atas).'),
+            TextInput::make('urutan')
+                ->numeric()
+                ->integer()
+                ->default(0)
+                ->helperText('Dipakai untuk urutan tampilan, bukan urutan threshold.'),
+            FileUpload::make('icon')
+                ->image()
+                ->directory('level-badge-icon'),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(LevelBadgeImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', LevelBadge::class) ?? false),
+                ExportAction::make()
+                    ->exporter(LevelBadgeExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', LevelBadge::class) ?? false),
+            ])
+            ->columns([
+                ImageColumn::make('icon')->circular(),
+                TextColumn::make('nama_badge')->searchable()->sortable(),
+                TextColumn::make('min_point')->sortable(),
+                TextColumn::make('max_point')->sortable()->placeholder('Tanpa batas atas'),
+                TextColumn::make('urutan')->sortable(),
+            ])
+            ->defaultSort('urutan')
+            ->recordActions([DeleteAction::make()])
+            ->toolbarActions([DeleteBulkAction::make()]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListLevelBadges::route('/'),
+            'create' => Pages\CreateLevelBadge::route('/create'),
+            'edit' => Pages\EditLevelBadge::route('/{record}/edit'),
         ];
     }
 }
@@ -2976,11 +4272,13 @@ namespace App\Filament\Resources;
 
 use App\Enums\KondisiBuku;
 use App\Enums\StatusPeminjaman;
+use App\Filament\Exports\PeminjamanExporter;
 use App\Filament\Resources\PeminjamanResource\Pages;
 use App\Models\Buku;
 use App\Models\Peminjaman;
 use App\Services\PeminjamanService;
 use Filament\Actions\Action;
+use Filament\Actions\ExportAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -3038,6 +4336,11 @@ class PeminjamanResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(PeminjamanExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Peminjaman::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('user.nama')
                     ->label('Peminjam')
@@ -3177,10 +4480,12 @@ class ListPengembalians extends ListRecords
 namespace App\Filament\Resources;
 
 use App\Enums\KondisiBuku;
+use App\Filament\Exports\PengembalianExporter;
 use App\Filament\Resources\PengembalianResource\Pages;
 use App\Models\Pengembalian;
 use App\Services\PeminjamanService;
 use Filament\Actions\Action;
+use Filament\Actions\ExportAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -3225,6 +4530,11 @@ class PengembalianResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(PengembalianExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Pengembalian::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('peminjaman.user.nama')
                     ->label('Peminjam')
@@ -3310,6 +4620,248 @@ class PengembalianResource extends Resource
     {
         return [
             'index' => Pages\ListPengembalians::route('/'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/PunishmentLogResource/Pages/ListPunishmentLogs.php
+```php
+<?php
+
+namespace App\Filament\Resources\PunishmentLogResource\Pages;
+
+use App\Filament\Resources\PunishmentLogResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListPunishmentLogs extends ListRecords
+{
+    protected static string $resource = PunishmentLogResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/PunishmentLogResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Exports\PunishmentLogExporter;
+use App\Filament\Resources\PunishmentLogResource\Pages;
+use App\Models\PunishmentLog;
+use Filament\Actions\ExportAction;
+use Filament\Resources\Resource;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+/**
+ * // TODO: ASUMSI - lihat catatan sama di RewardLogResource.
+ * Read-only, tanpa Import - dihasilkan otomatis oleh PointService.
+ */
+class PunishmentLogResource extends Resource
+{
+    protected static ?string $model = PunishmentLog::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shield-exclamation';
+
+    protected static ?string $navigationLabel = 'Riwayat Punishment';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Poin & Reward';
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(PunishmentLogExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', PunishmentLog::class) ?? false),
+            ])
+            ->columns([
+                TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
+                TextColumn::make('punishment.nama')->label('Punishment')->searchable()->sortable(),
+                TextColumn::make('tanggal_diterapkan')->dateTime()->sortable(),
+                TextColumn::make('tanggal_berakhir')->dateTime()->placeholder('-'),
+            ])
+            ->filters([
+                SelectFilter::make('punishment_id')->label('Punishment')->relationship('punishment', 'nama'),
+            ])
+            ->defaultSort('tanggal_diterapkan', 'desc')
+            ->recordActions([])
+            ->toolbarActions([]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListPunishmentLogs::route('/'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/PunishmentResource/Pages/CreatePunishment.php
+```php
+<?php
+
+namespace App\Filament\Resources\PunishmentResource\Pages;
+
+use App\Filament\Resources\PunishmentResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreatePunishment extends CreateRecord
+{
+    protected static string $resource = PunishmentResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/PunishmentResource/Pages/EditPunishment.php
+```php
+<?php
+
+namespace App\Filament\Resources\PunishmentResource\Pages;
+
+use App\Filament\Resources\PunishmentResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditPunishment extends EditRecord
+{
+    protected static string $resource = PunishmentResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [DeleteAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/PunishmentResource/Pages/ListPunishments.php
+```php
+<?php
+
+namespace App\Filament\Resources\PunishmentResource\Pages;
+
+use App\Filament\Resources\PunishmentResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListPunishments extends ListRecords
+{
+    protected static string $resource = PunishmentResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/PunishmentResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Exports\PunishmentExporter;
+use App\Filament\Imports\PunishmentImporter;
+use App\Filament\Resources\PunishmentResource\Pages;
+use App\Models\Punishment;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Table;
+
+class PunishmentResource extends Resource
+{
+    protected static ?string $model = Punishment::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-hand-raised';
+
+    protected static ?string $navigationLabel = 'Punishment';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Poin & Reward';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('nama')
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            Textarea::make('deskripsi')
+                ->columnSpanFull(),
+            TextInput::make('threshold_point_minus')
+                ->numeric()
+                ->integer()
+                ->maxValue(0)
+                ->required()
+                ->helperText('Nilai negatif - akumulasi point <= nilai ini akan memicu punishment.'),
+            TextInput::make('durasi_suspend_hari')
+                ->numeric()
+                ->integer()
+                ->minValue(1)
+                ->helperText('Kosongkan jika punishment tidak memicu suspend otomatis.'),
+            Toggle::make('aktif')
+                ->default(true)
+                ->helperText('Punishment nonaktif tidak akan dicek/direalisasikan lagi oleh PointService.'),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(PunishmentImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', Punishment::class) ?? false),
+                ExportAction::make()
+                    ->exporter(PunishmentExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Punishment::class) ?? false),
+            ])
+            ->columns([
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('threshold_point_minus')->sortable(),
+                TextColumn::make('durasi_suspend_hari')->placeholder('-'),
+                IconColumn::make('aktif')->boolean(),
+                TextColumn::make('punishment_logs_count')->label('Jumlah Diterapkan')->counts('punishmentLogs'),
+            ])
+            ->filters([TernaryFilter::make('aktif')])
+            ->recordActions([DeleteAction::make()])
+            ->toolbarActions([DeleteBulkAction::make()]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListPunishments::route('/'),
+            'create' => Pages\CreatePunishment::route('/create'),
+            'edit' => Pages\EditPunishment::route('/{record}/edit'),
         ];
     }
 }
@@ -3539,6 +5091,346 @@ class BukusRelationManager extends RelationManager
 ```
 ---
 
+## app/Filament/Resources/RewardLogResource/Pages/ListRewardLogs.php
+```php
+<?php
+
+namespace App\Filament\Resources\RewardLogResource\Pages;
+
+use App\Filament\Resources\RewardLogResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListRewardLogs extends ListRecords
+{
+    protected static string $resource = RewardLogResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/RewardLogResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Exports\RewardLogExporter;
+use App\Filament\Resources\RewardLogResource\Pages;
+use App\Models\RewardLog;
+use Filament\Actions\ExportAction;
+use Filament\Resources\Resource;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+/**
+ * // TODO: ASUMSI - dibuat sebagai Resource terpisah (bukan RelationManager
+ * di UserResource), mengikuti pola RiwayatKelasSiswaResource. Jika Anda
+ * lebih suka tab "Riwayat Reward" langsung di form/edit User, beri tahu -
+ * mudah dipindah karena logic query-nya identik.
+ *
+ * Read-only - RewardLog HANYA dihasilkan otomatis oleh PointService saat
+ * threshold tercapai (Aturan poin 3, DRY). Tidak ada Import - insert
+ * manual lewat spreadsheet akan melewati validasi threshold PointService.
+ */
+class RewardLogResource extends Resource
+{
+    protected static ?string $model = RewardLog::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-trophy';
+
+    protected static ?string $navigationLabel = 'Riwayat Reward';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Poin & Reward';
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(RewardLogExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
+            ])
+            ->columns([
+                TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
+                TextColumn::make('reward.nama')->label('Reward')->searchable()->sortable(),
+                TextColumn::make('tanggal_didapat')->dateTime()->sortable(),
+            ])
+            ->filters([
+                SelectFilter::make('reward_id')->label('Reward')->relationship('reward', 'nama'),
+            ])
+            ->defaultSort('tanggal_didapat', 'desc')
+            ->recordActions([])
+            ->toolbarActions([]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListRewardLogs::route('/'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/RewardResource/Pages/CreateReward.php
+```php
+<?php
+
+namespace App\Filament\Resources\RewardResource\Pages;
+
+use App\Filament\Resources\RewardResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateReward extends CreateRecord
+{
+    protected static string $resource = RewardResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/RewardResource/Pages/EditReward.php
+```php
+<?php
+
+namespace App\Filament\Resources\RewardResource\Pages;
+
+use App\Filament\Resources\RewardResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditReward extends EditRecord
+{
+    protected static string $resource = RewardResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [DeleteAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/RewardResource/Pages/ListRewards.php
+```php
+<?php
+
+namespace App\Filament\Resources\RewardResource\Pages;
+
+use App\Filament\Resources\RewardResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListRewards extends ListRecords
+{
+    protected static string $resource = RewardResource::class;
+}
+
+```
+---
+
+## app/Filament/Resources/RewardResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Exports\RewardExporter;
+use App\Filament\Imports\RewardImporter;
+use App\Filament\Resources\RewardResource\Pages;
+use App\Models\Reward;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Table;
+
+class RewardResource extends Resource
+{
+    protected static ?string $model = Reward::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-gift';
+
+    protected static ?string $navigationLabel = 'Reward';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Poin & Reward';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('nama')
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            Textarea::make('deskripsi')
+                ->columnSpanFull(),
+            TextInput::make('threshold_point')
+                ->numeric()
+                ->integer()
+                ->required(),
+            Toggle::make('aktif')
+                ->default(true)
+                ->helperText('Reward nonaktif tidak akan dicek/direalisasikan lagi oleh PointService.'),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(RewardImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', Reward::class) ?? false),
+                ExportAction::make()
+                    ->exporter(RewardExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Reward::class) ?? false),
+            ])
+            ->columns([
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('threshold_point')->sortable(),
+                IconColumn::make('aktif')->boolean(),
+                TextColumn::make('reward_logs_count')->label('Jumlah Diperoleh')->counts('rewardLogs'),
+            ])
+            ->filters([TernaryFilter::make('aktif')])
+            ->recordActions([DeleteAction::make()])
+            ->toolbarActions([DeleteBulkAction::make()]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListRewards::route('/'),
+            'create' => Pages\CreateReward::route('/create'),
+            'edit' => Pages\EditReward::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/RiwayatKelasSiswaResource/Pages/ListRiwayatKelasSiswas.php
+```php
+<?php
+
+namespace App\Filament\Resources\RiwayatKelasSiswaResource\Pages;
+
+use App\Filament\Resources\RiwayatKelasSiswaResource;
+use Filament\Resources\Pages\ListRecords;
+
+class ListRiwayatKelasSiswas extends ListRecords
+{
+    protected static string $resource = RiwayatKelasSiswaResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/RiwayatKelasSiswaResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Enums\StatusRiwayatKelas;
+use App\Filament\Resources\RiwayatKelasSiswaResource\Pages;
+use App\Models\RiwayatKelasSiswa;
+use Filament\Resources\Resource;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+/**
+ * Read-only - histori kenaikan/perpindahan kelas siswa. Tidak ada
+ * form/create/edit karena data ini hanya dihasilkan otomatis oleh
+ * KenaikanKelasService (Aturan poin 3, DRY - satu sumber kebenaran).
+ *
+ * // TODO: GAP-SPEC - canAccess dibatasi via Policy standar
+ * (ViewAny:RiwayatKelasSiswa). Saat ini di ShieldSeeder permission ini
+ * HANYA otomatis dimiliki super_admin (lewat syncPermissions(all())) -
+ * BELUM ditambahkan ke daftar permission Pustakawan. Konfirmasi apakah
+ * Pustakawan/wali kelas juga perlu akses lihat riwayat ini.
+ */
+class RiwayatKelasSiswaResource extends Resource
+{
+    protected static ?string $model = RiwayatKelasSiswa::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clock';
+
+    protected static ?string $navigationLabel = 'Riwayat Kelas Siswa';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Akademik';
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('user.nama')->label('Siswa')->searchable()->sortable(),
+                TextColumn::make('user.nisn')->label('NISN')->searchable(),
+                TextColumn::make('kelasTahunPelajaran.kelas.nama')->label('Kelas')->sortable(),
+                TextColumn::make('kelasTahunPelajaran.tahunPelajaran.nama')->label('Tahun Pelajaran')->sortable(),
+                TextColumn::make('status')
+                    ->badge()
+                    ->color(fn (StatusRiwayatKelas $state) => match ($state) {
+                        StatusRiwayatKelas::Aktif => 'success',
+                        StatusRiwayatKelas::Naik => 'info',
+                        StatusRiwayatKelas::Tinggal => 'warning',
+                        StatusRiwayatKelas::Lulus => 'primary',
+                        StatusRiwayatKelas::Keluar => 'gray',
+                    }),
+                TextColumn::make('tanggal_mulai')->date()->sortable(),
+                TextColumn::make('tanggal_selesai')->date()->sortable()->placeholder('-'),
+            ])
+            ->filters([
+                SelectFilter::make('status')
+                    ->options(collect(StatusRiwayatKelas::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+            ])
+            ->recordActions([])
+            ->toolbarActions([]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListRiwayatKelasSiswas::route('/'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/TahunPelajaranResource/Pages/CreateTahunPelajaran.php
 ```php
 <?php
@@ -3551,6 +5443,7 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateTahunPelajaran extends CreateRecord
 {
     protected static string $resource = TahunPelajaranResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -3573,10 +5466,12 @@ use Filament\Resources\Pages\EditRecord;
 class EditTahunPelajaran extends EditRecord
 {
     protected static string $resource = TahunPelajaranResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
     }
+
     protected function getHeaderActions(): array
     {
         return [DeleteAction::make()];
@@ -3615,11 +5510,15 @@ class ListTahunPelajarans extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\TahunPelajaranExporter;
+use App\Filament\Imports\TahunPelajaranImporter;
 use App\Filament\Resources\TahunPelajaranResource\Pages;
 use App\Models\TahunPelajaran;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -3655,6 +5554,14 @@ class TahunPelajaranResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(TahunPelajaranImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', TahunPelajaran::class) ?? false),
+                ExportAction::make()
+                    ->exporter(TahunPelajaranExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', TahunPelajaran::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('tanggal_mulai')->date(),
@@ -3735,11 +5642,13 @@ class ViewTransaksi extends ViewRecord
 namespace App\Filament\Resources;
 
 use App\Enums\JenisTransaksi;
+use App\Filament\Exports\TransaksiExporter;
 use App\Filament\Resources\TransaksiResource\Pages;
 use App\Filament\Resources\TransaksiResource\RelationManagers\PeminjamansRelationManager;
 use App\Models\Transaksi;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -3775,6 +5684,11 @@ class TransaksiResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(TransaksiExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Transaksi::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('user.nama')
                     ->label('User')
@@ -4004,7 +5918,10 @@ use App\Enums\StatusAkademik;
 use App\Filament\Exports\UserExporter;
 use App\Filament\Imports\UserImporter;
 use App\Filament\Resources\UserResource\Pages;
+use App\Models\KelasTahunPelajaran;
 use App\Models\User;
+use App\Services\KenaikanKelasService;
+use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
@@ -4023,9 +5940,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
-use App\Services\KenaikanKelasService;
-use Filament\Actions\BulkAction;
-use App\Models\KelasTahunPelajaran;
 
 /**
  * Resource khusus super_admin (dikonfirmasi) - lihat UserPolicy dan
@@ -4051,7 +5965,7 @@ class UserResource extends Resource
                 ->required()
                 ->maxLength(255),
             Select::make('role')
-                ->options(collect(RoleUser::cases())->mapWithKeys(fn($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
+                ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
                 ->required(),
             TextInput::make('nisn')
                 ->label('NISN')
@@ -4079,7 +5993,7 @@ class UserResource extends Resource
 
             Placeholder::make('kelas_tahun_pelajaran_id')
                 ->label('Kelas (Tahun Pelajaran)')
-                ->content(fn(?User $record) => $record?->kelasTahunPelajaran
+                ->content(fn (?User $record) => $record?->kelasTahunPelajaran
                     ? "{$record->kelasTahunPelajaran->kelas->nama} - {$record->kelasTahunPelajaran->tahunPelajaran->nama}"
                     : 'Belum di-assign - gunakan aksi "Assign ke Kelas" di daftar User.')
                 ->visibleOn('edit'),
@@ -4094,7 +6008,7 @@ class UserResource extends Resource
                     KelasTahunPelajaran::query()
                         ->with(['kelas', 'tahunPelajaran'])
                         ->get()
-                        ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
+                        ->mapWithKeys(fn (KelasTahunPelajaran $ktp) => [
                             $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
                         ])
                 )
@@ -4103,7 +6017,7 @@ class UserResource extends Resource
                 ->dehydrated()
                 ->visibleOn('create'),
             Select::make('status_akademik')
-                ->options(collect(StatusAkademik::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
+                ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
                 ->disabled()
                 ->dehydrated(false)
                 ->helperText('Berubah otomatis lewat proses Kenaikan Kelas / assignment, tidak bisa diedit manual di sini.')
@@ -4113,6 +6027,7 @@ class UserResource extends Resource
             TextInput::make('no_telepon')
                 ->label('No. Telepon')
                 ->required()
+                ->unique(ignoreRecord: true)
                 ->maxLength(255),
             TextInput::make('no_kartu_rfid')
                 ->label('No. Kartu RFID')
@@ -4121,8 +6036,8 @@ class UserResource extends Resource
             TextInput::make('password')
                 ->password()
                 ->revealable()
-                ->required(fn(string $operation) => $operation === 'create')
-                ->dehydrated(fn(?string $state) => filled($state))
+                ->required(fn (string $operation) => $operation === 'create')
+                ->dehydrated(fn (?string $state) => filled($state))
                 ->maxLength(255)
                 ->helperText('Kosongkan jika tidak ingin mengubah password.'),
             FileUpload::make('avatar')
@@ -4137,10 +6052,10 @@ class UserResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(UserImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', User::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', User::class) ?? false),
                 ExportAction::make()
                     ->exporter(UserExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', User::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', User::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('avatar')
@@ -4150,7 +6065,7 @@ class UserResource extends Resource
                     ->sortable(),
                 TextColumn::make('role')
                     ->badge()
-                    ->color(fn(RoleUser $state) => match ($state) {
+                    ->color(fn (RoleUser $state) => match ($state) {
                         RoleUser::Admin => 'danger',
                         RoleUser::Pustakawan => 'warning',
                         RoleUser::Pegawai => 'info',
@@ -4171,7 +6086,7 @@ class UserResource extends Resource
                 TextColumn::make('status_akademik')
                     ->badge()
                     ->toggleable()
-                    ->color(fn(StatusAkademik $state) => match ($state) {
+                    ->color(fn (StatusAkademik $state) => match ($state) {
                         StatusAkademik::Aktif => 'success',
                         StatusAkademik::Lulus => 'info',
                         StatusAkademik::Keluar => 'gray',
@@ -4203,9 +6118,9 @@ class UserResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('role')
-                    ->options(collect(RoleUser::cases())->mapWithKeys(fn($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
+                    ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
                 SelectFilter::make('status_akademik')
-                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
+                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
                 TernaryFilter::make('status_suspend')
                     ->label('Status Suspend'),
             ])
@@ -4213,7 +6128,7 @@ class UserResource extends Resource
                 DeleteAction::make()
                     // super_admin tidak boleh dihapus, termasuk oleh
                     // sesama super_admin - mencegah lock-out akun sistem.
-                    ->authorize(fn(User $record) => ! $record->hasRole('super_admin')
+                    ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
                         && (auth()->user()?->can('delete', $record) ?? false)),
             ])
             ->toolbarActions([
@@ -4227,22 +6142,22 @@ class UserResource extends Resource
                                 KelasTahunPelajaran::query()
                                     ->with(['kelas', 'tahunPelajaran'])
                                     ->get()
-                                    ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
+                                    ->mapWithKeys(fn (KelasTahunPelajaran $ktp) => [
                                         $ktp->id => "{$ktp->kelas->nama} -{$ktp->tahunPelajaran->nama}",
                                     ])
                             )
                             ->searchable()
                             ->required(),
                     ])
-                    ->action(function (\Illuminate\Support\Collection $records, array $data) {
+                    ->action(function (Collection $records, array $data) {
                         $ktp = KelasTahunPelajaran::query()->findOrFail($data['kelas_tahun_pelajaran_id']);
                         $service = app(KenaikanKelasService::class);
 
-                        $records->each(fn(User $user) => $service->assignKelas($user, $ktp));
+                        $records->each(fn (User $user) => $service->assignKelas($user, $ktp));
 
-                        \Filament\Notifications\Notification::make()
+                        Notification::make()
                             ->success()
-                            ->title($records->count() . ' user berhasil di-assign ke kelas.')
+                            ->title($records->count().' user berhasil di-assign ke kelas.')
                             ->send();
                     })
                     ->deselectRecordsAfterCompletion(),
@@ -4252,8 +6167,8 @@ class UserResource extends Resource
                     // dilewati (tidak ikut terhapus), bukan meng-error-kan
                     // seluruh aksi.
                     ->action(function (Collection $records) {
-                        $dilindungi = $records->filter(fn(User $u) => $u->hasRole('super_admin'));
-                        $bolehHapus = $records->reject(fn(User $u) => $u->hasRole('super_admin'));
+                        $dilindungi = $records->filter(fn (User $u) => $u->hasRole('super_admin'));
+                        $bolehHapus = $records->reject(fn (User $u) => $u->hasRole('super_admin'));
 
                         $bolehHapus->each->delete();
 
@@ -4261,16 +6176,16 @@ class UserResource extends Resource
                             Notification::make()
                                 ->warning()
                                 ->title('Sebagian user tidak dihapus')
-                                ->body($dilindungi->count() . ' user dengan role super_admin dilewati (tidak bisa dihapus lewat bulk delete).')
+                                ->body($dilindungi->count().' user dengan role super_admin dilewati (tidak bisa dihapus lewat bulk delete).')
                                 ->send();
                         }
                     })
-                    ->authorize(fn() => auth()->user()?->can('deleteAny', User::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('deleteAny', User::class) ?? false),
             ])
             // Checkbox baris super_admin dinonaktifkan supaya tidak bisa
             // ikut ter-select sama sekali (lapisan pencegahan pertama,
             // sebelum sampai ke action() di atas).
-            ->checkIfRecordIsSelectableUsing(fn(User $record) => ! $record->hasRole('super_admin'));
+            ->checkIfRecordIsSelectableUsing(fn (User $record) => ! $record->hasRole('super_admin'));
     }
 
     public static function getPages(): array
@@ -6337,14 +8252,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -6404,8 +8319,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-
 }
+
 ```
 ---
 
@@ -6417,14 +8332,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -6484,8 +8399,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-
 }
+
 ```
 ---
 
@@ -6497,14 +8412,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -6564,8 +8479,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-
 }
+
 ```
 ---
 
@@ -6577,14 +8492,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -6644,8 +8559,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-
 }
+
 ```
 ---
 
@@ -6657,14 +8572,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -6724,8 +8639,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-
 }
+
 ```
 ---
 
@@ -6737,14 +8652,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -6804,8 +8719,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -6817,14 +8732,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -6884,8 +8799,88 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-
 }
+
+```
+---
+
+## app/Policies/LevelBadgePolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use App\Models\LevelBadge;
+use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
+
+class LevelBadgePolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:LevelBadge');
+    }
+
+    public function view(AuthUser $authUser, LevelBadge $levelBadge): bool
+    {
+        return $authUser->can('View:LevelBadge');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:LevelBadge');
+    }
+
+    public function update(AuthUser $authUser, LevelBadge $levelBadge): bool
+    {
+        return $authUser->can('Update:LevelBadge');
+    }
+
+    public function delete(AuthUser $authUser, LevelBadge $levelBadge): bool
+    {
+        return $authUser->can('Delete:LevelBadge');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:LevelBadge');
+    }
+
+    public function restore(AuthUser $authUser, LevelBadge $levelBadge): bool
+    {
+        return $authUser->can('Restore:LevelBadge');
+    }
+
+    public function forceDelete(AuthUser $authUser, LevelBadge $levelBadge): bool
+    {
+        return $authUser->can('ForceDelete:LevelBadge');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:LevelBadge');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:LevelBadge');
+    }
+
+    public function replicate(AuthUser $authUser, LevelBadge $levelBadge): bool
+    {
+        return $authUser->can('Replicate:LevelBadge');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:LevelBadge');
+    }
+}
+
 ```
 ---
 
@@ -6897,14 +8892,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -6964,8 +8959,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-
 }
+
 ```
 ---
 
@@ -6977,14 +8972,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -7044,8 +9039,168 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-
 }
+
+```
+---
+
+## app/Policies/PunishmentLogPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use App\Models\PunishmentLog;
+use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
+
+class PunishmentLogPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:PunishmentLog');
+    }
+
+    public function view(AuthUser $authUser, PunishmentLog $punishmentLog): bool
+    {
+        return $authUser->can('View:PunishmentLog');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:PunishmentLog');
+    }
+
+    public function update(AuthUser $authUser, PunishmentLog $punishmentLog): bool
+    {
+        return $authUser->can('Update:PunishmentLog');
+    }
+
+    public function delete(AuthUser $authUser, PunishmentLog $punishmentLog): bool
+    {
+        return $authUser->can('Delete:PunishmentLog');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:PunishmentLog');
+    }
+
+    public function restore(AuthUser $authUser, PunishmentLog $punishmentLog): bool
+    {
+        return $authUser->can('Restore:PunishmentLog');
+    }
+
+    public function forceDelete(AuthUser $authUser, PunishmentLog $punishmentLog): bool
+    {
+        return $authUser->can('ForceDelete:PunishmentLog');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:PunishmentLog');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:PunishmentLog');
+    }
+
+    public function replicate(AuthUser $authUser, PunishmentLog $punishmentLog): bool
+    {
+        return $authUser->can('Replicate:PunishmentLog');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:PunishmentLog');
+    }
+}
+
+```
+---
+
+## app/Policies/PunishmentPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use App\Models\Punishment;
+use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
+
+class PunishmentPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Punishment');
+    }
+
+    public function view(AuthUser $authUser, Punishment $punishment): bool
+    {
+        return $authUser->can('View:Punishment');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Punishment');
+    }
+
+    public function update(AuthUser $authUser, Punishment $punishment): bool
+    {
+        return $authUser->can('Update:Punishment');
+    }
+
+    public function delete(AuthUser $authUser, Punishment $punishment): bool
+    {
+        return $authUser->can('Delete:Punishment');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Punishment');
+    }
+
+    public function restore(AuthUser $authUser, Punishment $punishment): bool
+    {
+        return $authUser->can('Restore:Punishment');
+    }
+
+    public function forceDelete(AuthUser $authUser, Punishment $punishment): bool
+    {
+        return $authUser->can('ForceDelete:Punishment');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Punishment');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Punishment');
+    }
+
+    public function replicate(AuthUser $authUser, Punishment $punishment): bool
+    {
+        return $authUser->can('Replicate:Punishment');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Punishment');
+    }
+}
+
 ```
 ---
 
@@ -7057,14 +9212,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -7124,8 +9279,248 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-
 }
+
+```
+---
+
+## app/Policies/RewardLogPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use App\Models\RewardLog;
+use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
+
+class RewardLogPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:RewardLog');
+    }
+
+    public function view(AuthUser $authUser, RewardLog $rewardLog): bool
+    {
+        return $authUser->can('View:RewardLog');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:RewardLog');
+    }
+
+    public function update(AuthUser $authUser, RewardLog $rewardLog): bool
+    {
+        return $authUser->can('Update:RewardLog');
+    }
+
+    public function delete(AuthUser $authUser, RewardLog $rewardLog): bool
+    {
+        return $authUser->can('Delete:RewardLog');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:RewardLog');
+    }
+
+    public function restore(AuthUser $authUser, RewardLog $rewardLog): bool
+    {
+        return $authUser->can('Restore:RewardLog');
+    }
+
+    public function forceDelete(AuthUser $authUser, RewardLog $rewardLog): bool
+    {
+        return $authUser->can('ForceDelete:RewardLog');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:RewardLog');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:RewardLog');
+    }
+
+    public function replicate(AuthUser $authUser, RewardLog $rewardLog): bool
+    {
+        return $authUser->can('Replicate:RewardLog');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:RewardLog');
+    }
+}
+
+```
+---
+
+## app/Policies/RewardPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use App\Models\Reward;
+use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
+
+class RewardPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Reward');
+    }
+
+    public function view(AuthUser $authUser, Reward $reward): bool
+    {
+        return $authUser->can('View:Reward');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Reward');
+    }
+
+    public function update(AuthUser $authUser, Reward $reward): bool
+    {
+        return $authUser->can('Update:Reward');
+    }
+
+    public function delete(AuthUser $authUser, Reward $reward): bool
+    {
+        return $authUser->can('Delete:Reward');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Reward');
+    }
+
+    public function restore(AuthUser $authUser, Reward $reward): bool
+    {
+        return $authUser->can('Restore:Reward');
+    }
+
+    public function forceDelete(AuthUser $authUser, Reward $reward): bool
+    {
+        return $authUser->can('ForceDelete:Reward');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Reward');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Reward');
+    }
+
+    public function replicate(AuthUser $authUser, Reward $reward): bool
+    {
+        return $authUser->can('Replicate:Reward');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Reward');
+    }
+}
+
+```
+---
+
+## app/Policies/RiwayatKelasSiswaPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use App\Models\RiwayatKelasSiswa;
+use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
+
+class RiwayatKelasSiswaPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:RiwayatKelasSiswa');
+    }
+
+    public function view(AuthUser $authUser, RiwayatKelasSiswa $riwayatKelasSiswa): bool
+    {
+        return $authUser->can('View:RiwayatKelasSiswa');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:RiwayatKelasSiswa');
+    }
+
+    public function update(AuthUser $authUser, RiwayatKelasSiswa $riwayatKelasSiswa): bool
+    {
+        return $authUser->can('Update:RiwayatKelasSiswa');
+    }
+
+    public function delete(AuthUser $authUser, RiwayatKelasSiswa $riwayatKelasSiswa): bool
+    {
+        return $authUser->can('Delete:RiwayatKelasSiswa');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:RiwayatKelasSiswa');
+    }
+
+    public function restore(AuthUser $authUser, RiwayatKelasSiswa $riwayatKelasSiswa): bool
+    {
+        return $authUser->can('Restore:RiwayatKelasSiswa');
+    }
+
+    public function forceDelete(AuthUser $authUser, RiwayatKelasSiswa $riwayatKelasSiswa): bool
+    {
+        return $authUser->can('ForceDelete:RiwayatKelasSiswa');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:RiwayatKelasSiswa');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:RiwayatKelasSiswa');
+    }
+
+    public function replicate(AuthUser $authUser, RiwayatKelasSiswa $riwayatKelasSiswa): bool
+    {
+        return $authUser->can('Replicate:RiwayatKelasSiswa');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:RiwayatKelasSiswa');
+    }
+}
+
 ```
 ---
 
@@ -7137,14 +9532,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
-use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -7204,8 +9599,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-
 }
+
 ```
 ---
 
@@ -7217,14 +9612,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -7284,8 +9679,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -7297,14 +9692,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -7364,8 +9759,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-
 }
+
 ```
 ---
 
@@ -7375,13 +9770,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -7441,8 +9836,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-
 }
+
 ```
 ---
 
@@ -7618,6 +10013,7 @@ namespace App\Services;
 
 use App\Enums\StatusAkademik;
 use App\Enums\StatusRiwayatKelas;
+use App\Models\Kelas;
 use App\Models\KelasTahunPelajaran;
 use App\Models\RiwayatKelasSiswa;
 use App\Models\TahunPelajaran;
@@ -7658,9 +10054,35 @@ class KenaikanKelasService
     }
 
     /**
+     * Keluarkan siswa dari kelas aktifnya saat ini tanpa proses kenaikan
+     * massal (dipanggil dari SiswaAktifRelationManager, aksi per baris).
+     * Menggunakan status 'keluar' - BUKAN 'lulus', karena ini penghapusan
+     * assignment manual, bukan kelulusan resmi.
+     *
+     * // TODO: GAP-SPEC - status_akademik user ikut diubah ke Keluar di
+     * sini, sama seperti prosesKeluar() pada alur kenaikan massal, demi
+     * konsistensi. Jika maksud "keluarkan dari kelas" di RelationManager
+     * ini sebenarnya hanya "lepas assignment kelas" (mis. akan di-assign
+     * ulang segera) tanpa mengubah status_akademik, ini perlu dikoreksi -
+     * belum ada spek eksplisit yang membedakan dua kasus tersebut.
+     */
+    public function keluarkanDariKelas(User $user): void
+    {
+        DB::transaction(function () use ($user) {
+            $this->tutupRiwayatAktif($user, StatusRiwayatKelas::Keluar);
+
+            $user->update([
+                'kelas_tahun_pelajaran_id' => null,
+                'status_akademik' => StatusAkademik::Keluar,
+            ]);
+        });
+    }
+
+    /**
      * Proses kenaikan kelas massal dari satu KTP asal.
      *
      * @param  array<string, string>  $keputusan  [user_id => 'naik'|'tinggal'|'lulus'|'keluar']
+     *
      * @throws RuntimeException jika Tahun Pelajaran aktif tidak valid atau KTP tujuan tidak ditemukan
      */
     public function prosesKenaikan(KelasTahunPelajaran $ktpAsal, array $keputusan): array
@@ -7706,9 +10128,9 @@ class KenaikanKelasService
         return $gagal;
     }
 
-    protected function prosesNaik(User $user, \App\Models\Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
+    protected function prosesNaik(User $user, Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
     {
-        $kelasTujuan = \App\Models\Kelas::query()
+        $kelasTujuan = Kelas::query()
             ->where('tingkat', $kelasAsal->tingkat + 1)
             ->where('jurusan_id', $kelasAsal->jurusan_id)
             ->first();
@@ -7723,13 +10145,13 @@ class KenaikanKelasService
             ->first();
 
         if (! $ktpTujuan) {
-            throw new RuntimeException("KTP tujuan ({$kelasTujuan->nama} - {$tahunTujuan->nama}) belum dibuat.");
+            throw new RuntimeException("KTP tujuan ({$kelasTujuan->nama} -{$tahunTujuan->nama}) belum dibuat.");
         }
 
         $this->pindahKe($user, $ktpTujuan, StatusRiwayatKelas::Naik);
     }
 
-    protected function prosesTinggal(User $user, \App\Models\Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
+    protected function prosesTinggal(User $user, Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
     {
         $ktpTujuan = KelasTahunPelajaran::query()
             ->where('kelas_id', $kelasAsal->id)
@@ -7757,12 +10179,7 @@ class KenaikanKelasService
 
     protected function prosesKeluar(User $user): void
     {
-        $this->tutupRiwayatAktif($user, StatusRiwayatKelas::Keluar);
-
-        $user->update([
-            'kelas_tahun_pelajaran_id' => null,
-            'status_akademik' => StatusAkademik::Keluar,
-        ]);
+        $this->keluarkanDariKelas($user);
     }
 
     protected function pindahKe(User $user, KelasTahunPelajaran $ktpTujuan, StatusRiwayatKelas $statusPenutup): void
@@ -12981,6 +15398,67 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_08_01_000007_drop_unique_riwayat_kelas_siswas.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * PERUBAHAN SKEMA - riwayat_kelas_siswas (Aturan poin 16).
+ *
+ * Constraint unik lama ('rks_user_ktp_unique' pada [user_id,
+ * kelas_tahun_pelajaran_id]) hanya mengizinkan SATU baris riwayat
+ * sepanjang masa untuk kombinasi siswa+KTP tertentu. Ini keliru secara
+ * desain: RiwayatKelasSiswa adalah log historis, bukan status tunggal -
+ * siswa yang keluar dari suatu KTP lalu di-assign kembali ke KTP yang
+ * sama di kemudian hari (dikonfirmasi sebagai skenario valid) butuh
+ * baris riwayat baru untuk pasangan yang sama.
+ *
+ * Constraint unik DIHAPUS TOTAL (dikonfirmasi: cukup mengandalkan logic
+ * aplikasi) - KenaikanKelasService::tutupRiwayatAktif() tetap menjadi
+ * satu-satunya penjaga agar tidak ada dua baris status='aktif' untuk
+ * user yang sama secara bersamaan (Aturan poin 3, DRY - satu sumber
+ * kebenaran di service, bukan di constraint DB).
+ *
+ * PENTING - urutan operasi: index baru dibuat TERLEBIH DAHULU sebelum
+ * index lama di-drop. Index 'rks_user_ktp_unique' (dimulai dari kolom
+ * user_id) dipakai MySQL sebagai index pendukung foreign key user_id
+ * (foreignId('user_id')->constrained('users')) - men-drop-nya tanpa ada
+ * index pengganti akan gagal dengan error 1553 "needed in a foreign key
+ * constraint". Index baru (user_id, status) dimulai dari kolom yang
+ * sama sehingga bisa langsung menggantikan peran tersebut.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('riwayat_kelas_siswas', function (Blueprint $table) {
+            $table->index(['user_id', 'status'], 'rks_user_status_idx');
+        });
+
+        Schema::table('riwayat_kelas_siswas', function (Blueprint $table) {
+            $table->dropUnique('rks_user_ktp_unique');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('riwayat_kelas_siswas', function (Blueprint $table) {
+            $table->unique(['user_id', 'kelas_tahun_pelajaran_id'], 'rks_user_ktp_unique');
+        });
+
+        Schema::table('riwayat_kelas_siswas', function (Blueprint $table) {
+            $table->dropIndex('rks_user_status_idx');
+        });
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -13203,6 +15681,61 @@ class ShieldSeeder extends Seeder
                 'View:Kunjungan',
                 'ViewAny:Transaksi',
                 'View:Transaksi',
+
+                'ViewAny:RiwayatKelasSiswa',
+                'View:RiwayatKelasSiswa',
+
+                // BARU iterasi ini - LevelBadge/Reward/Punishment adalah
+                // master data (threshold badge & aturan reward/punishment),
+                // diberi CRUD penuh sama seperti Buku/Kategori/Rak -
+                // dikonfirmasi Pustakawan dapat akses ke 5 resource baru
+                // (poin & reward) ini.
+                'ViewAny:LevelBadge',
+                'View:LevelBadge',
+                'Create:LevelBadge',
+                'Update:LevelBadge',
+                'Delete:LevelBadge',
+                'DeleteAny:LevelBadge',
+                'Restore:LevelBadge',
+                'RestoreAny:LevelBadge',
+                'ForceDelete:LevelBadge',
+                'ForceDeleteAny:LevelBadge',
+                'Replicate:LevelBadge',
+                'Reorder:LevelBadge',
+
+                'ViewAny:Reward',
+                'View:Reward',
+                'Create:Reward',
+                'Update:Reward',
+                'Delete:Reward',
+                'DeleteAny:Reward',
+                'Restore:Reward',
+                'RestoreAny:Reward',
+                'ForceDelete:Reward',
+                'ForceDeleteAny:Reward',
+                'Replicate:Reward',
+                'Reorder:Reward',
+
+                'ViewAny:Punishment',
+                'View:Punishment',
+                'Create:Punishment',
+                'Update:Punishment',
+                'Delete:Punishment',
+                'DeleteAny:Punishment',
+                'Restore:Punishment',
+                'RestoreAny:Punishment',
+                'ForceDelete:Punishment',
+                'ForceDeleteAny:Punishment',
+                'Replicate:Punishment',
+                'Reorder:Punishment',
+
+                // RewardLog/PunishmentLog - read-only (dihasilkan otomatis
+                // oleh PointService), Pustakawan hanya diberi akses lihat,
+                // sama pola dengan Denda/Kunjungan di atas.
+                'ViewAny:RewardLog',
+                'View:RewardLog',
+                'ViewAny:PunishmentLog',
+                'View:PunishmentLog',
 
                 'ViewAny:LaporanBulanan',
 

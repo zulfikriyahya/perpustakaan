@@ -11,6 +11,7 @@ use App\Services\PeminjamanService;
 use App\Services\RfidResolverService;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 /**
@@ -27,6 +28,19 @@ use RuntimeException;
  * Otorisasi: reuse Policy existing, tidak ada permission baru untuk
  * halaman ini sendiri - akses digerbang oleh Create:Peminjaman.
  *
+ * Rate limit anti-scan-ganda: barcode yang sama untuk user aktif yang
+ * sama tidak boleh diproses ulang dalam window RATE_LIMIT_DETIK detik
+ * (mencegah pinjam->kembali->pinjam tidak sengaja akibat buku ter-scan
+ * 2x, mis. scanner bouncing atau operator tidak sadar sudah masuk).
+ * Diguard via Cache (bukan DB), TTL pendek, tidak butuh migration.
+ *
+ * TODO: GAP-SPEC - window rate limit di-key per (user_id, buku_id), BUKAN
+ * global per buku - asumsi: 2 user berbeda scan buku yang sama beruntun
+ * (mis. serah terima cepat) tetap valid, hanya user yang SAMA scan buku
+ * yang SAMA berulang yang di-block. Jika ternyata yang diinginkan adalah
+ * block global per buku (siapapun operatornya), sesuaikan cache key di
+ * bawah (buang bagian user->id).
+ *
  * TODO: verifikasi signature terhadap versi package yang terpasang
  * (filament/filament versi sesuai composer.json) - properti $view dan
  * $navigationIcon di bawah mengikuti API Filament v4/v5 (schema-based),
@@ -42,6 +56,11 @@ class TransaksiCepat extends Page
 
     protected string $view = 'filament.pages.transaksi-cepat';
 
+    /**
+     * Window rate limit anti-scan-ganda (detik). Lihat catatan class di atas.
+     */
+    protected const RATE_LIMIT_DETIK = 15;
+
     public ?string $kartuInput = '';
 
     public ?string $barcodeInput = '';
@@ -51,7 +70,7 @@ class TransaksiCepat extends Page
     public bool $bisaMeminjam = false;
 
     /**
-     * @var array<int, array{barcode: string, judul: string, aksi: string, pesan: string, sukses: bool}>
+     * @var array<int, array{barcode: string, judul: string, aksi: string,pesan: string, sukses: bool}>
      */
     public array $riwayatScan = [];
 
@@ -106,6 +125,25 @@ class TransaksiCepat extends Page
             return;
         }
 
+        // Rate limit anti-scan-ganda - dicek SEBELUM logic pinjam/kembali,
+        // supaya buku yang sama ter-scan 2x dalam window tidak memicu
+        // toggle pinjam->kembali->pinjam yang tidak diinginkan.
+        $rateLimitKey = "transaksi-cepat-scan:{$this->user->id}:{$buku->id}";
+
+        if (Cache::has($rateLimitKey)) {
+            $this->tambahRiwayat(
+                $barcode,
+                $buku->judul,
+                'ditolak',
+                'Buku ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
+                false,
+            );
+
+            return;
+        }
+
+        Cache::put($rateLimitKey, true, self::RATE_LIMIT_DETIK);
+
         // Deteksi otomatis: ada Peminjaman aktif/terlambat milik user ini
         // untuk buku ini -> kembalikan. Kalau tidak -> pinjam baru.
         $peminjamanAktif = Peminjaman::query()
@@ -120,7 +158,7 @@ class TransaksiCepat extends Page
             if ($peminjamanAktif) {
                 $service->prosesPengembalian(
                     peminjaman: $peminjamanAktif,
-                    kondisi: KondisiBuku::Baik, // default, koreksi manual lewat PengembalianResource jika perlu
+                    kondisi: KondisiBuku::Baik, // default, koreksi manuallewat PengembalianResource jika perlu
                     diprosesOleh: auth()->user(),
                 );
                 $this->tambahRiwayat($barcode, $buku->judul, 'dikembalikan', 'Berhasil dikembalikan (kondisi: baik).', true);
@@ -133,6 +171,9 @@ class TransaksiCepat extends Page
                 $this->tambahRiwayat($barcode, $buku->judul, 'dipinjamkan', 'Berhasil dipinjamkan.', true);
             }
         } catch (RuntimeException $e) {
+            // Gagal diproses - buka kembali rate limit supaya operator bisa
+            // langsung retry tanpa perlu menunggu window habis.
+            Cache::forget($rateLimitKey);
             $this->tambahRiwayat($barcode, $buku->judul, 'error', $e->getMessage(), false);
         }
 

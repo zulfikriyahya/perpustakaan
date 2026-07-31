@@ -14,6 +14,7 @@ use Filament\Actions\ImportAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
@@ -22,6 +23,11 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Collection;
+use App\Services\KenaikanKelasService;
+use Filament\Actions\BulkAction;
+use Filament\Forms\Components\Select as FormSelect; // hindari bentrok nama jika perlu, atau pakai Select yang sudah ada
+use App\Models\KelasTahunPelajaran;
 
 /**
  * Resource khusus super_admin (dikonfirmasi) - lihat UserPolicy dan
@@ -154,19 +160,48 @@ class UserResource extends Resource
                         && (auth()->user()?->can('delete', $record) ?? false)),
             ])
             ->toolbarActions([
+                BulkAction::make('assign_kelas')
+                    ->label('Assign ke Kelas')
+                    ->icon('heroicon-o-user-group')
+                    ->schema([
+                        Select::make('kelas_tahun_pelajaran_id')
+                            ->label('Kelas (Tahun Pelajaran)')
+                            ->options(
+                                KelasTahunPelajaran::query()
+                                    ->with(['kelas', 'tahunPelajaran'])
+                                    ->get()
+                                    ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
+                                        $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
+                                    ])
+                            )
+                            ->searchable()
+                            ->required(),
+                    ])
+                    ->action(function (\Illuminate\Support\Collection $records, array $data) {
+                        $ktp = KelasTahunPelajaran::query()->findOrFail($data['kelas_tahun_pelajaran_id']);
+                        $service = app(KenaikanKelasService::class);
+
+                        $records->each(fn(User $user) => $service->assignKelas($user, $ktp));
+
+                        \Filament\Notifications\Notification::make()
+                            ->success()
+                            ->title($records->count() . ' user berhasil di-assign ke kelas.')
+                            ->send();
+                    })
+                    ->deselectRecordsAfterCompletion(),
                 DeleteBulkAction::make()
                     // Filter record super_admin keluar dari proses bulk
                     // delete - baris super_admin yang ikut ter-select akan
                     // dilewati (tidak ikut terhapus), bukan meng-error-kan
                     // seluruh aksi.
-                    ->action(function (\Illuminate\Support\Collection $records) {
+                    ->action(function (Collection $records) {
                         $dilindungi = $records->filter(fn(User $u) => $u->hasRole('super_admin'));
                         $bolehHapus = $records->reject(fn(User $u) => $u->hasRole('super_admin'));
 
                         $bolehHapus->each->delete();
 
                         if ($dilindungi->isNotEmpty()) {
-                            \Filament\Notifications\Notification::make()
+                            Notification::make()
                                 ->warning()
                                 ->title('Sebagian user tidak dihapus')
                                 ->body($dilindungi->count() . ' user dengan role super_admin dilewati (tidak bisa dihapus lewat bulk delete).')

@@ -1,0 +1,17 @@
+<?php
+
+namespace App\Filament\Resources\KelasTahunPelajaranResource\Pages;
+
+use App\Filament\Resources\KelasTahunPelajaranResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListKelasTahunPelajarans extends ListRecords
+{
+    protected static string $resource = KelasTahunPelajaranResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [CreateAction::make()];
+    }
+}

@@ -6,9 +6,9 @@ use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
 use App\Filament\Resources\DendaResource\Pages;
 use App\Models\Denda;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -65,7 +65,7 @@ class DendaResource extends Resource
                     ->toggleable(),
                 TextColumn::make('tipe')
                     ->badge()
-                    ->color(fn(TipeDenda $state) => match ($state) {
+                    ->color(fn (TipeDenda $state) => match ($state) {
                         TipeDenda::Keterlambatan => 'warning',
                         TipeDenda::Kerusakan => 'danger',
                         TipeDenda::Kehilangan => 'danger',
@@ -76,15 +76,15 @@ class DendaResource extends Resource
                 TextColumn::make('status_lunas')
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn(bool $state) => $state ? 'Lunas' : 'Belum Lunas')
-                    ->color(fn(bool $state) => $state ? 'success' : 'danger'),
+                    ->formatStateUsing(fn (bool $state) => $state ? 'Lunas' : 'Belum Lunas')
+                    ->color(fn (bool $state) => $state ? 'success' : 'danger'),
                 TextColumn::make('tanggal_lunas')
                     ->dateTime()
                     ->toggleable(),
                 TextColumn::make('status_refund')
                     ->label('Refund')
                     ->badge()
-                    ->color(fn(StatusRefund $state) => match ($state) {
+                    ->color(fn (StatusRefund $state) => match ($state) {
                         StatusRefund::TidakPerlu => 'gray',
                         StatusRefund::PerluRefund => 'warning',
                         StatusRefund::SudahDirefund => 'success',
@@ -100,12 +100,12 @@ class DendaResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('tipe')
-                    ->options(collect(TipeDenda::cases())->mapWithKeys(fn($t) => [$t->value => ucfirst($t->value)])),
+                    ->options(collect(TipeDenda::cases())->mapWithKeys(fn ($t) => [$t->value => ucfirst($t->value)])),
                 TernaryFilter::make('status_lunas')
                     ->label('Status Lunas'),
                 SelectFilter::make('status_refund')
                     ->label('Status Refund')
-                    ->options(collect(StatusRefund::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
+                    ->options(collect(StatusRefund::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
             ])
             ->recordActions([
                 Action::make('tandai_lunas')
@@ -115,8 +115,8 @@ class DendaResource extends Resource
                     // TODO: ASUMSI - Pustakawan boleh tandai lunas (setara
                     // proses pembayaran di meja), sama seperti pola akses
                     // Aksi "Proses Pengembalian" - perlu dikonfirmasi.
-                    ->authorize(fn(Denda $record) => auth()->user()?->can('update', $record) ?? false)
-                    ->visible(fn(Denda $record) => ! $record->status_lunas)
+                    ->authorize(fn (Denda $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->visible(fn (Denda $record) => ! $record->status_lunas)
                     ->requiresConfirmation()
                     ->schema([
                         DateTimePicker::make('tanggal_lunas')
@@ -125,7 +125,7 @@ class DendaResource extends Resource
                             ->required(),
                         Textarea::make('keterangan')
                             ->label('Catatan')
-                            ->default(fn(Denda $record) => $record->keterangan),
+                            ->default(fn (Denda $record) => $record->keterangan),
                     ])
                     ->action(function (Denda $record, array $data) {
                         // dipicu DendaObserver::updated() -> cek auto-unsuspend user
@@ -149,11 +149,11 @@ class DendaResource extends Resource
                     // biasa) - lihat TODO: GAP-SPEC di atas class, ini
                     // mitigasi manual untuk gap yang belum ada alur
                     // otomatisnya, jadi dibatasi lebih ketat dari Update:Denda.
-                    ->authorize(fn() => auth()->user()?->hasRole('super_admin') ?? false)
+                    ->authorize(fn () => auth()->user()?->hasRole('super_admin') ?? false)
                     ->schema([
                         Select::make('status_refund')
                             ->label('Status Refund')
-                            ->options(collect(StatusRefund::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
+                            ->options(collect(StatusRefund::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
                             ->required(),
                     ])
                     ->action(function (Denda $record, array $data) {

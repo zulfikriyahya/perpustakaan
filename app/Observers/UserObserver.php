@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Enums\GroupSetting;
 use App\Enums\RoleUser;
 use App\Models\Setting;
 use App\Models\User;
@@ -78,7 +79,7 @@ class UserObserver
 
         Setting::query()->updateOrCreate(
             ['key' => 'rfid_db_ver'],
-            ['value' => (string) $next, 'group' => \App\Enums\GroupSetting::Device]
+            ['value' => (string) $next, 'group' => GroupSetting::Device]
         );
 
         // Setting::get() di-cache 5 menit (lihat Setting model) - hapus cache

@@ -50,7 +50,7 @@ class TransaksiResource extends Resource
                     ->sortable(),
                 TextColumn::make('jenis')
                     ->badge()
-                    ->color(fn(JenisTransaksi $state) => match ($state) {
+                    ->color(fn (JenisTransaksi $state) => match ($state) {
                         JenisTransaksi::Peminjaman => 'info',
                         JenisTransaksi::Kunjungan => 'gray',
                         JenisTransaksi::PembayaranDenda => 'success',
@@ -67,7 +67,7 @@ class TransaksiResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('jenis')
-                    ->options(collect(JenisTransaksi::cases())->mapWithKeys(fn($j) => [$j->value => ucfirst(str_replace('_', ' ', $j->value))])),
+                    ->options(collect(JenisTransaksi::cases())->mapWithKeys(fn ($j) => [$j->value => ucfirst(str_replace('_', ' ', $j->value))])),
             ])
             ->recordActions([
                 DeleteAction::make(), // digerbang TransaksiPolicy::delete() - hanya Admin

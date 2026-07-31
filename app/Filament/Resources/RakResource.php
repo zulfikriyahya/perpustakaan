@@ -2,13 +2,13 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\RakResource\Pages;
-use App\Filament\Resources\RakResource\RelationManagers\BukusRelationManager;
 use App\Filament\Exports\RakExporter;
 use App\Filament\Imports\RakImporter;
+use App\Filament\Resources\RakResource\Pages;
+use App\Filament\Resources\RakResource\RelationManagers\BukusRelationManager;
+use App\Models\Rak;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ImportAction;
-use App\Models\Rak;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
@@ -49,10 +49,10 @@ class RakResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(RakImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Rak::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Rak::class) ?? false),
                 ExportAction::make()
                     ->exporter(RakExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Rak::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Rak::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('nama')

@@ -10,8 +10,10 @@
 │   │   ├── KondisiBuku.php
 │   │   ├── RoleUser.php
 │   │   ├── SourceKunjungan.php
+│   │   ├── StatusAkademik.php
 │   │   ├── StatusPeminjaman.php
 │   │   ├── StatusRefund.php
+│   │   ├── StatusRiwayatKelas.php
 │   │   └── TipeDenda.php
 │   ├── Exceptions
 │   │   └── WhatsappGatewayException.php
@@ -19,63 +21,104 @@
 │   │   ├── Exports
 │   │   │   ├── BukuExporter.php
 │   │   │   ├── KategoriExporter.php
-│   │   │   └── RakExporter.php
+│   │   │   ├── RakExporter.php
+│   │   │   └── UserExporter.php
 │   │   ├── Imports
 │   │   │   ├── BukuImporter.php
 │   │   │   ├── KategoriImporter.php
-│   │   │   └── RakImporter.php
+│   │   │   ├── RakImporter.php
+│   │   │   └── UserImporter.php
 │   │   ├── Pages
 │   │   │   ├── Auth
 │   │   │   │   ├── Login.php
 │   │   │   │   ├── RequestPasswordReset.php
 │   │   │   │   └── ResetPassword.php
 │   │   │   ├── LaporanBulanan.php
+│   │   │   ├── PengaturanSistem.php
+│   │   │   ├── ProsesKenaikanKelas.php
 │   │   │   └── TransaksiCepat.php
-│   │   └── Resources
-│   │       ├── BukuResource
-│   │       │   └── Pages
-│   │       │       ├── CreateBuku.php
-│   │       │       ├── EditBuku.php
-│   │       │       └── ListBukus.php
-│   │       ├── DendaResource
-│   │       │   └── Pages
-│   │       │       └── ListDendas.php
-│   │       ├── KategoriResource
-│   │       │   └── Pages
-│   │       │       ├── CreateKategori.php
-│   │       │       ├── EditKategori.php
-│   │       │       └── ListKategoris.php
-│   │       ├── KunjunganResource
-│   │       │   └── Pages
-│   │       │       └── ListKunjungans.php
-│   │       ├── PeminjamanResource
-│   │       │   └── Pages
-│   │       │       ├── CreatePeminjaman.php
-│   │       │       └── ListPeminjamans.php
-│   │       ├── PengembalianResource
-│   │       │   └── Pages
-│   │       │       └── ListPengembalians.php
-│   │       ├── RakResource
-│   │       │   ├── Pages
-│   │       │   │   ├── CreateRak.php
-│   │       │   │   ├── EditRak.php
-│   │       │   │   └── ListRaks.php
-│   │       │   └── RelationManagers
-│   │       │       └── BukusRelationManager.php
-│   │       ├── TransaksiResource
-│   │       │   ├── Pages
-│   │       │   │   ├── ListTransaksis.php
-│   │       │   │   └── ViewTransaksi.php
-│   │       │   └── RelationManagers
-│   │       │       └── PeminjamansRelationManager.php
-│   │       ├── BukuResource.php
-│   │       ├── DendaResource.php
-│   │       ├── KategoriResource.php
-│   │       ├── KunjunganResource.php
-│   │       ├── PeminjamanResource.php
-│   │       ├── PengembalianResource.php
-│   │       ├── RakResource.php
-│   │       └── TransaksiResource.php
+│   │   ├── Resources
+│   │   │   ├── BukuResource
+│   │   │   │   └── Pages
+│   │   │   │       ├── CreateBuku.php
+│   │   │   │       ├── EditBuku.php
+│   │   │   │       └── ListBukus.php
+│   │   │   ├── DendaResource
+│   │   │   │   └── Pages
+│   │   │   │       └── ListDendas.php
+│   │   │   ├── JurusanResource
+│   │   │   │   └── Pages
+│   │   │   │       ├── CreateJurusan.php
+│   │   │   │       ├── EditJurusan.php
+│   │   │   │       └── ListJurusans.php
+│   │   │   ├── KategoriResource
+│   │   │   │   └── Pages
+│   │   │   │       ├── CreateKategori.php
+│   │   │   │       ├── EditKategori.php
+│   │   │   │       └── ListKategoris.php
+│   │   │   ├── KelasResource
+│   │   │   │   └── Pages
+│   │   │   │       ├── CreateKelas.php
+│   │   │   │       ├── EditKelas.php
+│   │   │   │       └── ListKelas.php
+│   │   │   ├── KelasTahunPelajaranResource
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateKelasTahunPelajaran.php
+│   │   │   │   │   ├── EditKelasTahunPelajaran.php
+│   │   │   │   │   └── ListKelasTahunPelajarans.php
+│   │   │   │   └── RelationManagers
+│   │   │   │       └── SiswaAktifRelationManager.php
+│   │   │   ├── KunjunganResource
+│   │   │   │   └── Pages
+│   │   │   │       └── ListKunjungans.php
+│   │   │   ├── PeminjamanResource
+│   │   │   │   └── Pages
+│   │   │   │       ├── CreatePeminjaman.php
+│   │   │   │       └── ListPeminjamans.php
+│   │   │   ├── PengembalianResource
+│   │   │   │   └── Pages
+│   │   │   │       └── ListPengembalians.php
+│   │   │   ├── RakResource
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateRak.php
+│   │   │   │   │   ├── EditRak.php
+│   │   │   │   │   └── ListRaks.php
+│   │   │   │   └── RelationManagers
+│   │   │   │       └── BukusRelationManager.php
+│   │   │   ├── TahunPelajaranResource
+│   │   │   │   └── Pages
+│   │   │   │       ├── CreateTahunPelajaran.php
+│   │   │   │       ├── EditTahunPelajaran.php
+│   │   │   │       └── ListTahunPelajarans.php
+│   │   │   ├── TransaksiResource
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── ListTransaksis.php
+│   │   │   │   │   └── ViewTransaksi.php
+│   │   │   │   └── RelationManagers
+│   │   │   │       └── PeminjamansRelationManager.php
+│   │   │   ├── UserResource
+│   │   │   │   └── Pages
+│   │   │   │       ├── CreateUser.php
+│   │   │   │       ├── EditUser.php
+│   │   │   │       └── ListUsers.php
+│   │   │   ├── BukuResource.php
+│   │   │   ├── DendaResource.php
+│   │   │   ├── JurusanResource.php
+│   │   │   ├── KategoriResource.php
+│   │   │   ├── KelasResource.php
+│   │   │   ├── KelasTahunPelajaranResource.php
+│   │   │   ├── KunjunganResource.php
+│   │   │   ├── PeminjamanResource.php
+│   │   │   ├── PengembalianResource.php
+│   │   │   ├── RakResource.php
+│   │   │   ├── TahunPelajaranResource.php
+│   │   │   ├── TransaksiResource.php
+│   │   │   └── UserResource.php
+│   │   └── Widgets
+│   │       ├── DendaTerbaruWidget.php
+│   │       ├── PeminjamanJatuhTempoWidget.php
+│   │       ├── PeminjamanStatsWidget.php
+│   │       └── TrenKunjunganChartWidget.php
 │   ├── Http
 │   │   ├── Controllers
 │   │   │   ├── Api
@@ -90,7 +133,10 @@
 │   │   ├── Denda.php
 │   │   ├── DeviceLog.php
 │   │   ├── FirmwareRelease.php
+│   │   ├── Jurusan.php
 │   │   ├── Kategori.php
+│   │   ├── Kelas.php
+│   │   ├── KelasTahunPelajaran.php
 │   │   ├── Kunjungan.php
 │   │   ├── LevelBadge.php
 │   │   ├── PasswordResetOtp.php
@@ -102,7 +148,9 @@
 │   │   ├── Rak.php
 │   │   ├── RewardLog.php
 │   │   ├── Reward.php
+│   │   ├── RiwayatKelasSiswa.php
 │   │   ├── Setting.php
+│   │   ├── TahunPelajaran.php
 │   │   ├── Transaksi.php
 │   │   └── User.php
 │   ├── Observers
@@ -112,13 +160,18 @@
 │   ├── Policies
 │   │   ├── BukuPolicy.php
 │   │   ├── DendaPolicy.php
+│   │   ├── JurusanPolicy.php
 │   │   ├── KategoriPolicy.php
+│   │   ├── KelasPolicy.php
+│   │   ├── KelasTahunPelajaranPolicy.php
 │   │   ├── KunjunganPolicy.php
 │   │   ├── PeminjamanPolicy.php
 │   │   ├── PengembalianPolicy.php
 │   │   ├── RakPolicy.php
 │   │   ├── RolePolicy.php
-│   │   └── TransaksiPolicy.php
+│   │   ├── TahunPelajaranPolicy.php
+│   │   ├── TransaksiPolicy.php
+│   │   └── UserPolicy.php
 │   ├── Providers
 │   │   ├── Filament
 │   │   │   └── DashboardPanelProvider.php
@@ -126,6 +179,7 @@
 │   ├── Rules
 │   │   └── FormatKartuRfid.php
 │   └── Services
+│       ├── KenaikanKelasService.php
 │       ├── LaporanBulananService.php
 │       ├── PasswordResetOtpService.php
 │       ├── PeminjamanService.php
@@ -204,7 +258,13 @@
 │   │   ├── 2026_07_31_051302_create_imports_table.php
 │   │   ├── 2026_07_31_051303_create_exports_table.php
 │   │   ├── 2026_07_31_051304_create_failed_import_rows_table.php
-│   │   └── 2026_07_31_052251_create_notifications_table.php
+│   │   ├── 2026_07_31_052251_create_notifications_table.php
+│   │   ├── 2026_08_01_000001_create_jurusans_table.php
+│   │   ├── 2026_08_01_000002_create_tahun_pelajarans_table.php
+│   │   ├── 2026_08_01_000003_create_kelas_table.php
+│   │   ├── 2026_08_01_000004_create_kelas_tahun_pelajarans_table.php
+│   │   ├── 2026_08_01_000005_create_riwayat_kelas_siswas_table.php
+│   │   └── 2026_08_01_000006_replace_kelas_column_in_users_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
@@ -226,6 +286,8 @@
 │       │       │   ├── request-password-reset.blade.php
 │       │       │   └── reset-password.blade.php
 │       │       ├── laporan-bulanan.blade.php
+│       │       ├── pengaturan-sistem.blade.php
+│       │       ├── proses-kenaikan-kelas.blade.php
 │       │       └── transaksi-cepat.blade.php
 │       ├── pdf
 │       │   └── laporan-bulanan.blade.php
@@ -255,4 +317,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-62 directories, 194 files
+74 directories, 244 files

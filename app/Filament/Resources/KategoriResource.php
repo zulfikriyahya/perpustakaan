@@ -2,20 +2,19 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\KategoriExporter;
+use App\Filament\Imports\KategoriImporter;
 use App\Filament\Resources\KategoriResource\Pages;
 use App\Models\Kategori;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use App\Filament\Exports\KategoriExporter;
-use App\Filament\Imports\KategoriImporter;
-use Filament\Actions\ExportAction;
-use Filament\Actions\ImportAction;
-
 
 class KategoriResource extends Resource
 {
@@ -63,10 +62,10 @@ class KategoriResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(KategoriImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Kategori::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Kategori::class) ?? false),
                 ExportAction::make()
                     ->exporter(KategoriExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Kategori::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Kategori::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('nama')

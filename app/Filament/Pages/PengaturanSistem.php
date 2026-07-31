@@ -12,7 +12,6 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
-use Illuminate\Validation\Rule;
 
 /**
  * Halaman Pengaturan Sistem: form terstruktur per GroupSetting, menulis
@@ -127,7 +126,7 @@ class PengaturanSistem extends Page
                                 'wa_template_koreksi_kondisi_pengembalian' => 'Koreksi Kondisi Pengembalian',
                                 'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
                             ])->map(
-                                fn(string $label, string $key) => TextInput::make($key)
+                                fn (string $label, string $key) => TextInput::make($key)
                                     ->label($label)
                                     ->required()
                                     ->helperText('Wajib sama persis dengan template_code di panel gateway.')
@@ -138,7 +137,7 @@ class PengaturanSistem extends Page
                         ->schema([
                             Placeholder::make('rfid_db_ver')
                                 ->label('Versi Daftar Kartu RFID (otomatis)')
-                                ->content(fn() => (string) Setting::get('rfid_db_ver', 0)),
+                                ->content(fn () => (string) Setting::get('rfid_db_ver', 0)),
                             TextInput::make('device_sleep_start_hour')
                                 ->label('Jam Mulai Sleep (0-23)')
                                 ->numeric()->integer()->minValue(0)->maxValue(23)->required(),

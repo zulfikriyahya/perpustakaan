@@ -152,6 +152,22 @@ enum SourceKunjungan: string
 ```
 ---
 
+## app/Enums/StatusAkademik.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum StatusAkademik: string
+{
+    case Aktif = 'aktif';
+    case Lulus = 'lulus';
+    case Keluar = 'keluar';
+}
+
+```
+---
+
 ## app/Enums/StatusPeminjaman.php
 ```php
 <?php
@@ -180,6 +196,24 @@ enum StatusRefund: string
     case TidakPerlu = 'tidak_perlu';
     case PerluRefund = 'perlu_refund';
     case SudahDirefund = 'sudah_direfund';
+}
+
+```
+---
+
+## app/Enums/StatusRiwayatKelas.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum StatusRiwayatKelas: string
+{
+    case Aktif = 'aktif';       // sedang berjalan di KTP ini
+    case Naik = 'naik';         // selesai, siswa naik ke KTP berikutnya
+    case Tinggal = 'tinggal';   // selesai, siswa tinggal kelas (KTP tingkat sama, tahun baru)
+    case Lulus = 'lulus';       // selesai, siswa lulus dari KTP ini
+    case Keluar = 'keluar';     // selesai, siswa keluar/pindah sekolah
 }
 
 ```
@@ -255,10 +289,10 @@ class BukuExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Buku selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+        $body = 'Export Buku selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
         }
 
         return $body;
@@ -293,10 +327,10 @@ class KategoriExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Kategori selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+        $body = 'Export Kategori selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
         }
 
         return $body;
@@ -332,10 +366,60 @@ class RakExporter extends Exporter
 
     public static function getCompletedNotificationBody(Export $export): string
     {
-        $body = 'Export Rak selesai, ' . number_format($export->successful_rows) . ' baris berhasil diekspor.';
+        $body = 'Export Rak selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
 
         if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Exports/UserExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\User;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+/**
+ * SENGAJA tidak menyertakan kolom 'password' - meski sudah $hidden di
+ * Model, tetap dieksplisitkan di sini sebagai lapisan keamanan kedua.
+ */
+class UserExporter extends Exporter
+{
+    protected static ?string $model = User::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('nama'),
+            ExportColumn::make('role'),
+            ExportColumn::make('nisn')->label('NISN'),
+            ExportColumn::make('nip')->label('NIP'),
+            ExportColumn::make('kelas'),
+            ExportColumn::make('jabatan'),
+            ExportColumn::make('no_telepon')->label('No. Telepon'),
+            ExportColumn::make('no_kartu_rfid')->label('No. Kartu RFID'),
+            ExportColumn::make('status_suspend')->label('Suspend'),
+            ExportColumn::make('akumulasi_point')->label('Point'),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export User selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
         }
 
         return $body;
@@ -431,10 +515,10 @@ class BukuImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Buku selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Buku selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;
@@ -478,10 +562,10 @@ class KategoriImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Kategori selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Kategori selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;
@@ -538,10 +622,93 @@ class RakImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Rak selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Rak selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/UserImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Enums\RoleUser;
+use App\Models\User;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+use Illuminate\Support\Str;
+
+/**
+ * TODO: GAP-SPEC - 'role' dan 'no_kartu_rfid' SENGAJA tidak termasuk kolom
+ * import (dikonfirmasi: harus manual lewat form demi keamanan). User baru
+ * hasil import otomatis role='siswa' (default migration/kolom).
+ *
+ * Upsert berdasarkan 'nisn' jika ada, fallback 'nip' - baris tanpa
+ * keduanya akan gagal (lihat rules 'required_without').
+ *
+ * Password digenerate random - TIDAK ada mekanisme kirim WA/email
+ * notifikasi password ke user baru dalam iterasi ini (lihat status
+ * verifikasi di respons utama untuk gap ini).
+ */
+class UserImporter extends Importer
+{
+    protected static ?string $model = User::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('nama')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+            ImportColumn::make('nisn')
+                ->label('NISN')
+                ->rules(['nullable', 'required_without:nip', 'string', 'max:255']),
+            ImportColumn::make('nip')
+                ->label('NIP')
+                ->rules(['nullable', 'required_without:nisn', 'string', 'max:255']),
+            ImportColumn::make('kelas')
+                ->rules(['nullable', 'string', 'max:255']),
+            ImportColumn::make('jabatan')
+                ->rules(['nullable', 'string', 'max:255']),
+            ImportColumn::make('no_telepon')
+                ->label('No. Telepon')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255']),
+        ];
+    }
+
+    public function resolveRecord(): ?User
+    {
+        if (! empty($this->data['nisn'])) {
+            $record = User::query()->firstOrNew(['nisn' => $this->data['nisn']]);
+        } else {
+            $record = User::query()->firstOrNew(['nip' => $this->data['nip']]);
+        }
+
+        if (! $record->exists) {
+            $record->role = RoleUser::Siswa;
+            $record->password = Str::random(12); // di-hash otomatis via cast 'hashed'
+        }
+
+        return $record;
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import User selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;
@@ -768,6 +935,7 @@ class ResetPassword extends SimplePage
     {
         if (! Session::has('reset_password_no_telepon')) {
             $this->redirect(route('filament.dashboard.auth.password-reset.request'));
+
             return;
         }
 
@@ -804,6 +972,7 @@ class ResetPassword extends SimplePage
             $otpService->verifikasiDanReset($noTelepon, $data['otp'], $data['password']);
         } catch (\RuntimeException $e) {
             Notification::make()->title($e->getMessage())->warning()->send();
+
             return;
         }
 
@@ -836,6 +1005,8 @@ class LaporanBulanan extends Page
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-chart-bar';
 
     protected static ?string $navigationLabel = 'Laporan Bulanan';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Laporan';
 
     protected string $view = 'filament.pages.laporan-bulanan';
 
@@ -883,7 +1054,7 @@ class LaporanBulanan extends Page
                 ->label('Tahun')
                 ->options(
                     collect(range((int) now()->format('Y'), 2024))
-                        ->mapWithKeys(fn($y) => [$y => $y])
+                        ->mapWithKeys(fn ($y) => [$y => $y])
                 )
                 ->required(),
         ])->statePath('data');
@@ -899,10 +1070,358 @@ class LaporanBulanan extends Page
             ->setPaper('a4', 'portrait');
 
         return response()->streamDownload(
-            fn() => print($pdf->output()),
+            fn () => print ($pdf->output()),
             "laporan-bulanan-{$data['tahun']}-{$data['bulan']}.pdf",
             ['Content-Type' => 'application/pdf'],
         );
+    }
+}
+
+```
+---
+
+## app/Filament/Pages/PengaturanSistem.php
+```php
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Enums\GroupSetting;
+use App\Models\Setting;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
+
+/**
+ * Halaman Pengaturan Sistem: form terstruktur per GroupSetting, menulis
+ * ke tabel `settings` (bukan generate Resource generik). Konsisten
+ * dengan pola LaporanBulanan (custom Page + Schema->statePath('data')).
+ *
+ * Simpan dipisah 2 method (simpanUmum / simpanDevice) - BUKAN satu
+ * Action generik - supaya konfirmasi dialog hanya wajib untuk grup
+ * Device (poin 17: perubahan di sini menyentuh device fisik yang
+ * sudah aktif di lapangan). Dialog konfirmasi di-trigger via Alpine
+ * confirm() di Blade, bukan Filament Action::requiresConfirmation(),
+ * karena signature Action pada Filament 5.7 belum diverifikasi penuh
+ * untuk kasus non-Resource page ini.
+ *
+ * TODO: verifikasi signature terhadap versi package yang terpasang -
+ * komponen Tabs/Tab diasumsikan berada di Filament\Schemas\Components
+ * (mengikuti pola Schema/Select yang sudah dipakai LaporanBulanan),
+ * cek ulang jika filament/filament ^5.7 punya lokasi berbeda.
+ */
+class PengaturanSistem extends Page
+{
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
+
+    protected static ?string $navigationLabel = 'Pengaturan Sistem';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Sistem';
+
+    protected string $view = 'filament.pages.pengaturan-sistem';
+
+    public ?array $data = [];
+
+    /**
+     * Key yang HANYA dikelola otomatis oleh sistem (UserObserver) -
+     * tidak boleh masuk fillable form, ditampilkan read-only saja.
+     */
+    protected const KEY_READONLY = ['rfid_db_ver'];
+
+    /**
+     * Key milik grup Device yang wajib lewat konfirmasi terpisah
+     * karena berdampak langsung ke device fisik aktif.
+     */
+    protected const KEY_DEVICE_SENSITIVE = [
+        'device_sleep_start_hour',
+        'device_sleep_end_hour',
+        'device_oled_dim_start_hour',
+        'device_oled_dim_end_hour',
+        'device_sync_interval_ms',
+        'device_ota_check_interval_ms',
+    ];
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('ViewAny:PengaturanSistem') ?? false;
+    }
+
+    public function getHeading(): string|HtmlString
+    {
+        return 'Pengaturan Sistem';
+    }
+
+    public function mount(): void
+    {
+        $values = Setting::query()->pluck('value', 'key');
+
+        $this->form->fill($values->toArray());
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Tabs::make('Grup')
+                ->tabs([
+                    Tab::make('Peminjaman & Denda')
+                        ->schema([
+                            TextInput::make('max_peminjaman_aktif')
+                                ->label('Maks. Peminjaman Aktif per User')
+                                ->numeric()->integer()->minValue(1)->required(),
+                            TextInput::make('lama_peminjaman_hari')
+                                ->label('Lama Masa Pinjam (hari)')
+                                ->numeric()->integer()->minValue(1)->required(),
+                            TextInput::make('tarif_denda_per_hari')
+                                ->label('Tarif Denda Keterlambatan / Hari (Rp)')
+                                ->numeric()->minValue(0)->required(),
+                            TextInput::make('persentase_denda_kerusakan')
+                                ->label('Persentase Denda Kerusakan (%)')
+                                ->numeric()->minValue(0)->maxValue(100)->required(),
+                        ]),
+
+                    Tab::make('Point')
+                        ->schema([
+                            TextInput::make('point_kunjungan')->label('Point Kunjungan')->numeric()->integer()->required(),
+                            TextInput::make('point_peminjaman')->label('Point Peminjaman')->numeric()->integer()->required(),
+                            TextInput::make('point_pengembalian')->label('Point Pengembalian')->numeric()->integer()->required(),
+                            TextInput::make('point_kerusakan')->label('Point Kerusakan (negatif)')->numeric()->integer()->maxValue(0)->required(),
+                            TextInput::make('point_kehilangan')->label('Point Kehilangan (negatif)')->numeric()->integer()->maxValue(0)->required(),
+                        ]),
+
+                    Tab::make('WhatsApp Template')
+                        ->schema(
+                            collect([
+                                'wa_template_peminjaman_aktif' => 'Peminjaman Aktif',
+                                'wa_template_reminder_h3' => 'Reminder H-3',
+                                'wa_template_reminder_h1' => 'Reminder H-1',
+                                'wa_template_jadi_terlambat' => 'Jadi Terlambat',
+                                'wa_template_pengembalian_diproses' => 'Pengembalian Diproses',
+                                'wa_template_denda_dibuat' => 'Denda Dibuat',
+                                'wa_template_denda_lunas' => 'Denda Lunas',
+                                'wa_template_badge_naik' => 'Badge Naik',
+                                'wa_template_reward_didapat' => 'Reward Didapat',
+                                'wa_template_punishment_diterapkan' => 'Punishment Diterapkan',
+                                'wa_template_reset_password_otp' => 'Reset Password OTP',
+                                'wa_template_koreksi_kondisi_pengembalian' => 'Koreksi Kondisi Pengembalian',
+                                'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
+                            ])->map(
+                                fn (string $label, string $key) => TextInput::make($key)
+                                    ->label($label)
+                                    ->required()
+                                    ->helperText('Wajib sama persis dengan template_code di panel gateway.')
+                            )->values()->all()
+                        ),
+
+                    Tab::make('Device')
+                        ->schema([
+                            Placeholder::make('rfid_db_ver')
+                                ->label('Versi Daftar Kartu RFID (otomatis)')
+                                ->content(fn () => (string) Setting::get('rfid_db_ver', 0)),
+                            TextInput::make('device_sleep_start_hour')
+                                ->label('Jam Mulai Sleep (0-23)')
+                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                            TextInput::make('device_sleep_end_hour')
+                                ->label('Jam Bangun dari Sleep (0-23)')
+                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                            TextInput::make('device_oled_dim_start_hour')
+                                ->label('Jam OLED Dimatikan Sementara (0-23)')
+                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                            TextInput::make('device_oled_dim_end_hour')
+                                ->label('Jam OLED Menyala Kembali (0-23)')
+                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                            TextInput::make('device_sync_interval_ms')
+                                ->label('Interval Sinkronisasi (ms)')
+                                ->numeric()->integer()->minValue(1000)->required()
+                                ->helperText('Minimum 1000ms - nilai terlalu kecil membebani device & jaringan.'),
+                            TextInput::make('device_ota_check_interval_ms')
+                                ->label('Interval Cek Firmware OTA (ms)')
+                                ->numeric()->integer()->minValue(1000)->required(),
+                        ]),
+                ]),
+        ])->statePath('data');
+    }
+
+    /**
+     * Simpan grup Peminjaman, Denda, Point, WhatsApp - tanpa konfirmasi,
+     * tidak menyentuh kontrak device.
+     */
+    public function simpanUmum(): void
+    {
+        $state = $this->form->getState();
+
+        $keys = array_diff(
+            array_keys($state),
+            self::KEY_DEVICE_SENSITIVE,
+            self::KEY_READONLY,
+        );
+
+        $this->simpanKeys($state, $keys);
+
+        Notification::make()->success()->title('Pengaturan umum disimpan.')->send();
+    }
+
+    /**
+     * Simpan grup Device - dipanggil setelah konfirmasi Alpine di Blade.
+     * TODO: GAP-SPEC - perubahan di sini baru dipakai device pada siklus
+     * fetch config berikutnya (lihat PerpustakaanDeviceController), TIDAK
+     * ada mekanisme push aktif ke device yang sedang online. Jika perlu
+     * push real-time, perlu keputusan desain tambahan (mis. queue command
+     * ke device via endpoint lain) - belum diimplementasikan.
+     */
+    public function simpanDevice(): void
+    {
+        $state = $this->form->getState();
+
+        $this->simpanKeys($state, self::KEY_DEVICE_SENSITIVE);
+
+        Notification::make()
+            ->warning()
+            ->title('Pengaturan device disimpan.')
+            ->body('Device akan memakai nilai baru pada sinkronisasi berikutnya, bukan seketika.')
+            ->send();
+    }
+
+    protected function simpanKeys(array $state, array $keys): void
+    {
+        $groupMap = [
+            'max_peminjaman_aktif' => GroupSetting::Peminjaman,
+            'lama_peminjaman_hari' => GroupSetting::Peminjaman,
+            'tarif_denda_per_hari' => GroupSetting::Denda,
+            'persentase_denda_kerusakan' => GroupSetting::Denda,
+            'point_kunjungan' => GroupSetting::Point,
+            'point_peminjaman' => GroupSetting::Point,
+            'point_pengembalian' => GroupSetting::Point,
+            'point_kerusakan' => GroupSetting::Point,
+            'point_kehilangan' => GroupSetting::Point,
+            'device_sleep_start_hour' => GroupSetting::Device,
+            'device_sleep_end_hour' => GroupSetting::Device,
+            'device_oled_dim_start_hour' => GroupSetting::Device,
+            'device_oled_dim_end_hour' => GroupSetting::Device,
+            'device_sync_interval_ms' => GroupSetting::Device,
+            'device_ota_check_interval_ms' => GroupSetting::Device,
+        ];
+
+        foreach ($keys as $key) {
+            if (in_array($key, self::KEY_READONLY, true) || ! array_key_exists($key, $state)) {
+                continue;
+            }
+
+            $group = $groupMap[$key] ?? GroupSetting::Whatsapp; // sisanya wa_template_*
+
+            Setting::query()->updateOrCreate(
+                ['key' => $key],
+                ['value' => (string) $state[$key], 'group' => $group],
+            );
+        }
+    }
+}
+
+```
+---
+
+## app/Filament/Pages/ProsesKenaikanKelas.php
+```php
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Enums\StatusRiwayatKelas;
+use App\Models\KelasTahunPelajaran;
+use App\Services\KenaikanKelasService;
+use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Filament\Schemas\Schema;
+use RuntimeException;
+
+/**
+ * Halaman kerja untuk memutuskan status kenaikan tiap siswa aktif di
+ * satu KTP asal, lalu memanggil KenaikanKelasService::prosesKenaikan()
+ * sekaligus (Aturan poin 3, DRY - tidak ada logic kalkulasi di sini).
+ * Diakses lewat Action 'proses_kenaikan' di KelasTahunPelajaranResource.
+ *
+ * Sengaja TIDAK didaftarkan ke navigasi (excludeFromNavigation) - hanya
+ * dapat diakses via URL dengan parameter ?ktp=... dari Resource.
+ */
+class ProsesKenaikanKelas extends Page
+{
+    protected static string|\BackedEnum|null $navigationIcon = null;
+
+    protected static bool $shouldRegisterNavigation = false;
+
+    protected string $view = 'filament.pages.proses-kenaikan-kelas';
+
+    public ?KelasTahunPelajaran $ktp = null;
+
+    public ?array $data = [];
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->hasRole('super_admin') ?? false;
+    }
+
+    public function mount(string $ktp): void
+    {
+        $this->ktp = KelasTahunPelajaran::query()
+            ->with(['kelas', 'tahunPelajaran', 'siswaAktif'])
+            ->findOrFail($ktp);
+
+        $this->form->fill(
+            $this->ktp->siswaAktif->mapWithKeys(fn($siswa) => [
+                $siswa->id => StatusRiwayatKelas::Naik->value,
+            ])->toArray()
+        );
+    }
+
+    public function getHeading(): string
+    {
+        return "Proses Kenaikan Kelas: {$this->ktp->kelas->nama} ({$this->ktp->tahunPelajaran->nama})";
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components(
+            $this->ktp->siswaAktif->map(
+                fn($siswa) => Select::make((string) $siswa->id)
+                    ->label($siswa->nama . ' (' . ($siswa->nisn ?? '-') . ')')
+                    ->options([
+                        StatusRiwayatKelas::Naik->value => 'Naik Kelas',
+                        StatusRiwayatKelas::Tinggal->value => 'Tinggal Kelas',
+                        StatusRiwayatKelas::Lulus->value => 'Lulus',
+                        StatusRiwayatKelas::Keluar->value => 'Keluar',
+                    ])
+                    ->required()
+            )->all()
+        )->statePath('data');
+    }
+
+    public function proses(): void
+    {
+        $keputusan = $this->form->getState();
+
+        try {
+            $gagal = app(KenaikanKelasService::class)->prosesKenaikan($this->ktp, $keputusan);
+        } catch (RuntimeException $e) {
+            Notification::make()->danger()->title('Gagal memproses kenaikan kelas')->body($e->getMessage())->send();
+            return;
+        }
+
+        if (empty($gagal)) {
+            Notification::make()->success()->title('Kenaikan kelas berhasil diproses untuk semua siswa.')->send();
+        } else {
+            Notification::make()
+                ->warning()
+                ->title('Sebagian siswa gagal diproses')
+                ->body(collect($gagal)->map(fn($pesan, $nama) => "{$nama}: {$pesan}")->implode('; '))
+                ->send();
+        }
+
+        $this->redirect(\App\Filament\Resources\KelasTahunPelajaranResource::getUrl());
     }
 }
 
@@ -951,6 +1470,8 @@ class TransaksiCepat extends Page
 
     protected static ?string $navigationLabel = 'Transaksi Cepat';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
+
     protected string $view = 'filament.pages.transaksi-cepat';
 
     public ?string $kartuInput = '';
@@ -984,6 +1505,7 @@ class TransaksiCepat extends Page
             $this->user = app(RfidResolverService::class)->resolveUser($input);
         } catch (RuntimeException $e) {
             Notification::make()->danger()->title('User tidak ditemukan')->body($e->getMessage())->send();
+
             return;
         }
 
@@ -1012,6 +1534,7 @@ class TransaksiCepat extends Page
 
         if (! $buku) {
             $this->tambahRiwayat($barcode, '-', 'error', 'Barcode tidak ditemukan.', false);
+
             return;
         }
 
@@ -1084,6 +1607,7 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateBuku extends CreateRecord
 {
     protected static string $resource = BukuResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -1113,6 +1637,7 @@ class EditBuku extends EditRecord
             DeleteAction::make(),
         ];
     }
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -1153,22 +1678,22 @@ class ListBukus extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\BukuExporter;
+use App\Filament\Imports\BukuImporter;
 use App\Filament\Resources\BukuResource\Pages;
 use App\Models\Buku;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use App\Filament\Exports\BukuExporter;
-use App\Filament\Imports\BukuImporter;
-use Filament\Actions\ExportAction;
-use Filament\Actions\ImportAction;
 
 class BukuResource extends Resource
 {
@@ -1177,6 +1702,8 @@ class BukuResource extends Resource
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-book-open';
 
     protected static ?string $navigationLabel = 'Buku';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Master Data';
 
     public static function form(Schema $schema): Schema
     {
@@ -1236,10 +1763,10 @@ class BukuResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(BukuImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Buku::class) ?? false),
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -1314,9 +1841,9 @@ use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
 use App\Filament\Resources\DendaResource\Pages;
 use App\Models\Denda;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -1352,6 +1879,8 @@ class DendaResource extends Resource
 
     protected static ?string $navigationLabel = 'Denda';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Keuangan';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);
@@ -1371,7 +1900,7 @@ class DendaResource extends Resource
                     ->toggleable(),
                 TextColumn::make('tipe')
                     ->badge()
-                    ->color(fn(TipeDenda $state) => match ($state) {
+                    ->color(fn (TipeDenda $state) => match ($state) {
                         TipeDenda::Keterlambatan => 'warning',
                         TipeDenda::Kerusakan => 'danger',
                         TipeDenda::Kehilangan => 'danger',
@@ -1382,15 +1911,15 @@ class DendaResource extends Resource
                 TextColumn::make('status_lunas')
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn(bool $state) => $state ? 'Lunas' : 'Belum Lunas')
-                    ->color(fn(bool $state) => $state ? 'success' : 'danger'),
+                    ->formatStateUsing(fn (bool $state) => $state ? 'Lunas' : 'Belum Lunas')
+                    ->color(fn (bool $state) => $state ? 'success' : 'danger'),
                 TextColumn::make('tanggal_lunas')
                     ->dateTime()
                     ->toggleable(),
                 TextColumn::make('status_refund')
                     ->label('Refund')
                     ->badge()
-                    ->color(fn(StatusRefund $state) => match ($state) {
+                    ->color(fn (StatusRefund $state) => match ($state) {
                         StatusRefund::TidakPerlu => 'gray',
                         StatusRefund::PerluRefund => 'warning',
                         StatusRefund::SudahDirefund => 'success',
@@ -1406,12 +1935,12 @@ class DendaResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('tipe')
-                    ->options(collect(TipeDenda::cases())->mapWithKeys(fn($t) => [$t->value => ucfirst($t->value)])),
+                    ->options(collect(TipeDenda::cases())->mapWithKeys(fn ($t) => [$t->value => ucfirst($t->value)])),
                 TernaryFilter::make('status_lunas')
                     ->label('Status Lunas'),
                 SelectFilter::make('status_refund')
                     ->label('Status Refund')
-                    ->options(collect(StatusRefund::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
+                    ->options(collect(StatusRefund::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
             ])
             ->recordActions([
                 Action::make('tandai_lunas')
@@ -1421,8 +1950,8 @@ class DendaResource extends Resource
                     // TODO: ASUMSI - Pustakawan boleh tandai lunas (setara
                     // proses pembayaran di meja), sama seperti pola akses
                     // Aksi "Proses Pengembalian" - perlu dikonfirmasi.
-                    ->authorize(fn(Denda $record) => auth()->user()?->can('update', $record) ?? false)
-                    ->visible(fn(Denda $record) => ! $record->status_lunas)
+                    ->authorize(fn (Denda $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->visible(fn (Denda $record) => ! $record->status_lunas)
                     ->requiresConfirmation()
                     ->schema([
                         DateTimePicker::make('tanggal_lunas')
@@ -1431,7 +1960,7 @@ class DendaResource extends Resource
                             ->required(),
                         Textarea::make('keterangan')
                             ->label('Catatan')
-                            ->default(fn(Denda $record) => $record->keterangan),
+                            ->default(fn (Denda $record) => $record->keterangan),
                     ])
                     ->action(function (Denda $record, array $data) {
                         // dipicu DendaObserver::updated() -> cek auto-unsuspend user
@@ -1455,11 +1984,11 @@ class DendaResource extends Resource
                     // biasa) - lihat TODO: GAP-SPEC di atas class, ini
                     // mitigasi manual untuk gap yang belum ada alur
                     // otomatisnya, jadi dibatasi lebih ketat dari Update:Denda.
-                    ->authorize(fn() => auth()->user()?->hasRole('super_admin') ?? false)
+                    ->authorize(fn () => auth()->user()?->hasRole('super_admin') ?? false)
                     ->schema([
                         Select::make('status_refund')
                             ->label('Status Refund')
-                            ->options(collect(StatusRefund::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
+                            ->options(collect(StatusRefund::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
                             ->required(),
                     ])
                     ->action(function (Denda $record, array $data) {
@@ -1494,6 +2023,137 @@ class DendaResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/JurusanResource/Pages/CreateJurusan.php
+```php
+<?php
+
+namespace App\Filament\Resources\JurusanResource\Pages;
+
+use App\Filament\Resources\JurusanResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateJurusan extends CreateRecord
+{
+    protected static string $resource = JurusanResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/JurusanResource/Pages/EditJurusan.php
+```php
+<?php
+
+namespace App\Filament\Resources\JurusanResource\Pages;
+
+use App\Filament\Resources\JurusanResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditJurusan extends EditRecord
+{
+    protected static string $resource = JurusanResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [DeleteAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/JurusanResource/Pages/ListJurusans.php
+```php
+<?php
+
+namespace App\Filament\Resources\JurusanResource\Pages;
+
+use App\Filament\Resources\JurusanResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListJurusans extends ListRecords
+{
+    protected static string $resource = JurusanResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [CreateAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/JurusanResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\JurusanResource\Pages;
+use App\Models\Jurusan;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Forms\Components\TextInput;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+class JurusanResource extends Resource
+{
+    protected static ?string $model = Jurusan::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-academic-cap';
+
+    protected static ?string $navigationLabel = 'Jurusan';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Akademik';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('nama')->required()->maxLength(255),
+            TextInput::make('kode')->required()->unique(ignoreRecord: true)->maxLength(255),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('kode')->searchable(),
+                TextColumn::make('kelas_count')->label('Jumlah Kelas')->counts('kelas'),
+                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->recordActions([DeleteAction::make()])
+            ->toolbarActions([DeleteBulkAction::make()]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListJurusans::route('/'),
+            'create' => Pages\CreateJurusan::route('/create'),
+            'edit' => Pages\EditJurusan::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/KategoriResource/Pages/CreateKategori.php
 ```php
 <?php
@@ -1506,6 +2166,7 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateKategori extends CreateRecord
 {
     protected static string $resource = KategoriResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -1535,6 +2196,7 @@ class EditKategori extends EditRecord
             DeleteAction::make(),
         ];
     }
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -1575,20 +2237,19 @@ class ListKategoris extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\KategoriExporter;
+use App\Filament\Imports\KategoriImporter;
 use App\Filament\Resources\KategoriResource\Pages;
 use App\Models\Kategori;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use App\Filament\Exports\KategoriExporter;
-use App\Filament\Imports\KategoriImporter;
-use Filament\Actions\ExportAction;
-use Filament\Actions\ImportAction;
-
 
 class KategoriResource extends Resource
 {
@@ -1597,6 +2258,8 @@ class KategoriResource extends Resource
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-tag';
 
     protected static ?string $navigationLabel = 'Kategori';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Master Data';
 
     public static function form(Schema $schema): Schema
     {
@@ -1624,8 +2287,7 @@ class KategoriResource extends Resource
                         ->multiple()
                         ->preload()
                         ->searchable(),
-                ])
-                ,
+                ]),
         ]);
     }
 
@@ -1635,10 +2297,10 @@ class KategoriResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(KategoriImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Kategori::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Kategori::class) ?? false),
                 ExportAction::make()
                     ->exporter(KategoriExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Kategori::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Kategori::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('nama')
@@ -1668,6 +2330,363 @@ class KategoriResource extends Resource
             'create' => Pages\CreateKategori::route('/create'),
             'edit' => Pages\EditKategori::route('/{record}/edit'),
         ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KelasResource/Pages/CreateKelas.php
+```php
+<?php
+
+namespace App\Filament\Resources\KelasResource\Pages;
+
+use App\Filament\Resources\KelasResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateKelas extends CreateRecord
+{
+    protected static string $resource = KelasResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KelasResource/Pages/EditKelas.php
+```php
+<?php
+
+namespace App\Filament\Resources\KelasResource\Pages;
+
+use App\Filament\Resources\KelasResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditKelas extends EditRecord
+{
+    protected static string $resource = KelasResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+    protected function getHeaderActions(): array
+    {
+        return [DeleteAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KelasResource/Pages/ListKelas.php
+```php
+<?php
+
+namespace App\Filament\Resources\KelasResource\Pages;
+
+use App\Filament\Resources\KelasResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListKelas extends ListRecords
+{
+    protected static string $resource = KelasResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [CreateAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KelasResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\KelasResource\Pages;
+use App\Models\Kelas;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+class KelasResource extends Resource
+{
+    protected static ?string $model = Kelas::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
+
+    protected static ?string $navigationLabel = 'Kelas';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Akademik';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('nama')
+                ->label('Nama Kelas (mis. X IPA 1)')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('tingkat')
+                ->numeric()
+                ->integer()
+                ->minValue(1)
+                ->required()
+                ->helperText('Angka tingkat, mis. 10, 11, 12 - dipakai untuk urutan kenaikan kelas.'),
+            Select::make('jurusan_id')
+                ->label('Jurusan')
+                ->relationship('jurusan', 'nama')
+                ->searchable()
+                ->preload(),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('tingkat')->sortable(),
+                TextColumn::make('jurusan.nama')->label('Jurusan')->toggleable(),
+                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                SelectFilter::make('jurusan_id')->label('Jurusan')->relationship('jurusan', 'nama'),
+            ])
+            ->recordActions([DeleteAction::make()])
+            ->toolbarActions([DeleteBulkAction::make()]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListKelas::route('/'),
+            'create' => Pages\CreateKelas::route('/create'),
+            'edit' => Pages\EditKelas::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KelasTahunPelajaranResource/Pages/CreateKelasTahunPelajaran.php
+```php
+<?php
+
+namespace App\Filament\Resources\KelasTahunPelajaranResource\Pages;
+
+use App\Filament\Resources\KelasTahunPelajaranResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateKelasTahunPelajaran extends CreateRecord
+{
+    protected static string $resource = KelasTahunPelajaranResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KelasTahunPelajaranResource/Pages/EditKelasTahunPelajaran.php
+```php
+<?php
+
+namespace App\Filament\Resources\KelasTahunPelajaranResource\Pages;
+
+use App\Filament\Resources\KelasTahunPelajaranResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditKelasTahunPelajaran extends EditRecord
+{
+    protected static string $resource = KelasTahunPelajaranResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+    protected function getHeaderActions(): array
+    {
+        return [DeleteAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KelasTahunPelajaranResource/Pages/ListKelasTahunPelajarans.php
+```php
+<?php
+
+namespace App\Filament\Resources\KelasTahunPelajaranResource\Pages;
+
+use App\Filament\Resources\KelasTahunPelajaranResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListKelasTahunPelajarans extends ListRecords
+{
+    protected static string $resource = KelasTahunPelajaranResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [CreateAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KelasTahunPelajaranResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Pages\ProsesKenaikanKelas;
+use App\Filament\Resources\KelasTahunPelajaranResource\Pages;
+use App\Filament\Resources\KelasTahunPelajaranResource\RelationManagers\SiswaAktifRelationManager;
+use App\Models\KelasTahunPelajaran;
+use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Forms\Components\Select;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+/**
+ * Instance Kelas untuk Tahun Pelajaran tertentu - satu kombinasi
+ * kelas_id + tahun_pelajaran_id unik (lihat migration unique index).
+ */
+class KelasTahunPelajaranResource extends Resource
+{
+    protected static ?string $model = KelasTahunPelajaran::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-group';
+
+    protected static ?string $navigationLabel = 'Kelas per Tahun Pelajaran';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Akademik';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Select::make('kelas_id')
+                ->label('Kelas')
+                ->relationship('kelas', 'nama')
+                ->searchable()
+                ->preload()
+                ->required(),
+            Select::make('tahun_pelajaran_id')
+                ->label('Tahun Pelajaran')
+                ->relationship('tahunPelajaran', 'nama')
+                ->searchable()
+                ->preload()
+                ->required(),
+            Select::make('wali_kelas_id')
+                ->label('Wali Kelas')
+                ->relationship('waliKelas', 'nama', fn ($query) => $query->whereIn('role', ['pustakawan', 'pegawai', 'super_admin']))
+                ->searchable()
+                ->preload(),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('kelas.nama')->label('Kelas')->searchable()->sortable(),
+                TextColumn::make('tahunPelajaran.nama')->label('Tahun Pelajaran')->searchable()->sortable(),
+                TextColumn::make('waliKelas.nama')->label('Wali Kelas')->toggleable(),
+                TextColumn::make('siswa_aktif_count')->label('Jumlah Siswa')->counts('siswaAktif'),
+            ])
+            ->filters([
+                SelectFilter::make('tahun_pelajaran_id')->label('Tahun Pelajaran')->relationship('tahunPelajaran', 'nama'),
+            ])
+            ->recordActions([
+            Action::make('proses_kenaikan')
+                ->label('Proses Kenaikan Kelas')
+                ->icon('heroicon-o-arrow-trending-up')
+                ->color('warning')
+                ->url(fn(KelasTahunPelajaran $record) => ProsesKenaikanKelas::getUrl(['ktp' => $record->id])),
+                DeleteAction::make()
+                ])
+            ->toolbarActions([DeleteBulkAction::make()]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            SiswaAktifRelationManager::class,
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListKelasTahunPelajarans::route('/'),
+            'create' => Pages\CreateKelasTahunPelajaran::route('/create'),
+            'edit' => Pages\EditKelasTahunPelajaran::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/KelasTahunPelajaranResource/RelationManagers/SiswaAktifRelationManager.php
+```php
+<?php
+
+namespace App\Filament\Resources\KelasTahunPelajaranResource\RelationManagers;
+
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+/**
+ * Read-only - assignment siswa ke KTP dilakukan lewat UserResource
+ * (edit user, pilih kelas_tahun_pelajaran_id) atau Action Kenaikan Kelas
+ * massal (menyusul), BUKAN attach/detach di sini, karena relasi ini
+ * belongsTo di sisi User (kelas_tahun_pelajaran_id), bukan pivot.
+ */
+class SiswaAktifRelationManager extends RelationManager
+{
+    protected static string $relationship = 'siswaAktif';
+
+    protected static ?string $title = 'Siswa Aktif';
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('nisn')->label('NISN')->searchable(),
+                TextColumn::make('status_akademik')->badge(),
+            ])
+            ->headerActions([])
+            ->recordActions([])
+            ->toolbarActions([]);
     }
 }
 
@@ -1724,6 +2743,8 @@ class KunjunganResource extends Resource
 
     protected static ?string $navigationLabel = 'Kunjungan';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);
@@ -1746,7 +2767,7 @@ class KunjunganResource extends Resource
                 TextColumn::make('source')
                     ->label('Sumber')
                     ->badge()
-                    ->color(fn(SourceKunjungan $state) => match ($state) {
+                    ->color(fn (SourceKunjungan $state) => match ($state) {
                         SourceKunjungan::Rfid => 'info',
                         SourceKunjungan::Manual => 'warning',
                     }),
@@ -1757,7 +2778,7 @@ class KunjunganResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('source')
-                    ->options(collect(SourceKunjungan::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
+                    ->options(collect(SourceKunjungan::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
             ])
             ->recordActions([
                 DeleteAction::make(), // digerbang KunjunganPolicy::delete() - hanya Admin
@@ -1802,6 +2823,7 @@ use RuntimeException;
 class CreatePeminjaman extends CreateRecord
 {
     protected static string $resource = PeminjamanResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -1909,12 +2931,11 @@ class PeminjamanResource extends Resource
 {
     protected static ?string $model = Peminjaman::class;
 
-    protected static ?string $slug = 'peminjaman';
+    protected static ?string $navigationLabel = 'Peminjaman';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-arrow-path-rounded-square';
-
-
-    protected static ?string $navigationLabel = 'Peminjaman';
 
     public static function form(Schema $schema): Schema
     {
@@ -1930,7 +2951,7 @@ class PeminjamanResource extends Resource
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->options(fn() => Buku::query()->where('stok', '>', 0)->pluck('judul', 'id'))
+                ->options(fn () => Buku::query()->where('stok', '>', 0)->pluck('judul', 'id'))
                 ->helperText('Hanya menampilkan buku dengan stok tersedia. Validasi limit peminjaman aktif & status suspend dicek otomatis saat submit.')
                 ->required(),
         ]);
@@ -1956,7 +2977,7 @@ class PeminjamanResource extends Resource
                     ->sortable(),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn(StatusPeminjaman $state) => match ($state) {
+                    ->color(fn (StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Aktif => 'success',
                         StatusPeminjaman::Terlambat => 'danger',
                         StatusPeminjaman::Selesai => 'gray',
@@ -1969,17 +2990,17 @@ class PeminjamanResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options(collect(StatusPeminjaman::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
+                    ->options(collect(StatusPeminjaman::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
             ])
             ->recordActions([
                 Action::make('proses_pengembalian')
                     ->label('Proses Pengembalian')
                     ->icon('heroicon-o-arrow-uturn-left')
-                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->visible(fn (Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
                     ->schema([
                         Select::make('kondisi')
                             ->label('Kondisi Buku')
-                            ->options(collect(KondisiBuku::cases())->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)]))
+                            ->options(collect(KondisiBuku::cases())->mapWithKeys(fn ($k) => [$k->value => ucfirst($k->value)]))
                             ->required(),
                         Textarea::make('catatan')
                             ->label('Catatan'),
@@ -2012,7 +3033,7 @@ class PeminjamanResource extends Resource
                     ->color('danger')
                     ->requiresConfirmation()
                     ->modalDescription('Buku belum dikembalikan secara fisik. Denda kehilangan penuh (Buku.harga_ganti) akan langsung dicatat.')
-                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->visible(fn (Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
                     ->action(function (Peminjaman $record) {
                         try {
                             app(PeminjamanService::class)->laporkanHilang($record);
@@ -2061,6 +3082,7 @@ class ListPengembalians extends ListRecords
     {
         return [];
     }
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -2115,6 +3137,8 @@ class PengembalianResource extends Resource
 
     protected static ?string $navigationLabel = 'Pengembalian';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);
@@ -2137,7 +3161,7 @@ class PengembalianResource extends Resource
                     ->sortable(),
                 TextColumn::make('kondisi')
                     ->badge()
-                    ->color(fn(KondisiBuku $state) => match ($state) {
+                    ->color(fn (KondisiBuku $state) => match ($state) {
                         KondisiBuku::Baik => 'success',
                         KondisiBuku::Rusak => 'warning',
                         KondisiBuku::Hilang => 'danger',
@@ -2151,24 +3175,24 @@ class PengembalianResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('kondisi')
-                    ->options(collect(KondisiBuku::cases())->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)])),
+                    ->options(collect(KondisiBuku::cases())->mapWithKeys(fn ($k) => [$k->value => ucfirst($k->value)])),
             ])
             ->recordActions([
                 Action::make('koreksi_kondisi')
                     ->label('Koreksi Kondisi')
                     ->icon('heroicon-o-pencil-square')
                     ->color('warning')
-                    ->authorize(fn(Pengembalian $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->authorize(fn (Pengembalian $record) => auth()->user()?->can('update', $record) ?? false)
                     // dijaga PengembalianPolicy - lihat TODO ShieldSeeder di atas
                     ->requiresConfirmation()
                     ->modalDescription('Mengubah kondisi akan otomatis menyesuaikan stok dan Denda terkait (batalkan Denda lama, catat Denda baru jika perlu). Ini tidak bisa dibatalkan lewat tombol undo.')
-                    ->schema(fn(Pengembalian $record) => [
+                    ->schema(fn (Pengembalian $record) => [
                         Select::make('kondisi_baru')
                             ->label('Kondisi Baru')
                             ->options(
                                 collect(KondisiBuku::cases())
-                                    ->reject(fn($k) => $k === $record->kondisi)
-                                    ->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)])
+                                    ->reject(fn ($k) => $k === $record->kondisi)
+                                    ->mapWithKeys(fn ($k) => [$k->value => ucfirst($k->value)])
                             )
                             ->required(),
                         Textarea::make('catatan')
@@ -2227,6 +3251,7 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateRak extends CreateRecord
 {
     protected static string $resource = RakResource::class;
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -2256,6 +3281,7 @@ class EditRak extends EditRecord
             DeleteAction::make(),
         ];
     }
+
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
@@ -2296,13 +3322,13 @@ class ListRaks extends ListRecords
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\RakResource\Pages;
-use App\Filament\Resources\RakResource\RelationManagers\BukusRelationManager;
 use App\Filament\Exports\RakExporter;
 use App\Filament\Imports\RakImporter;
+use App\Filament\Resources\RakResource\Pages;
+use App\Filament\Resources\RakResource\RelationManagers\BukusRelationManager;
+use App\Models\Rak;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ImportAction;
-use App\Models\Rak;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
@@ -2317,6 +3343,8 @@ class RakResource extends Resource
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-archive-box';
 
     protected static ?string $navigationLabel = 'Rak';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Master Data';
 
     public static function form(Schema $schema): Schema
     {
@@ -2341,10 +3369,10 @@ class RakResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(RakImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Rak::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Rak::class) ?? false),
                 ExportAction::make()
                     ->exporter(RakExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Rak::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Rak::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('nama')
@@ -2433,6 +3461,161 @@ class BukusRelationManager extends RelationManager
 ```
 ---
 
+## app/Filament/Resources/TahunPelajaranResource/Pages/CreateTahunPelajaran.php
+```php
+<?php
+
+namespace App\Filament\Resources\TahunPelajaranResource\Pages;
+
+use App\Filament\Resources\TahunPelajaranResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateTahunPelajaran extends CreateRecord
+{
+    protected static string $resource = TahunPelajaranResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/TahunPelajaranResource/Pages/EditTahunPelajaran.php
+```php
+<?php
+
+namespace App\Filament\Resources\TahunPelajaranResource\Pages;
+
+use App\Filament\Resources\TahunPelajaranResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditTahunPelajaran extends EditRecord
+{
+    protected static string $resource = TahunPelajaranResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+    protected function getHeaderActions(): array
+    {
+        return [DeleteAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/TahunPelajaranResource/Pages/ListTahunPelajarans.php
+```php
+<?php
+
+namespace App\Filament\Resources\TahunPelajaranResource\Pages;
+
+use App\Filament\Resources\TahunPelajaranResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListTahunPelajarans extends ListRecords
+{
+    protected static string $resource = TahunPelajaranResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [CreateAction::make()];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/TahunPelajaranResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\TahunPelajaranResource\Pages;
+use App\Models\TahunPelajaran;
+use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+class TahunPelajaranResource extends Resource
+{
+    protected static ?string $model = TahunPelajaran::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-calendar-days';
+
+    protected static ?string $navigationLabel = 'Tahun Pelajaran';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Akademik';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('nama')
+                ->label('Nama (mis. 2025/2026)')
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            DatePicker::make('tanggal_mulai')->required(),
+            DatePicker::make('tanggal_selesai')->required()->afterOrEqual('tanggal_mulai'),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('tanggal_mulai')->date(),
+                TextColumn::make('tanggal_selesai')->date(),
+                IconColumn::make('aktif')->boolean()->label('Aktif'),
+            ])
+            ->recordActions([
+                Action::make('jadikan_aktif')
+                    ->label('Jadikan Aktif')
+                    ->icon('heroicon-o-check-badge')
+                    ->color('success')
+                    ->visible(fn (TahunPelajaran $record) => ! $record->aktif)
+                    ->requiresConfirmation()
+                    ->modalDescription('Tahun Pelajaran lain yang sedang aktif akan otomatis dinonaktifkan.')
+                    ->action(function (TahunPelajaran $record) {
+                        TahunPelajaran::query()->where('id', '!=', $record->id)->update(['aktif' => false]);
+                        $record->update(['aktif' => true]);
+
+                        Notification::make()->success()->title('Tahun Pelajaran diaktifkan')->send();
+                    }),
+                DeleteAction::make()
+                    ->visible(fn (TahunPelajaran $record) => ! $record->aktif),
+            ])
+            ->toolbarActions([DeleteBulkAction::make()]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListTahunPelajarans::route('/'),
+            'create' => Pages\CreateTahunPelajaran::route('/create'),
+            'edit' => Pages\EditTahunPelajaran::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/TransaksiResource/Pages/ListTransaksis.php
 ```php
 <?php
@@ -2504,6 +3687,8 @@ class TransaksiResource extends Resource
 
     protected static ?string $navigationLabel = 'Transaksi';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Keuangan';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);
@@ -2519,7 +3704,7 @@ class TransaksiResource extends Resource
                     ->sortable(),
                 TextColumn::make('jenis')
                     ->badge()
-                    ->color(fn(JenisTransaksi $state) => match ($state) {
+                    ->color(fn (JenisTransaksi $state) => match ($state) {
                         JenisTransaksi::Peminjaman => 'info',
                         JenisTransaksi::Kunjungan => 'gray',
                         JenisTransaksi::PembayaranDenda => 'success',
@@ -2536,7 +3721,7 @@ class TransaksiResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('jenis')
-                    ->options(collect(JenisTransaksi::cases())->mapWithKeys(fn($j) => [$j->value => ucfirst(str_replace('_', ' ', $j->value))])),
+                    ->options(collect(JenisTransaksi::cases())->mapWithKeys(fn ($j) => [$j->value => ucfirst(str_replace('_', ' ', $j->value))])),
             ])
             ->recordActions([
                 DeleteAction::make(), // digerbang TransaksiPolicy::delete() - hanya Admin
@@ -2604,7 +3789,7 @@ class PeminjamansRelationManager extends RelationManager
                     ->date(),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn(StatusPeminjaman $state) => match ($state) {
+                    ->color(fn (StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Aktif => 'success',
                         StatusPeminjaman::Terlambat => 'danger',
                         StatusPeminjaman::Selesai => 'gray',
@@ -2614,6 +3799,557 @@ class PeminjamansRelationManager extends RelationManager
             ->headerActions([])
             ->recordActions([])
             ->toolbarActions([]);
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/UserResource/Pages/CreateUser.php
+```php
+<?php
+
+namespace App\Filament\Resources\UserResource\Pages;
+
+use App\Filament\Resources\UserResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateUser extends CreateRecord
+{
+    protected static string $resource = UserResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/UserResource/Pages/EditUser.php
+```php
+<?php
+
+namespace App\Filament\Resources\UserResource\Pages;
+
+use App\Filament\Resources\UserResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditUser extends EditRecord
+{
+    protected static string $resource = UserResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            DeleteAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/UserResource/Pages/ListUsers.php
+```php
+<?php
+
+namespace App\Filament\Resources\UserResource\Pages;
+
+use App\Filament\Resources\UserResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListUsers extends ListRecords
+{
+    protected static string $resource = UserResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/UserResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Enums\RoleUser;
+use App\Filament\Exports\UserExporter;
+use App\Filament\Imports\UserImporter;
+use App\Filament\Resources\UserResource\Pages;
+use App\Models\User;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Table;
+use Illuminate\Support\Collection;
+use App\Services\KenaikanKelasService;
+use Filament\Actions\BulkAction;
+use Filament\Forms\Components\Select as FormSelect; // hindari bentrok nama jika perlu, atau pakai Select yang sudah ada
+use App\Models\KelasTahunPelajaran;
+
+/**
+ * Resource khusus super_admin (dikonfirmasi) - lihat UserPolicy dan
+ * ShieldSeeder (permission User TIDAK disinkron ke role pustakawan).
+ *
+ * TODO: verifikasi signature terhadap versi package yang terpasang -
+ * mengikuti pola BukuResource untuk Schema/Table API Filament ^5.7.
+ */
+class UserResource extends Resource
+{
+    protected static ?string $model = User::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-users';
+
+    protected static ?string $navigationLabel = 'User';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Sistem';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('nama')
+                ->required()
+                ->maxLength(255),
+            Select::make('role')
+                ->options(collect(RoleUser::cases())->mapWithKeys(fn($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
+                ->required(),
+            TextInput::make('nisn')
+                ->label('NISN')
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            TextInput::make('nip')
+                ->label('NIP')
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            TextInput::make('kelas')
+                ->maxLength(255),
+            TextInput::make('jabatan')
+                ->maxLength(255),
+            TextInput::make('no_telepon')
+                ->label('No. Telepon')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('no_kartu_rfid')
+                ->label('No. Kartu RFID')
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            TextInput::make('password')
+                ->password()
+                ->revealable()
+                ->required(fn(string $operation) => $operation === 'create')
+                ->dehydrated(fn(?string $state) => filled($state))
+                ->maxLength(255)
+                ->helperText('Kosongkan jika tidak ingin mengubah password.'),
+            FileUpload::make('avatar')
+                ->image()
+                ->directory('user-avatar'),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->headerActions([
+                ImportAction::make()
+                    ->importer(UserImporter::class)
+                    ->authorize(fn() => auth()->user()?->can('create', User::class) ?? false),
+                ExportAction::make()
+                    ->exporter(UserExporter::class)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', User::class) ?? false),
+            ])
+            ->columns([
+                ImageColumn::make('avatar')
+                    ->circular(),
+                TextColumn::make('nama')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('role')
+                    ->badge()
+                    ->color(fn(RoleUser $state) => match ($state) {
+                        RoleUser::Admin => 'danger',
+                        RoleUser::Pustakawan => 'warning',
+                        RoleUser::Pegawai => 'info',
+                        RoleUser::Siswa => 'gray',
+                    }),
+                TextColumn::make('nisn')
+                    ->label('NISN')
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('nip')
+                    ->label('NIP')
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('no_telepon')
+                    ->label('No. Telepon')
+                    ->searchable(),
+                TextColumn::make('no_kartu_rfid')
+                    ->label('Kartu RFID')
+                    ->searchable()
+                    ->toggleable(),
+                IconColumn::make('status_suspend')
+                    ->label('Suspend')
+                    ->boolean()
+                    // Dibalik dari default Filament - true (suspend) = merah
+                    // (masalah), false (aman) = hijau. Default bawaan
+                    // mewarnai false sebagai merah, keliru untuk flag ini.
+                    ->trueIcon('heroicon-o-lock-closed')
+                    ->falseIcon('heroicon-o-lock-open')
+                    ->trueColor('danger')
+                    ->falseColor('success'),
+                TextColumn::make('akumulasi_point')
+                    ->label('Point')
+                    ->sortable(),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                SelectFilter::make('role')
+                    ->options(collect(RoleUser::cases())->mapWithKeys(fn($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
+                TernaryFilter::make('status_suspend')
+                    ->label('Status Suspend'),
+            ])
+            ->recordActions([
+                DeleteAction::make()
+                    // super_admin tidak boleh dihapus, termasuk oleh
+                    // sesama super_admin - mencegah lock-out akun sistem.
+                    ->authorize(fn(User $record) => ! $record->hasRole('super_admin')
+                        && (auth()->user()?->can('delete', $record) ?? false)),
+            ])
+            ->toolbarActions([
+                BulkAction::make('assign_kelas')
+                    ->label('Assign ke Kelas')
+                    ->icon('heroicon-o-user-group')
+                    ->schema([
+                        Select::make('kelas_tahun_pelajaran_id')
+                            ->label('Kelas (Tahun Pelajaran)')
+                            ->options(
+                                KelasTahunPelajaran::query()
+                                    ->with(['kelas', 'tahunPelajaran'])
+                                    ->get()
+                                    ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
+                                        $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
+                                    ])
+                            )
+                            ->searchable()
+                            ->required(),
+                    ])
+                    ->action(function (\Illuminate\Support\Collection $records, array $data) {
+                        $ktp = KelasTahunPelajaran::query()->findOrFail($data['kelas_tahun_pelajaran_id']);
+                        $service = app(KenaikanKelasService::class);
+
+                        $records->each(fn(User $user) => $service->assignKelas($user, $ktp));
+
+                        \Filament\Notifications\Notification::make()
+                            ->success()
+                            ->title($records->count() . ' user berhasil di-assign ke kelas.')
+                            ->send();
+                    })
+                    ->deselectRecordsAfterCompletion(),
+                DeleteBulkAction::make()
+                    // Filter record super_admin keluar dari proses bulk
+                    // delete - baris super_admin yang ikut ter-select akan
+                    // dilewati (tidak ikut terhapus), bukan meng-error-kan
+                    // seluruh aksi.
+                    ->action(function (Collection $records) {
+                        $dilindungi = $records->filter(fn(User $u) => $u->hasRole('super_admin'));
+                        $bolehHapus = $records->reject(fn(User $u) => $u->hasRole('super_admin'));
+
+                        $bolehHapus->each->delete();
+
+                        if ($dilindungi->isNotEmpty()) {
+                            Notification::make()
+                                ->warning()
+                                ->title('Sebagian user tidak dihapus')
+                                ->body($dilindungi->count() . ' user dengan role super_admin dilewati (tidak bisa dihapus lewat bulk delete).')
+                                ->send();
+                        }
+                    })
+                    ->authorize(fn() => auth()->user()?->can('deleteAny', User::class) ?? false),
+            ])
+            // Checkbox baris super_admin dinonaktifkan supaya tidak bisa
+            // ikut ter-select sama sekali (lapisan pencegahan pertama,
+            // sebelum sampai ke action() di atas).
+            ->checkIfRecordIsSelectableUsing(fn(User $record) => ! $record->hasRole('super_admin'));
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListUsers::route('/'),
+            'create' => Pages\CreateUser::route('/create'),
+            'edit' => Pages\EditUser::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Widgets/DendaTerbaruWidget.php
+```php
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Models\Denda;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Filament\Widgets\TableWidget;
+
+/**
+ * Denda terbaru yang belum lunas - untuk Admin & Pustakawan.
+ */
+class DendaTerbaruWidget extends TableWidget
+{
+    protected static ?int $sort = 4;
+
+    public static function canView(): bool
+    {
+        return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
+    }
+
+    protected function getTableHeading(): string
+    {
+        return 'Denda Belum Lunas Terbaru';
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query(
+                Denda::query()
+                    ->where('status_lunas', false)
+                    ->latest('created_at')
+            )
+            ->columns([
+                TextColumn::make('user.nama')->label('User'),
+                TextColumn::make('tipe')->label('Tipe')->badge(),
+                TextColumn::make('nominal')->label('Nominal')
+                    ->formatStateUsing(fn ($state) => 'Rp '.number_format((float) $state, 0, ',', '.')),
+                TextColumn::make('created_at')->label('Tanggal')->dateTime('d M Y H:i'),
+            ])
+            ->paginated([5, 10])
+            ->defaultPaginationPageOption(5);
+    }
+}
+
+```
+---
+
+## app/Filament/Widgets/PeminjamanJatuhTempoWidget.php
+```php
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Enums\StatusPeminjaman;
+use App\Models\Peminjaman;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Filament\Widgets\TableWidget;
+
+/**
+ * Peminjaman yang mendekati/melewati jatuh tempo - untuk Admin & Pustakawan.
+ * TODO: verifikasi signature terhadap versi filament/filament ^5.7 -
+ * TableWidget/table() API diasumsikan sama seperti pola Resource table().
+ */
+class PeminjamanJatuhTempoWidget extends TableWidget
+{
+    protected static ?int $sort = 3;
+
+    public static function canView(): bool
+    {
+        return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
+    }
+
+    protected function getTableHeading(): string
+    {
+        return 'Peminjaman Perlu Perhatian (Jatuh Tempo Terdekat)';
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query(
+                Peminjaman::query()
+                    ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat])
+                    ->orderBy('tanggal_jatuh_tempo')
+            )
+            ->columns([
+                TextColumn::make('user.nama')->label('Peminjam'),
+                TextColumn::make('buku.judul')->label('Buku'),
+                TextColumn::make('tanggal_jatuh_tempo')->label('Jatuh Tempo')->date('d M Y'),
+                TextColumn::make('status')->label('Status')->badge()
+                    ->color(fn (StatusPeminjaman $state) => match ($state) {
+                        StatusPeminjaman::Terlambat => 'danger',
+                        StatusPeminjaman::Aktif => 'success',
+                        default => 'gray',
+                    }),
+            ])
+            ->paginated([5, 10])
+            ->defaultPaginationPageOption(5);
+    }
+}
+
+```
+---
+
+## app/Filament/Widgets/PeminjamanStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Enums\StatusPeminjaman;
+use App\Models\Denda;
+use App\Models\Kunjungan;
+use App\Models\Peminjaman;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+/**
+ * Ringkasan operasional harian - untuk Admin & Pustakawan.
+ * TODO: verifikasi signature terhadap versi package yang terpasang
+ * (filament/filament ^5.7) - namespace Filament\Widgets\StatsOverviewWidget
+ * diasumsikan stabil sejak v3, belum dicek ulang untuk v5.
+ */
+class PeminjamanStatsWidget extends StatsOverviewWidget
+{
+    protected static ?int $sort = 1;
+
+    public static function canView(): bool
+    {
+        return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        $aktif = Peminjaman::query()->where('status', StatusPeminjaman::Aktif)->count();
+        $terlambat = Peminjaman::query()->where('status', StatusPeminjaman::Terlambat)->count();
+
+        $dendaBelumLunas = Denda::query()->where('status_lunas', false);
+        $jumlahDendaBelumLunas = $dendaBelumLunas->count();
+        $nominalDendaBelumLunas = (clone $dendaBelumLunas)->sum('nominal');
+
+        $kunjunganHariIni = Kunjungan::query()->whereDate('tanggal', now()->toDateString())->count();
+
+        return [
+            Stat::make('Peminjaman Aktif', (string) $aktif)
+                ->color('success'),
+
+            Stat::make('Peminjaman Terlambat', (string) $terlambat)
+                ->color($terlambat > 0 ? 'danger' : 'gray'),
+
+            Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas.' transaksi')
+                ->description('Rp '.number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
+                ->color($jumlahDendaBelumLunas > 0 ? 'warning' : 'gray'),
+
+            Stat::make('Kunjungan Hari Ini', (string) $kunjunganHariIni)
+                ->color('info'),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Widgets/TrenKunjunganChartWidget.php
+```php
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Models\Kunjungan;
+use Filament\Widgets\ChartWidget;
+
+/**
+ * Tren kunjungan 14 hari terakhir - untuk Admin & Pustakawan.
+ * TODO: verifikasi signature getData()/getType() terhadap versi
+ * filament/filament ^5.7 yang terpasang.
+ */
+class TrenKunjunganChartWidget extends ChartWidget
+{
+    protected static ?int $sort = 2;
+
+    public function getHeading(): ?string
+    {
+        return 'Tren Kunjungan (14 Hari Terakhir)';
+    }
+
+    public static function canView(): bool
+    {
+        return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
+    }
+
+    protected function getData(): array
+    {
+        $mulai = now()->subDays(13)->startOfDay();
+
+        $data = Kunjungan::query()
+            ->selectRaw('DATE(tanggal) as tgl, COUNT(*) as total')
+            ->where('tanggal', '>=', $mulai->toDateString())
+            ->groupBy('tgl')
+            ->orderBy('tgl')
+            ->pluck('total', 'tgl');
+
+        $labels = [];
+        $values = [];
+
+        for ($i = 0; $i < 14; $i++) {
+            $tanggal = $mulai->copy()->addDays($i);
+            $key = $tanggal->toDateString();
+
+            $labels[] = $tanggal->translatedFormat('d M');
+            $values[] = (int) ($data[$key] ?? 0);
+        }
+
+        return [
+            'datasets' => [
+                [
+                    'label' => 'Kunjungan',
+                    'data' => $values,
+                    'borderColor' => '#06b6d4',
+                    'backgroundColor' => 'rgba(6, 182, 212, 0.15)',
+                    'fill' => true,
+                ],
+            ],
+            'labels' => $labels,
+        ];
+    }
+
+    protected function getType(): string
+    {
+        return 'line';
     }
 }
 
@@ -2633,10 +4369,13 @@ use App\Models\DeviceLog;
 use App\Models\FirmwareRelease;
 use App\Models\Kunjungan;
 use App\Models\Setting;
+use App\Models\User;
 use App\Services\PointService;
 use App\Services\RfidResolverService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 /**
  * Endpoint untuk Attendance Machine (ESP32-C3) - kontrak persis mengikuti
@@ -2676,16 +4415,16 @@ class PerpustakaanDeviceController extends Controller
      * karena tidak lolos filter regex di bawah - bukan bug, tapi konsekuensi
      * kontrak firmware. Data lama wajib diperbaiki ke format 10 digit.
      */
-    public function rfidList(): \Illuminate\Http\Response
+    public function rfidList(): Response
     {
         $ver = (int) Setting::get('rfid_db_ver', 0);
 
-        $kartuList = \App\Models\User::query()
+        $kartuList = User::query()
             ->whereNotNull('no_kartu_rfid')
             ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
             ->pluck('no_kartu_rfid');
 
-        $body = "ver:{$ver}\n" . $kartuList->implode("\n");
+        $body = "ver:{$ver}\n".$kartuList->implode("\n");
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -2751,7 +4490,7 @@ class PerpustakaanDeviceController extends Controller
                 'jam_tap' => $this->parseJamDariTimestamp($timestamp),
                 'source' => SourceKunjungan::Rfid,
             ]);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return response()->json(['error' => 'sudah tercatat hari ini'], 400);
         }
@@ -2816,7 +4555,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {
@@ -2860,7 +4599,7 @@ class PerpustakaanDeviceController extends Controller
                 'jam_tap' => $this->parseJamDariTimestamp($timestamp),
                 'source' => SourceKunjungan::Rfid,
             ]);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'duplikat'];
         }
@@ -3135,6 +4874,7 @@ class Buku extends Model
 
 namespace App\Models;
 
+use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -3165,7 +4905,7 @@ class Denda extends Model
             'nominal' => 'decimal:2',
             'status_lunas' => 'boolean',
             'tanggal_lunas' => 'datetime',
-            'status_refund' => \App\Enums\StatusRefund::class,
+            'status_refund' => StatusRefund::class,
         ];
     }
 
@@ -3256,6 +4996,33 @@ class FirmwareRelease extends Model
 ```
 ---
 
+## app/Models/Jurusan.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Jurusan extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $fillable = ['nama', 'kode'];
+
+    public function kelas(): HasMany
+    {
+        return $this->hasMany(Kelas::class);
+    }
+}
+
+```
+---
+
 ## app/Models/Kategori.php
 ```php
 <?php
@@ -3290,6 +5057,100 @@ class Kategori extends Model
     public function raks(): BelongsToMany
     {
         return $this->belongsToMany(Rak::class);
+    }
+}
+
+```
+---
+
+## app/Models/Kelas.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Kelas extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $table = 'kelas';
+
+    protected $fillable = ['nama', 'tingkat', 'jurusan_id'];
+
+    protected function casts(): array
+    {
+        return ['tingkat' => 'integer'];
+    }
+
+    public function jurusan(): BelongsTo
+    {
+        return $this->belongsTo(Jurusan::class);
+    }
+
+    public function kelasTahunPelajarans(): HasMany
+    {
+        return $this->hasMany(KelasTahunPelajaran::class);
+    }
+}
+
+```
+---
+
+## app/Models/KelasTahunPelajaran.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class KelasTahunPelajaran extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $fillable = ['kelas_id', 'tahun_pelajaran_id', 'wali_kelas_id'];
+
+    protected function casts(): array
+    {
+        return ['wali_kelas_id' => 'integer'];
+    }
+
+    public function kelas(): BelongsTo
+    {
+        return $this->belongsTo(Kelas::class);
+    }
+
+    public function tahunPelajaran(): BelongsTo
+    {
+        return $this->belongsTo(TahunPelajaran::class);
+    }
+
+    public function waliKelas(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'wali_kelas_id');
+    }
+
+    // Siswa yang SAAT INI aktif di KTP ini (bukan histori).
+    public function siswaAktif(): HasMany
+    {
+        return $this->hasMany(User::class, 'kelas_tahun_pelajaran_id');
+    }
+
+    public function riwayatSiswa(): HasMany
+    {
+        return $this->hasMany(RiwayatKelasSiswa::class);
     }
 }
 
@@ -3804,6 +5665,57 @@ class Reward extends Model
 ```
 ---
 
+## app/Models/RiwayatKelasSiswa.php
+```php
+<?php
+
+namespace App\Models;
+
+use App\Enums\StatusRiwayatKelas;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class RiwayatKelasSiswa extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $table = 'riwayat_kelas_siswas';
+
+    protected $fillable = [
+        'user_id',
+        'kelas_tahun_pelajaran_id',
+        'status',
+        'tanggal_mulai',
+        'tanggal_selesai',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'user_id' => 'integer',
+            'status' => StatusRiwayatKelas::class,
+            'tanggal_mulai' => 'date',
+            'tanggal_selesai' => 'date',
+        ];
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function kelasTahunPelajaran(): BelongsTo
+    {
+        return $this->belongsTo(KelasTahunPelajaran::class);
+    }
+}
+
+```
+---
+
 ## app/Models/Setting.php
 ```php
 <?php
@@ -3845,6 +5757,47 @@ class Setting extends Model
 
             return $setting?->value ?? $default;
         });
+    }
+}
+
+```
+---
+
+## app/Models/TahunPelajaran.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class TahunPelajaran extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $fillable = ['nama', 'tanggal_mulai', 'tanggal_selesai', 'aktif'];
+
+    protected function casts(): array
+    {
+        return [
+            'tanggal_mulai' => 'date',
+            'tanggal_selesai' => 'date',
+            'aktif' => 'boolean',
+        ];
+    }
+
+    public function kelasTahunPelajarans(): HasMany
+    {
+        return $this->hasMany(KelasTahunPelajaran::class);
+    }
+
+    public static function aktif(): ?self
+    {
+        return static::query()->where('aktif', true)->first();
     }
 }
 
@@ -3913,21 +5866,22 @@ class Transaksi extends Model
 namespace App\Models;
 
 use App\Enums\RoleUser;
-use BezhanSalleh\FilamentShield\Traits\HasPanelShield;
+use App\Enums\StatusAkademik;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements AuthenticatableContract, HasName, FilamentUser
+class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasName
 {
-    use HasFactory, SoftDeletes, HasRoles, Notifiable;
+    use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'avatar',
@@ -3935,7 +5889,8 @@ class User extends Authenticatable implements AuthenticatableContract, HasName, 
         'role',
         'nisn',
         'nip',
-        'kelas',
+        'kelas_tahun_pelajaran_id',
+        'status_akademik',
         'jabatan',
         'no_telepon',
         'no_kartu_rfid',
@@ -3954,6 +5909,7 @@ class User extends Authenticatable implements AuthenticatableContract, HasName, 
         return [
             'id' => 'integer',
             'role' => RoleUser::class,
+            'status_akademik' => StatusAkademik::class,
             'status_suspend' => 'boolean',
             'password' => 'hashed',
         ];
@@ -3972,6 +5928,9 @@ class User extends Authenticatable implements AuthenticatableContract, HasName, 
      * alasan suspend) lolos ke panel. Guard sesungguhnya (Siswa tidak bisa
      * CRUD Buku, Pustakawan tidak bisa ubah Setting, dst.) ditulis di
      * masing-masing app/Policies/*Policy.php, di-enforce via Shield.
+     *
+     * status_akademik = Lulus TETAP bisa akses panel (dikonfirmasi Aturan
+     * - akun tidak dinonaktifkan saat lulus).
      */
     public function canAccessPanel(Panel $panel): bool
     {
@@ -3981,6 +5940,16 @@ class User extends Authenticatable implements AuthenticatableContract, HasName, 
     public function levelBadge(): BelongsTo
     {
         return $this->belongsTo(LevelBadge::class);
+    }
+
+    public function kelasTahunPelajaran(): BelongsTo
+    {
+        return $this->belongsTo(KelasTahunPelajaran::class);
+    }
+
+    public function riwayatKelas(): HasMany
+    {
+        return $this->hasMany(RiwayatKelasSiswa::class);
     }
 }
 
@@ -4087,6 +6056,7 @@ class SettingObserver
 
 namespace App\Observers;
 
+use App\Enums\GroupSetting;
 use App\Enums\RoleUser;
 use App\Models\Setting;
 use App\Models\User;
@@ -4163,7 +6133,7 @@ class UserObserver
 
         Setting::query()->updateOrCreate(
             ['key' => 'rfid_db_ver'],
-            ['value' => (string) $next, 'group' => \App\Enums\GroupSetting::Device]
+            ['value' => (string) $next, 'group' => GroupSetting::Device]
         );
 
         // Setting::get() di-cache 5 menit (lihat Setting model) - hapus cache
@@ -4348,6 +6318,86 @@ class DendaPolicy
 ```
 ---
 
+## app/Policies/JurusanPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Jurusan;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class JurusanPolicy
+{
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Jurusan');
+    }
+
+    public function view(AuthUser $authUser, Jurusan $jurusan): bool
+    {
+        return $authUser->can('View:Jurusan');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Jurusan');
+    }
+
+    public function update(AuthUser $authUser, Jurusan $jurusan): bool
+    {
+        return $authUser->can('Update:Jurusan');
+    }
+
+    public function delete(AuthUser $authUser, Jurusan $jurusan): bool
+    {
+        return $authUser->can('Delete:Jurusan');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Jurusan');
+    }
+
+    public function restore(AuthUser $authUser, Jurusan $jurusan): bool
+    {
+        return $authUser->can('Restore:Jurusan');
+    }
+
+    public function forceDelete(AuthUser $authUser, Jurusan $jurusan): bool
+    {
+        return $authUser->can('ForceDelete:Jurusan');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Jurusan');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Jurusan');
+    }
+
+    public function replicate(AuthUser $authUser, Jurusan $jurusan): bool
+    {
+        return $authUser->can('Replicate:Jurusan');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Jurusan');
+    }
+
+}
+```
+---
+
 ## app/Policies/KategoriPolicy.php
 ```php
 <?php
@@ -4422,6 +6472,166 @@ class KategoriPolicy
     public function reorder(AuthUser $authUser): bool
     {
         return $authUser->can('Reorder:Kategori');
+    }
+
+}
+```
+---
+
+## app/Policies/KelasPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Kelas;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class KelasPolicy
+{
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Kelas');
+    }
+
+    public function view(AuthUser $authUser, Kelas $kelas): bool
+    {
+        return $authUser->can('View:Kelas');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Kelas');
+    }
+
+    public function update(AuthUser $authUser, Kelas $kelas): bool
+    {
+        return $authUser->can('Update:Kelas');
+    }
+
+    public function delete(AuthUser $authUser, Kelas $kelas): bool
+    {
+        return $authUser->can('Delete:Kelas');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Kelas');
+    }
+
+    public function restore(AuthUser $authUser, Kelas $kelas): bool
+    {
+        return $authUser->can('Restore:Kelas');
+    }
+
+    public function forceDelete(AuthUser $authUser, Kelas $kelas): bool
+    {
+        return $authUser->can('ForceDelete:Kelas');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Kelas');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Kelas');
+    }
+
+    public function replicate(AuthUser $authUser, Kelas $kelas): bool
+    {
+        return $authUser->can('Replicate:Kelas');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Kelas');
+    }
+
+}
+```
+---
+
+## app/Policies/KelasTahunPelajaranPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\KelasTahunPelajaran;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class KelasTahunPelajaranPolicy
+{
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:KelasTahunPelajaran');
+    }
+
+    public function view(AuthUser $authUser, KelasTahunPelajaran $kelasTahunPelajaran): bool
+    {
+        return $authUser->can('View:KelasTahunPelajaran');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:KelasTahunPelajaran');
+    }
+
+    public function update(AuthUser $authUser, KelasTahunPelajaran $kelasTahunPelajaran): bool
+    {
+        return $authUser->can('Update:KelasTahunPelajaran');
+    }
+
+    public function delete(AuthUser $authUser, KelasTahunPelajaran $kelasTahunPelajaran): bool
+    {
+        return $authUser->can('Delete:KelasTahunPelajaran');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:KelasTahunPelajaran');
+    }
+
+    public function restore(AuthUser $authUser, KelasTahunPelajaran $kelasTahunPelajaran): bool
+    {
+        return $authUser->can('Restore:KelasTahunPelajaran');
+    }
+
+    public function forceDelete(AuthUser $authUser, KelasTahunPelajaran $kelasTahunPelajaran): bool
+    {
+        return $authUser->can('ForceDelete:KelasTahunPelajaran');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:KelasTahunPelajaran');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:KelasTahunPelajaran');
+    }
+
+    public function replicate(AuthUser $authUser, KelasTahunPelajaran $kelasTahunPelajaran): bool
+    {
+        return $authUser->can('Replicate:KelasTahunPelajaran');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:KelasTahunPelajaran');
     }
 
 }
@@ -4828,6 +7038,86 @@ class RolePolicy
 ```
 ---
 
+## app/Policies/TahunPelajaranPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\TahunPelajaran;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class TahunPelajaranPolicy
+{
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:TahunPelajaran');
+    }
+
+    public function view(AuthUser $authUser, TahunPelajaran $tahunPelajaran): bool
+    {
+        return $authUser->can('View:TahunPelajaran');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:TahunPelajaran');
+    }
+
+    public function update(AuthUser $authUser, TahunPelajaran $tahunPelajaran): bool
+    {
+        return $authUser->can('Update:TahunPelajaran');
+    }
+
+    public function delete(AuthUser $authUser, TahunPelajaran $tahunPelajaran): bool
+    {
+        return $authUser->can('Delete:TahunPelajaran');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:TahunPelajaran');
+    }
+
+    public function restore(AuthUser $authUser, TahunPelajaran $tahunPelajaran): bool
+    {
+        return $authUser->can('Restore:TahunPelajaran');
+    }
+
+    public function forceDelete(AuthUser $authUser, TahunPelajaran $tahunPelajaran): bool
+    {
+        return $authUser->can('ForceDelete:TahunPelajaran');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:TahunPelajaran');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:TahunPelajaran');
+    }
+
+    public function replicate(AuthUser $authUser, TahunPelajaran $tahunPelajaran): bool
+    {
+        return $authUser->can('Replicate:TahunPelajaran');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:TahunPelajaran');
+    }
+
+}
+```
+---
+
 ## app/Policies/TransaksiPolicy.php
 ```php
 <?php
@@ -4908,6 +7198,83 @@ class TransaksiPolicy
 ```
 ---
 
+## app/Policies/UserPolicy.php
+```php
+<?php
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class UserPolicy
+{
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:User');
+    }
+
+    public function view(AuthUser $authUser): bool
+    {
+        return $authUser->can('View:User');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:User');
+    }
+
+    public function update(AuthUser $authUser): bool
+    {
+        return $authUser->can('Update:User');
+    }
+
+    public function delete(AuthUser $authUser): bool
+    {
+        return $authUser->can('Delete:User');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:User');
+    }
+
+    public function restore(AuthUser $authUser): bool
+    {
+        return $authUser->can('Restore:User');
+    }
+
+    public function forceDelete(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDelete:User');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:User');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:User');
+    }
+
+    public function replicate(AuthUser $authUser): bool
+    {
+        return $authUser->can('Replicate:User');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:User');
+    }
+
+}
+```
+---
+
 ## app/Providers/AppServiceProvider.php
 ```php
 <?php
@@ -4920,8 +7287,8 @@ use App\Models\User;
 use App\Observers\DendaObserver;
 use App\Observers\SettingObserver;
 use App\Observers\UserObserver;
-use Illuminate\Support\ServiceProvider;
 use BezhanSalleh\FilamentShield\Facades\FilamentShield;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -4949,9 +7316,9 @@ class AppServiceProvider extends ServiceProvider
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
-use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use App\Filament\Pages\Auth\RequestPasswordReset;
 use App\Filament\Pages\Auth\ResetPassword;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -4960,8 +7327,6 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -4974,6 +7339,7 @@ class DashboardPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
+            ->topNavigation()
             ->globalSearch(false)
             ->default()
             ->databaseNotifications()
@@ -4987,8 +7353,15 @@ class DashboardPanelProvider extends PanelProvider
                 ResetPassword::class,
             )
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Cyan,
             ])
+            // Pakai Lexend yang sudah di-bundle lokal via @fontsource/lexend
+            // (resources/css/app.css), bukan fetch dari Google Fonts CDN.
+            // TODO: verifikasi signature terhadap versi package yang
+            // terpasang - argumen kedua diasumsikan menonaktifkan provider
+            // Google Fonts bawaan Filament v5.7; cek ulang jika behaviour
+            // berbeda (mis. tetap muncul request ke fonts.googleapis.com).
+            ->font('Lexend', provider: null)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
@@ -4996,8 +7369,10 @@ class DashboardPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
+                // \App\Filament\Widgets\PeminjamanStatsWidget::class,
+                // \App\Filament\Widgets\TrenKunjunganChartWidget::class,
+                // \App\Filament\Widgets\PeminjamanJatuhTempoWidget::class,
+                // \App\Filament\Widgets\DendaTerbaruWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -5062,6 +7437,190 @@ class FormatKartuRfid implements ValidationRule
 ```
 ---
 
+## app/Services/KenaikanKelasService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Enums\StatusAkademik;
+use App\Enums\StatusRiwayatKelas;
+use App\Models\KelasTahunPelajaran;
+use App\Models\RiwayatKelasSiswa;
+use App\Models\TahunPelajaran;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
+
+/**
+ * Satu sumber kebenaran untuk seluruh perpindahan status akademik siswa
+ * (assignment awal, kenaikan kelas, tinggal kelas, lulus, keluar).
+ * Resource/Action HANYA memanggil method di sini (Aturan poin 3, DRY).
+ */
+class KenaikanKelasService
+{
+    /**
+     * Assignment awal / pindah kelas manual (bukan proses kenaikan massal).
+     * Menutup RiwayatKelasSiswa aktif sebelumnya (jika ada) dengan status
+     * 'keluar' (dianggap pindah kelas manual, bukan kenaikan reguler),
+     * lalu buka riwayat baru di KTP tujuan.
+     */
+    public function assignKelas(User $user, KelasTahunPelajaran $ktpTujuan): void
+    {
+        DB::transaction(function () use ($user, $ktpTujuan) {
+            $this->tutupRiwayatAktif($user, StatusRiwayatKelas::Keluar);
+
+            RiwayatKelasSiswa::query()->create([
+                'user_id' => $user->id,
+                'kelas_tahun_pelajaran_id' => $ktpTujuan->id,
+                'status' => StatusRiwayatKelas::Aktif,
+                'tanggal_mulai' => now()->toDateString(),
+            ]);
+
+            $user->update([
+                'kelas_tahun_pelajaran_id' => $ktpTujuan->id,
+                'status_akademik' => StatusAkademik::Aktif,
+            ]);
+        });
+    }
+
+    /**
+     * Proses kenaikan kelas massal dari satu KTP asal.
+     *
+     * @param  array<string, string>  $keputusan  [user_id => 'naik'|'tinggal'|'lulus'|'keluar']
+     * @throws RuntimeException jika Tahun Pelajaran aktif tidak valid atau KTP tujuan tidak ditemukan
+     */
+    public function prosesKenaikan(KelasTahunPelajaran $ktpAsal, array $keputusan): array
+    {
+        $tahunAktif = TahunPelajaran::aktif();
+
+        if (! $tahunAktif) {
+            throw new RuntimeException('Tidak ada Tahun Pelajaran aktif. Aktifkan Tahun Pelajaran tujuan terlebih dahulu.');
+        }
+
+        if ($tahunAktif->id === $ktpAsal->tahun_pelajaran_id) {
+            throw new RuntimeException('Tahun Pelajaran aktif masih sama dengan Tahun Pelajaran asal. Aktifkan Tahun Pelajaran berikutnya terlebih dahulu.');
+        }
+
+        $gagal = [];
+
+        DB::transaction(function () use ($ktpAsal, $keputusan, $tahunAktif, &$gagal) {
+            $kelasAsal = $ktpAsal->kelas;
+
+            foreach ($keputusan as $userId => $status) {
+                $user = User::query()->find($userId);
+
+                if (! $user) {
+                    continue;
+                }
+
+                $statusEnum = StatusRiwayatKelas::from($status);
+
+                try {
+                    match ($statusEnum) {
+                        StatusRiwayatKelas::Naik => $this->prosesNaik($user, $kelasAsal, $tahunAktif),
+                        StatusRiwayatKelas::Tinggal => $this->prosesTinggal($user, $kelasAsal, $tahunAktif),
+                        StatusRiwayatKelas::Lulus => $this->prosesLulus($user),
+                        StatusRiwayatKelas::Keluar => $this->prosesKeluar($user),
+                        default => throw new RuntimeException("Status tidak valid: {$status}"),
+                    };
+                } catch (RuntimeException $e) {
+                    $gagal[$user->nama] = $e->getMessage();
+                }
+            }
+        });
+
+        return $gagal;
+    }
+
+    protected function prosesNaik(User $user, \App\Models\Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
+    {
+        $kelasTujuan = \App\Models\Kelas::query()
+            ->where('tingkat', $kelasAsal->tingkat + 1)
+            ->where('jurusan_id', $kelasAsal->jurusan_id)
+            ->first();
+
+        if (! $kelasTujuan) {
+            throw new RuntimeException('Kelas tingkat+1 dengan jurusan sama belum ada - buat Kelas tujuan terlebih dahulu.');
+        }
+
+        $ktpTujuan = KelasTahunPelajaran::query()
+            ->where('kelas_id', $kelasTujuan->id)
+            ->where('tahun_pelajaran_id', $tahunTujuan->id)
+            ->first();
+
+        if (! $ktpTujuan) {
+            throw new RuntimeException("KTP tujuan ({$kelasTujuan->nama} - {$tahunTujuan->nama}) belum dibuat.");
+        }
+
+        $this->pindahKe($user, $ktpTujuan, StatusRiwayatKelas::Naik);
+    }
+
+    protected function prosesTinggal(User $user, \App\Models\Kelas $kelasAsal, TahunPelajaran $tahunTujuan): void
+    {
+        $ktpTujuan = KelasTahunPelajaran::query()
+            ->where('kelas_id', $kelasAsal->id)
+            ->where('tahun_pelajaran_id', $tahunTujuan->id)
+            ->first();
+
+        if (! $ktpTujuan) {
+            throw new RuntimeException("KTP tinggal kelas ({$kelasAsal->nama} - {$tahunTujuan->nama}) belum dibuat.");
+        }
+
+        $this->pindahKe($user, $ktpTujuan, StatusRiwayatKelas::Tinggal);
+    }
+
+    protected function prosesLulus(User $user): void
+    {
+        $this->tutupRiwayatAktif($user, StatusRiwayatKelas::Lulus);
+
+        $user->update([
+            'kelas_tahun_pelajaran_id' => null,
+            'status_akademik' => StatusAkademik::Lulus,
+        ]);
+        // Akun TETAP aktif normal (dikonfirmasi Aturan) - tidak ada
+        // perubahan status_suspend/canAccessPanel di sini.
+    }
+
+    protected function prosesKeluar(User $user): void
+    {
+        $this->tutupRiwayatAktif($user, StatusRiwayatKelas::Keluar);
+
+        $user->update([
+            'kelas_tahun_pelajaran_id' => null,
+            'status_akademik' => StatusAkademik::Keluar,
+        ]);
+    }
+
+    protected function pindahKe(User $user, KelasTahunPelajaran $ktpTujuan, StatusRiwayatKelas $statusPenutup): void
+    {
+        $this->tutupRiwayatAktif($user, $statusPenutup);
+
+        RiwayatKelasSiswa::query()->create([
+            'user_id' => $user->id,
+            'kelas_tahun_pelajaran_id' => $ktpTujuan->id,
+            'status' => StatusRiwayatKelas::Aktif,
+            'tanggal_mulai' => now()->toDateString(),
+        ]);
+
+        $user->update(['kelas_tahun_pelajaran_id' => $ktpTujuan->id]);
+    }
+
+    protected function tutupRiwayatAktif(User $user, StatusRiwayatKelas $statusBaru): void
+    {
+        RiwayatKelasSiswa::query()
+            ->where('user_id', $user->id)
+            ->where('status', StatusRiwayatKelas::Aktif)
+            ->update([
+                'status' => $statusBaru,
+                'tanggal_selesai' => now()->toDateString(),
+            ]);
+    }
+}
+
+```
+---
+
 ## app/Services/LaporanBulananService.php
 ```php
 <?php
@@ -5114,7 +7673,7 @@ class LaporanBulananService
 
         return [
             'total' => $records->count(),
-            'per_status' => $records->groupBy(fn($r) => $r->status->value)->map->count(),
+            'per_status' => $records->groupBy(fn ($r) => $r->status->value)->map->count(),
             'detail' => $records,
         ];
     }
@@ -5129,7 +7688,7 @@ class LaporanBulananService
 
         return [
             'total' => $records->count(),
-            'per_kondisi' => $records->groupBy(fn($r) => $r->kondisi->value)->map->count(),
+            'per_kondisi' => $records->groupBy(fn ($r) => $r->kondisi->value)->map->count(),
             'detail' => $records,
         ];
     }
@@ -5147,7 +7706,7 @@ class LaporanBulananService
             'total_nominal' => $records->sum('nominal'),
             'total_nominal_lunas' => $records->where('status_lunas', true)->sum('nominal'),
             'total_nominal_belum_lunas' => $records->where('status_lunas', false)->sum('nominal'),
-            'per_tipe' => $records->groupBy(fn($r) => $r->tipe->value)->map(fn($g) => [
+            'per_tipe' => $records->groupBy(fn ($r) => $r->tipe->value)->map(fn ($g) => [
                 'jumlah' => $g->count(),
                 'nominal' => $g->sum('nominal'),
             ]),
@@ -5166,7 +7725,7 @@ class LaporanBulananService
         return [
             'total' => $records->count(),
             'user_unik' => $records->pluck('user_id')->unique()->count(),
-            'per_source' => $records->groupBy(fn($r) => $r->source->value)->map->count(),
+            'per_source' => $records->groupBy(fn ($r) => $r->source->value)->map->count(),
             'detail' => $records,
         ];
     }
@@ -5182,7 +7741,7 @@ class LaporanBulananService
         return [
             'total_transaksi' => $records->count(),
             'total_nilai' => $records->sum('nilai'),
-            'per_event' => $records->groupBy(fn($r) => $r->event_type->value)->map(fn($g) => [
+            'per_event' => $records->groupBy(fn ($r) => $r->event_type->value)->map(fn ($g) => [
                 'jumlah' => $g->count(),
                 'total_nilai' => $g->sum('nilai'),
             ]),
@@ -5249,7 +7808,7 @@ class PasswordResetOtpService
             eventCode: 'reset_password_otp',
             nomorTujuan: $user->no_telepon,
             variables: ['nama' => $user->nama, 'otp' => $otp],
-            referenceId: "reset-otp-{$user->id}-" . now()->timestamp,
+            referenceId: "reset-otp-{$user->id}-".now()->timestamp,
         );
     }
 
@@ -5699,8 +8258,8 @@ class PeminjamanService
             'nominal' => 0,
             'status_lunas' => true,
             'tanggal_lunas' => now(),
-            'keterangan' => trim(($denda->keterangan ? $denda->keterangan . ' | ' : '')
-                . ($sudahTerbayar
+            'keterangan' => trim(($denda->keterangan ? $denda->keterangan.' | ' : '')
+                .($sudahTerbayar
                     ? 'Dibatalkan otomatis (SUDAH TERBAYAR SEBELUM KOREKSI - perlu refund manual di luar sistem): koreksi kondisi Pengembalian.'
                     : 'Dibatalkan otomatis: koreksi kondisi Pengembalian.')),
         ]);
@@ -5730,7 +8289,6 @@ use App\Models\RewardLog;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-
 
 class PointService
 {
@@ -5819,7 +8377,7 @@ class PointService
         $reward = Reward::query()
             ->where('aktif', true)
             ->where('threshold_point', '<=', $user->akumulasi_point)
-            ->whereDoesntHave('rewardLogs', fn($q) => $q->where('user_id', $user->id))
+            ->whereDoesntHave('rewardLogs', fn ($q) => $q->where('user_id', $user->id))
             ->orderByDesc('threshold_point')
             ->first();
 
@@ -5890,6 +8448,7 @@ class PointService
             referenceId: "punishment-{$punishmentLog->id}",
         );
     }
+
     /**
      * Reverse SATU Point log (mis. saat koreksi kondisi Pengembalian
      * membatalkan alasan event tersebut). Insert entry Point BARU dengan
@@ -6020,7 +8579,6 @@ class RfidResolverService
 
 namespace App\Services;
 
-use App\Enums\GroupSetting;
 use App\Exceptions\WhatsappGatewayException;
 use App\Jobs\KirimNotifikasiWhatsapp;
 use App\Models\Setting;
@@ -6148,6 +8706,7 @@ class WhatsappService
         $templateCode = Setting::get("wa_template_{$eventCode}");
         if (! $templateCode) {
             Log::warning("WhatsappService: template untuk event '{$eventCode}' belum dikonfigurasi di Setting, notifikasi di-skip.");
+
             return;
         }
         KirimNotifikasiWhatsapp::dispatch(
@@ -6176,7 +8735,7 @@ class WhatsappService
         $response = Http::withHeaders($headers)
             ->timeout($this->timeout)
             ->withBody($bodyString, 'application/json')
-            ->send($method, $this->baseUrl . $path);
+            ->send($method, $this->baseUrl.$path);
 
         return [$response->status(), $response->json() ?? []];
     }
@@ -8604,6 +11163,7 @@ class TransaksiFactory extends Factory
 namespace Database\Factories;
 
 use App\Enums\RoleUser;
+use App\Enums\StatusAkademik;
 use App\Models\LevelBadge;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -8621,7 +11181,11 @@ class UserFactory extends Factory
             'role' => fake()->randomElement(RoleUser::cases()),
             'nisn' => fake()->unique()->numerify('NISN######'),
             'nip' => fake()->unique()->numerify('NIP##########'),
-            'kelas' => fake()->word(),
+            // kelas_tahun_pelajaran_id sengaja dibiarkan null (default) -
+            // belum ada data master Kelas/TahunPelajaran/KTP di seeder,
+            // assignment kelas dilakukan manual lewat Resource setelah
+            // data akademik (Jurusan/TahunPelajaran/Kelas/KTP) dibuat.
+            'status_akademik' => StatusAkademik::Aktif,
             'jabatan' => fake()->word(),
             'no_telepon' => fake()->unique()->numerify('628##########'),
             'no_kartu_rfid' => fake()->unique()->numerify('########'),
@@ -9586,10 +12150,10 @@ return new class extends Migration
                 ) STORED
         ");
 
-        DB::statement("
+        DB::statement('
             ALTER TABLE kunjungans
             ADD UNIQUE INDEX kunjungans_unik_aktif_unique (unik_aktif)
-        ");
+        ');
     }
 
     public function down(): void
@@ -9998,6 +12562,226 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_08_01_000001_create_jurusans_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('jurusans', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('nama');
+            $table->string('kode')->unique();
+            $table->softDeletes();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('jurusans');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_01_000002_create_tahun_pelajarans_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('tahun_pelajarans', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('nama')->unique(); // mis. "2025/2026"
+            $table->date('tanggal_mulai');
+            $table->date('tanggal_selesai');
+            $table->boolean('aktif')->default(false);
+            $table->softDeletes();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('tahun_pelajarans');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_01_000003_create_kelas_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('kelas', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('nama'); // mis. "X IPA 1"
+            $table->unsignedTinyInteger('tingkat'); // 10, 11, 12 - dipakai urutan kenaikan
+            $table->uuid('jurusan_id')->nullable();
+            $table->foreign('jurusan_id')->references('id')->on('jurusans')->nullOnDelete();
+            $table->softDeletes();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('kelas');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_01_000004_create_kelas_tahun_pelajarans_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('kelas_tahun_pelajarans', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->uuid('kelas_id');
+            $table->foreign('kelas_id')->references('id')->on('kelas')->cascadeOnDelete();
+            $table->uuid('tahun_pelajaran_id');
+            $table->foreign('tahun_pelajaran_id')->references('id')->on('tahun_pelajarans')->cascadeOnDelete();
+            $table->foreignId('wali_kelas_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->softDeletes();
+            $table->timestamps();
+
+            $table->unique(['kelas_id', 'tahun_pelajaran_id']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('kelas_tahun_pelajarans');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_01_000005_create_riwayat_kelas_siswas_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('riwayat_kelas_siswas', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->uuid('kelas_tahun_pelajaran_id');
+            $table->foreign('kelas_tahun_pelajaran_id', 'rks_ktp_fk')
+                ->references('id')->on('kelas_tahun_pelajarans')->cascadeOnDelete();
+            $table->enum('status', ['aktif', 'naik', 'tinggal', 'lulus', 'keluar'])->default('aktif');
+            $table->date('tanggal_mulai');
+            $table->date('tanggal_selesai')->nullable();
+            $table->softDeletes();
+            $table->timestamps();
+
+            $table->unique(['user_id', 'kelas_tahun_pelajaran_id'], 'rks_user_ktp_unique');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('riwayat_kelas_siswas');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_01_000006_replace_kelas_column_in_users_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * MENGUBAH SKEMA users - dampak ke data existing (Aturan poin 16).
+ * Kolom 'kelas' (string bebas) DIHAPUS, diganti relasi
+ * kelas_tahun_pelajaran_id + status_akademik. Data lama di kolom
+ * 'kelas' string TIDAK dimigrasikan otomatis ke KTP (karena tidak ada
+ * mapping otomatis nama-string -> Kelas/TahunPelajaran yang valid) -
+ * WAJIB assignment ulang manual oleh Admin setelah migrasi ini jalan.
+ *
+ * TODO: GAP-SPEC - pertimbangkan backup nilai 'kelas' lama (mis. ke
+ * kolom 'kelas_lama_arsip') sebelum drop, supaya Admin punya rujukan
+ * saat assignment ulang manual. BELUM diimplementasikan di migration
+ * ini - konfirmasi dulu apakah diperlukan sebelum dijalankan ke
+ * production yang sudah ada data siswa.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('kelas');
+        });
+
+        Schema::table('users', function (Blueprint $table) {
+            $table->uuid('kelas_tahun_pelajaran_id')->nullable()->after('jabatan');
+            $table->foreign('kelas_tahun_pelajaran_id', 'users_ktp_fk')
+                ->references('id')->on('kelas_tahun_pelajarans')->nullOnDelete();
+            $table->string('status_akademik')->default('aktif')->after('kelas_tahun_pelajaran_id');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropForeign('users_ktp_fk');
+            $table->dropColumn(['kelas_tahun_pelajaran_id', 'status_akademik']);
+        });
+
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('kelas')->nullable();
+        });
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -10128,6 +12912,7 @@ class SettingSeeder extends Seeder
 namespace Database\Seeders;
 
 use App\Enums\RoleUser;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -10136,11 +12921,20 @@ class ShieldSeeder extends Seeder
 {
     public function run(): void
     {
-        // Permission manual untuk halaman non-Resource (LaporanBulanan) -
-        // dibuat eksplisit di sini karena Shield tidak auto-generate
-        // permission untuk Filament Page biasa (hanya untuk Resource).
+        // Permission manual untuk halaman non-Resource (LaporanBulanan,
+        // PengaturanSistem) - Shield tidak auto-generate permission untuk
+        // Filament Page biasa (hanya untuk Resource).
         Permission::firstOrCreate([
             'name' => 'ViewAny:LaporanBulanan',
+            'guard_name' => 'web',
+        ]);
+
+        // BARU iterasi ini - sengaja TIDAK dimasukkan ke daftar permission
+        // pustakawan di bawah, karena scope Setting = Admin (dok Logic
+        // Module §1). Hanya super_admin yang otomatis dapat lewat
+        // syncPermissions(Permission::all()).
+        Permission::firstOrCreate([
+            'name' => 'ViewAny:PengaturanSistem',
             'guard_name' => 'web',
         ]);
 
@@ -10211,16 +13005,18 @@ class ShieldSeeder extends Seeder
                 'ViewAny:Transaksi',
                 'View:Transaksi',
 
-                // BARU iterasi ini.
                 'ViewAny:LaporanBulanan',
+
+                // Catatan: 'ViewAny:PengaturanSistem' SENGAJA tidak
+                // ditambahkan di sini - lihat komentar di atas.
             ])->get()
         );
 
         Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'pegawai', 'guard_name' => 'web']);
 
-        \App\Models\User::where('role', RoleUser::Admin)->each(
-            fn($user) => $user->syncRoles(['super_admin'])
+        User::where('role', RoleUser::Admin)->each(
+            fn ($user) => $user->syncRoles(['super_admin'])
         );
     }
 }
@@ -10240,9 +13036,9 @@ use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__ . '/../routes/web.php',
-        api: __DIR__ . '/../routes/api.php',
-        commands: __DIR__ . '/../routes/console.php',
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -10252,7 +13048,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn(Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->is('api/*'),
         );
     })->create();
 
@@ -10798,9 +13594,12 @@ return Application::configure(basePath: dirname(__DIR__))
 ```php
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\Filament\DashboardPanelProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Providers\Filament\DashboardPanelProvider::class,
+    AppServiceProvider::class,
+    DashboardPanelProvider::class,
 ];
 
 ```
@@ -10810,8 +13609,10 @@ return [
 ```css
 @import 'tailwindcss';
 @import '@fontsource/lexend';
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
+@source '../views/filament/pages/*.blade.php';
 
 @theme {
     --font-sans: 'Lexend', ui-sans-serif, system-ui, sans-serif,
@@ -10871,6 +13672,57 @@ return [
         <div style="margin-top: 1.5rem;">
             <x-filament::button type="submit" icon="heroicon-o-document-arrow-down">
                 Generate & Download PDF
+            </x-filament::button>
+        </div>
+    </form>
+</x-filament-panels::page>
+
+```
+---
+
+## resources/views/filament/pages/pengaturan-sistem.blade.php
+```blade
+<x-filament-panels::page>
+    <form wire:submit.prevent>
+        {{ $this->form }}
+
+        <div style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.75rem;">
+            <x-filament::button
+                type="button"
+                wire:click="simpanUmum"
+                icon="heroicon-o-check"
+            >
+                Simpan Pengaturan Umum
+            </x-filament::button>
+
+            <x-filament::button
+                type="button"
+                color="warning"
+                icon="heroicon-o-exclamation-triangle"
+                x-on:click.prevent="
+                    if (confirm('Perubahan ini mempengaruhi device RFID yang sudah aktif di lapangan. Lanjutkan menyimpan?')) {
+                        $wire.simpanDevice()
+                    }
+                "
+            >
+                Simpan Pengaturan Device
+            </x-filament::button>
+        </div>
+    </form>
+</x-filament-panels::page>
+
+```
+---
+
+## resources/views/filament/pages/proses-kenaikan-kelas.blade.php
+```blade
+<x-filament-panels::page>
+    <form wire:submit.prevent="proses">
+        {{ $this->form }}
+
+        <div style="margin-top: 1.5rem;">
+            <x-filament::button type="submit" icon="heroicon-o-check">
+                Proses Kenaikan Kelas
             </x-filament::button>
         </div>
     </form>

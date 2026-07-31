@@ -65,7 +65,7 @@ class PengembalianResource extends Resource
                     ->sortable(),
                 TextColumn::make('kondisi')
                     ->badge()
-                    ->color(fn(KondisiBuku $state) => match ($state) {
+                    ->color(fn (KondisiBuku $state) => match ($state) {
                         KondisiBuku::Baik => 'success',
                         KondisiBuku::Rusak => 'warning',
                         KondisiBuku::Hilang => 'danger',
@@ -79,24 +79,24 @@ class PengembalianResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('kondisi')
-                    ->options(collect(KondisiBuku::cases())->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)])),
+                    ->options(collect(KondisiBuku::cases())->mapWithKeys(fn ($k) => [$k->value => ucfirst($k->value)])),
             ])
             ->recordActions([
                 Action::make('koreksi_kondisi')
                     ->label('Koreksi Kondisi')
                     ->icon('heroicon-o-pencil-square')
                     ->color('warning')
-                    ->authorize(fn(Pengembalian $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->authorize(fn (Pengembalian $record) => auth()->user()?->can('update', $record) ?? false)
                     // dijaga PengembalianPolicy - lihat TODO ShieldSeeder di atas
                     ->requiresConfirmation()
                     ->modalDescription('Mengubah kondisi akan otomatis menyesuaikan stok dan Denda terkait (batalkan Denda lama, catat Denda baru jika perlu). Ini tidak bisa dibatalkan lewat tombol undo.')
-                    ->schema(fn(Pengembalian $record) => [
+                    ->schema(fn (Pengembalian $record) => [
                         Select::make('kondisi_baru')
                             ->label('Kondisi Baru')
                             ->options(
                                 collect(KondisiBuku::cases())
-                                    ->reject(fn($k) => $k === $record->kondisi)
-                                    ->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)])
+                                    ->reject(fn ($k) => $k === $record->kondisi)
+                                    ->mapWithKeys(fn ($k) => [$k->value => ucfirst($k->value)])
                             )
                             ->required(),
                         Textarea::make('catatan')

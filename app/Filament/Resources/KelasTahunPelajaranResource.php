@@ -1,0 +1,94 @@
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Pages\ProsesKenaikanKelas;
+use App\Filament\Resources\KelasTahunPelajaranResource\Pages;
+use App\Filament\Resources\KelasTahunPelajaranResource\RelationManagers\SiswaAktifRelationManager;
+use App\Models\KelasTahunPelajaran;
+use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Forms\Components\Select;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+/**
+ * Instance Kelas untuk Tahun Pelajaran tertentu - satu kombinasi
+ * kelas_id + tahun_pelajaran_id unik (lihat migration unique index).
+ */
+class KelasTahunPelajaranResource extends Resource
+{
+    protected static ?string $model = KelasTahunPelajaran::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-group';
+
+    protected static ?string $navigationLabel = 'Kelas per Tahun Pelajaran';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Akademik';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Select::make('kelas_id')
+                ->label('Kelas')
+                ->relationship('kelas', 'nama')
+                ->searchable()
+                ->preload()
+                ->required(),
+            Select::make('tahun_pelajaran_id')
+                ->label('Tahun Pelajaran')
+                ->relationship('tahunPelajaran', 'nama')
+                ->searchable()
+                ->preload()
+                ->required(),
+            Select::make('wali_kelas_id')
+                ->label('Wali Kelas')
+                ->relationship('waliKelas', 'nama', fn ($query) => $query->whereIn('role', ['pustakawan', 'pegawai', 'super_admin']))
+                ->searchable()
+                ->preload(),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('kelas.nama')->label('Kelas')->searchable()->sortable(),
+                TextColumn::make('tahunPelajaran.nama')->label('Tahun Pelajaran')->searchable()->sortable(),
+                TextColumn::make('waliKelas.nama')->label('Wali Kelas')->toggleable(),
+                TextColumn::make('siswa_aktif_count')->label('Jumlah Siswa')->counts('siswaAktif'),
+            ])
+            ->filters([
+                SelectFilter::make('tahun_pelajaran_id')->label('Tahun Pelajaran')->relationship('tahunPelajaran', 'nama'),
+            ])
+            ->recordActions([
+            Action::make('proses_kenaikan')
+                ->label('Proses Kenaikan Kelas')
+                ->icon('heroicon-o-arrow-trending-up')
+                ->color('warning')
+                ->url(fn(KelasTahunPelajaran $record) => ProsesKenaikanKelas::getUrl(['ktp' => $record->id])),
+                DeleteAction::make()
+                ])
+            ->toolbarActions([DeleteBulkAction::make()]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            SiswaAktifRelationManager::class,
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListKelasTahunPelajarans::route('/'),
+            'create' => Pages\CreateKelasTahunPelajaran::route('/create'),
+            'edit' => Pages\EditKelasTahunPelajaran::route('/{record}/edit'),
+        ];
+    }
+}

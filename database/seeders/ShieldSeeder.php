@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Enums\RoleUser;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -105,8 +106,8 @@ class ShieldSeeder extends Seeder
         Role::firstOrCreate(['name' => 'siswa', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'pegawai', 'guard_name' => 'web']);
 
-        \App\Models\User::where('role', RoleUser::Admin)->each(
-            fn($user) => $user->syncRoles(['super_admin'])
+        User::where('role', RoleUser::Admin)->each(
+            fn ($user) => $user->syncRoles(['super_admin'])
         );
     }
 }

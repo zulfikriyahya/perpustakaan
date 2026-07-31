@@ -40,7 +40,7 @@ class PeminjamanJatuhTempoWidget extends TableWidget
                 TextColumn::make('buku.judul')->label('Buku'),
                 TextColumn::make('tanggal_jatuh_tempo')->label('Jatuh Tempo')->date('d M Y'),
                 TextColumn::make('status')->label('Status')->badge()
-                    ->color(fn(StatusPeminjaman $state) => match ($state) {
+                    ->color(fn (StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Terlambat => 'danger',
                         StatusPeminjaman::Aktif => 'success',
                         default => 'gray',

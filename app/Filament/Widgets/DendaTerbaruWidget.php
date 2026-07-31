@@ -36,7 +36,7 @@ class DendaTerbaruWidget extends TableWidget
                 TextColumn::make('user.nama')->label('User'),
                 TextColumn::make('tipe')->label('Tipe')->badge(),
                 TextColumn::make('nominal')->label('Nominal')
-                    ->formatStateUsing(fn($state) => 'Rp ' . number_format((float) $state, 0, ',', '.')),
+                    ->formatStateUsing(fn ($state) => 'Rp '.number_format((float) $state, 0, ',', '.')),
                 TextColumn::make('created_at')->label('Tanggal')->dateTime('d M Y H:i'),
             ])
             ->paginated([5, 10])

@@ -99,7 +99,136 @@ Ketentuan:
 ---
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
-- Finalkan Fitur setting
+- Finalkan Fitur Akademik [import dan eksport, assign siswa ke kelas, assign wali kelas dan sebagainya]
+- Perbaiki:
+```md
+# Illuminate\Contracts\Container\BindingResolutionException - Internal Server Error
+
+Unable to resolve dependency [Parameter #0 [ <required> string $ktp ]] in class App\Filament\Pages\ProsesKenaikanKelas
+
+PHP 8.4.22
+Laravel 13.23.0
+localhost:8000
+
+## Stack Trace
+
+0 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:200
+1 - vendor/livewire/livewire/src/ImplicitlyBoundMethod.php:29
+2 - vendor/livewire/livewire/src/ImplicitlyBoundMethod.php:15
+3 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:36
+4 - vendor/laravel/framework/src/Illuminate/Container/Util.php:43
+5 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:96
+6 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:35
+7 - vendor/livewire/livewire/src/Wrapped.php:23
+8 - vendor/livewire/livewire/src/Features/SupportLifecycleHooks/SupportLifecycleHooks.php:176
+9 - vendor/livewire/livewire/src/Features/SupportLifecycleHooks/SupportLifecycleHooks.php:35
+10 - vendor/livewire/livewire/src/ComponentHook.php:19
+11 - vendor/livewire/livewire/src/ComponentHookRegistry.php:45
+12 - vendor/livewire/livewire/src/EventBus.php:87
+13 - vendor/livewire/livewire/src/helpers.php:98
+14 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:79
+15 - vendor/livewire/livewire/src/LivewireManager.php:102
+16 - vendor/livewire/livewire/src/Features/SupportPageComponents/HandlesPageComponents.php:19
+17 - vendor/livewire/livewire/src/Features/SupportPageComponents/SupportPageComponents.php:118
+18 - vendor/livewire/livewire/src/Features/SupportPageComponents/HandlesPageComponents.php:14
+19 - vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php:46
+20 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:276
+21 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:216
+22 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:822
+23 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
+24 - vendor/filament/filament/src/Http/Middleware/DispatchServingFilamentEvent.php:15
+25 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+26 - vendor/filament/filament/src/Http/Middleware/DisableBladeIconComponents.php:14
+27 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+28 - vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php:52
+29 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+30 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php:104
+31 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+32 - vendor/laravel/framework/src/Illuminate/Session/Middleware/AuthenticateSession.php:70
+33 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+34 - vendor/laravel/framework/src/Illuminate/Auth/Middleware/Authenticate.php:63
+35 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+36 - vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php:48
+37 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+38 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:120
+39 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:63
+40 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+41 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php:36
+42 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+43 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php:74
+44 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+45 - vendor/filament/filament/src/Http/Middleware/SetUpPanel.php:19
+46 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+47 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
+48 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:821
+49 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:800
+50 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:764
+51 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:753
+52 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:200
+53 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
+54 - vendor/livewire/livewire/src/Features/SupportDisablingBackButtonCache/DisableBackButtonCacheMiddleware.php:19
+55 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+56 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php:21
+57 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php:31
+58 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+59 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php:21
+60 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php:51
+61 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+62 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php:27
+63 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+64 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php:109
+65 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+66 - vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php:61
+67 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+68 - vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php:58
+69 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+70 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php:22
+71 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+72 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePathEncoding.php:28
+73 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+74 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
+75 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:175
+76 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:144
+77 - vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1227
+78 - public/index.php:20
+79 - vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php:23
+
+
+## Request
+
+GET /dashboard/proses-kenaikan-kelas
+
+## Headers
+
+* **host**: localhost:8000
+* **user-agent**: Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0
+* **accept**: */*
+* **accept-language**: id,en-US;q=0.7,en;q=0.3
+* **accept-encoding**: gzip, deflate, br, zstd
+* **referer**: http://localhost:8000/dashboard/kelas-tahun-pelajarans
+* **x-livewire-navigate**: 1
+* **connection**: keep-alive
+* **cookie**: _ga=GA1.1.476939021.1778443708; perpustakaan-session=eyJpdiI6InRJRkJ0VnZ6ak1BVWFhaWlNdS8wbHc9PSIsInZhbHVlIjoiQjZGaWNGa1lPT2p6UjB4K0ZlSitiV1JteHpWY2lhZ2lHOTJURlVPbXdwSUVwdmp0d3RYaXg4Mmo3SGN5OWhzb0FLU0N4MzVaclkySS9IbnE1VElXUXVlbTJKckxRZW16d0YrYkF3Y1VId2UvS0FSMzk3TEwyc2lqTkp2dzI4YjAiLCJtYWMiOiI3MWFhN2IzOGU1ZGNhYmNjZmM5MDdiNmIyYzU4NjgxZjkwMDBlODY1N2YxOGQyODVhMDJhNmUwM2Q0ZGQzOGU1IiwidGFnIjoiIn0%3D; XSRF-TOKEN=eyJpdiI6IjRGdHREOXMxc3Z6ekpQRFY4QXpXcGc9PSIsInZhbHVlIjoibXlaQWJDZDluY1pqbmhQVEVrc0g0VFV0a2VWaUlaZklhNFJ5UkRmQ0p3V0p2RXRrQkkrWTFCdmVaZUhUcE0xWTVQUHZMNWVKN09WdlVScnFvNDZHNVRLYjNoK3g1OG1OOVBRSjJyeWsza09pSStVY2t2RmIxSFZTd2FPYWdJK2YiLCJtYWMiOiJjY2VjOGYxYTEyOTY1YTE3YjZmMzgyMTFiMDBhODIzZjY0MGU3NGYwMWZmMTczMTEyNjZhNWYyODVkOWFjMzE0IiwidGFnIjoiIn0%3D
+* **sec-fetch-dest**: empty
+* **sec-fetch-mode**: cors
+* **sec-fetch-site**: same-origin
+* **priority**: u=0
+
+## Route Context
+
+controller: App\Filament\Pages\ProsesKenaikanKelas
+route name: filament.dashboard.pages.proses-kenaikan-kelas
+middleware: panel:dashboard, Illuminate\Cookie\Middleware\EncryptCookies, Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse, Illuminate\Session\Middleware\StartSession, Filament\Http\Middleware\AuthenticateSession, Illuminate\View\Middleware\ShareErrorsFromSession, Illuminate\Foundation\Http\Middleware\PreventRequestForgery, Illuminate\Routing\Middleware\SubstituteBindings, Filament\Http\Middleware\DisableBladeIconComponents, Filament\Http\Middleware\DispatchServingFilamentEvent, Filament\Http\Middleware\Authenticate
+
+## Route Parameters
+
+No route parameter data available.
+
+## Database Queries
+
+* mysql - select * from `users` where `id` = 1 and `users`.`deleted_at` is null limit 1 (0.94 ms)
+
+```
 
 ---
 

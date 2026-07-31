@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Enums\GroupSetting;
 use App\Exceptions\WhatsappGatewayException;
 use App\Jobs\KirimNotifikasiWhatsapp;
 use App\Models\Setting;
@@ -130,6 +129,7 @@ class WhatsappService
         $templateCode = Setting::get("wa_template_{$eventCode}");
         if (! $templateCode) {
             Log::warning("WhatsappService: template untuk event '{$eventCode}' belum dikonfigurasi di Setting, notifikasi di-skip.");
+
             return;
         }
         KirimNotifikasiWhatsapp::dispatch(
@@ -158,7 +158,7 @@ class WhatsappService
         $response = Http::withHeaders($headers)
             ->timeout($this->timeout)
             ->withBody($bodyString, 'application/json')
-            ->send($method, $this->baseUrl . $path);
+            ->send($method, $this->baseUrl.$path);
 
         return [$response->status(), $response->json() ?? []];
     }

@@ -87,6 +87,9 @@ genstructure:
 gen: gencode genstructure
 	@echo "✅ Semua dokumentasi berhasil digenerate di folder docs/"
 
+pamfs:
+	php artisan migrate:fresh --seed && php artisan shield:generate --all
+
 deploy:
 ifeq ($(strip $(DOMAIN)),)
 	@sudo ./scripts/deploy-perpustakaan.sh

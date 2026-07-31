@@ -53,7 +53,7 @@ class KunjunganResource extends Resource
                 TextColumn::make('source')
                     ->label('Sumber')
                     ->badge()
-                    ->color(fn(SourceKunjungan $state) => match ($state) {
+                    ->color(fn (SourceKunjungan $state) => match ($state) {
                         SourceKunjungan::Rfid => 'info',
                         SourceKunjungan::Manual => 'warning',
                     }),
@@ -64,7 +64,7 @@ class KunjunganResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('source')
-                    ->options(collect(SourceKunjungan::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
+                    ->options(collect(SourceKunjungan::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
             ])
             ->recordActions([
                 DeleteAction::make(), // digerbang KunjunganPolicy::delete() - hanya Admin

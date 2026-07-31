@@ -73,6 +73,7 @@ class TransaksiCepat extends Page
             $this->user = app(RfidResolverService::class)->resolveUser($input);
         } catch (RuntimeException $e) {
             Notification::make()->danger()->title('User tidak ditemukan')->body($e->getMessage())->send();
+
             return;
         }
 
@@ -101,6 +102,7 @@ class TransaksiCepat extends Page
 
         if (! $buku) {
             $this->tambahRiwayat($barcode, '-', 'error', 'Barcode tidak ditemukan.', false);
+
             return;
         }
 

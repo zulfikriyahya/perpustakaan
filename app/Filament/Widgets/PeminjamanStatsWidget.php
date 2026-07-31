@@ -42,8 +42,8 @@ class PeminjamanStatsWidget extends StatsOverviewWidget
             Stat::make('Peminjaman Terlambat', (string) $terlambat)
                 ->color($terlambat > 0 ? 'danger' : 'gray'),
 
-            Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas . ' transaksi')
-                ->description('Rp ' . number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
+            Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas.' transaksi')
+                ->description('Rp '.number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
                 ->color($jumlahDendaBelumLunas > 0 ? 'warning' : 'gray'),
 
             Stat::make('Kunjungan Hari Ini', (string) $kunjunganHariIni)

@@ -48,7 +48,7 @@ class LaporanBulananService
 
         return [
             'total' => $records->count(),
-            'per_status' => $records->groupBy(fn($r) => $r->status->value)->map->count(),
+            'per_status' => $records->groupBy(fn ($r) => $r->status->value)->map->count(),
             'detail' => $records,
         ];
     }
@@ -63,7 +63,7 @@ class LaporanBulananService
 
         return [
             'total' => $records->count(),
-            'per_kondisi' => $records->groupBy(fn($r) => $r->kondisi->value)->map->count(),
+            'per_kondisi' => $records->groupBy(fn ($r) => $r->kondisi->value)->map->count(),
             'detail' => $records,
         ];
     }
@@ -81,7 +81,7 @@ class LaporanBulananService
             'total_nominal' => $records->sum('nominal'),
             'total_nominal_lunas' => $records->where('status_lunas', true)->sum('nominal'),
             'total_nominal_belum_lunas' => $records->where('status_lunas', false)->sum('nominal'),
-            'per_tipe' => $records->groupBy(fn($r) => $r->tipe->value)->map(fn($g) => [
+            'per_tipe' => $records->groupBy(fn ($r) => $r->tipe->value)->map(fn ($g) => [
                 'jumlah' => $g->count(),
                 'nominal' => $g->sum('nominal'),
             ]),
@@ -100,7 +100,7 @@ class LaporanBulananService
         return [
             'total' => $records->count(),
             'user_unik' => $records->pluck('user_id')->unique()->count(),
-            'per_source' => $records->groupBy(fn($r) => $r->source->value)->map->count(),
+            'per_source' => $records->groupBy(fn ($r) => $r->source->value)->map->count(),
             'detail' => $records,
         ];
     }
@@ -116,7 +116,7 @@ class LaporanBulananService
         return [
             'total_transaksi' => $records->count(),
             'total_nilai' => $records->sum('nilai'),
-            'per_event' => $records->groupBy(fn($r) => $r->event_type->value)->map(fn($g) => [
+            'per_event' => $records->groupBy(fn ($r) => $r->event_type->value)->map(fn ($g) => [
                 'jumlah' => $g->count(),
                 'total_nilai' => $g->sum('nilai'),
             ]),

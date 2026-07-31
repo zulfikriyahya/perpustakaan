@@ -14,7 +14,7 @@ class TrenKunjunganChartWidget extends ChartWidget
 {
     protected static ?int $sort = 2;
 
-    public function getHeading(): string|null
+    public function getHeading(): ?string
     {
         return 'Tren Kunjungan (14 Hari Terakhir)';
     }

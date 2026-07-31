@@ -29,7 +29,7 @@ class PeminjamansRelationManager extends RelationManager
                     ->date(),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn(StatusPeminjaman $state) => match ($state) {
+                    ->color(fn (StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Aktif => 'success',
                         StatusPeminjaman::Terlambat => 'danger',
                         StatusPeminjaman::Selesai => 'gray',

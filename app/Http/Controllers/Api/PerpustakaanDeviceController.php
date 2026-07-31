@@ -9,10 +9,13 @@ use App\Models\DeviceLog;
 use App\Models\FirmwareRelease;
 use App\Models\Kunjungan;
 use App\Models\Setting;
+use App\Models\User;
 use App\Services\PointService;
 use App\Services\RfidResolverService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 /**
  * Endpoint untuk Attendance Machine (ESP32-C3) - kontrak persis mengikuti
@@ -52,16 +55,16 @@ class PerpustakaanDeviceController extends Controller
      * karena tidak lolos filter regex di bawah - bukan bug, tapi konsekuensi
      * kontrak firmware. Data lama wajib diperbaiki ke format 10 digit.
      */
-    public function rfidList(): \Illuminate\Http\Response
+    public function rfidList(): Response
     {
         $ver = (int) Setting::get('rfid_db_ver', 0);
 
-        $kartuList = \App\Models\User::query()
+        $kartuList = User::query()
             ->whereNotNull('no_kartu_rfid')
             ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
             ->pluck('no_kartu_rfid');
 
-        $body = "ver:{$ver}\n" . $kartuList->implode("\n");
+        $body = "ver:{$ver}\n".$kartuList->implode("\n");
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -127,7 +130,7 @@ class PerpustakaanDeviceController extends Controller
                 'jam_tap' => $this->parseJamDariTimestamp($timestamp),
                 'source' => SourceKunjungan::Rfid,
             ]);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return response()->json(['error' => 'sudah tercatat hari ini'], 400);
         }
@@ -192,7 +195,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {
@@ -236,7 +239,7 @@ class PerpustakaanDeviceController extends Controller
                 'jam_tap' => $this->parseJamDariTimestamp($timestamp),
                 'source' => SourceKunjungan::Rfid,
             ]);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'duplikat'];
         }

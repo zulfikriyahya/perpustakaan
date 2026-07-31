@@ -3,21 +3,22 @@
 namespace App\Models;
 
 use App\Enums\RoleUser;
-use BezhanSalleh\FilamentShield\Traits\HasPanelShield;
+use App\Enums\StatusAkademik;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements AuthenticatableContract, HasName, FilamentUser
+class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasName
 {
-    use HasFactory, SoftDeletes, HasRoles, Notifiable;
+    use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'avatar',
@@ -25,7 +26,8 @@ class User extends Authenticatable implements AuthenticatableContract, HasName, 
         'role',
         'nisn',
         'nip',
-        'kelas',
+        'kelas_tahun_pelajaran_id',
+        'status_akademik',
         'jabatan',
         'no_telepon',
         'no_kartu_rfid',
@@ -44,6 +46,7 @@ class User extends Authenticatable implements AuthenticatableContract, HasName, 
         return [
             'id' => 'integer',
             'role' => RoleUser::class,
+            'status_akademik' => StatusAkademik::class,
             'status_suspend' => 'boolean',
             'password' => 'hashed',
         ];
@@ -62,6 +65,9 @@ class User extends Authenticatable implements AuthenticatableContract, HasName, 
      * alasan suspend) lolos ke panel. Guard sesungguhnya (Siswa tidak bisa
      * CRUD Buku, Pustakawan tidak bisa ubah Setting, dst.) ditulis di
      * masing-masing app/Policies/*Policy.php, di-enforce via Shield.
+     *
+     * status_akademik = Lulus TETAP bisa akses panel (dikonfirmasi Aturan
+     * - akun tidak dinonaktifkan saat lulus).
      */
     public function canAccessPanel(Panel $panel): bool
     {
@@ -71,5 +77,15 @@ class User extends Authenticatable implements AuthenticatableContract, HasName, 
     public function levelBadge(): BelongsTo
     {
         return $this->belongsTo(LevelBadge::class);
+    }
+
+    public function kelasTahunPelajaran(): BelongsTo
+    {
+        return $this->belongsTo(KelasTahunPelajaran::class);
+    }
+
+    public function riwayatKelas(): HasMany
+    {
+        return $this->hasMany(RiwayatKelasSiswa::class);
     }
 }

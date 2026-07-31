@@ -36,6 +36,7 @@ class ResetPassword extends SimplePage
     {
         if (! Session::has('reset_password_no_telepon')) {
             $this->redirect(route('filament.dashboard.auth.password-reset.request'));
+
             return;
         }
 
@@ -72,6 +73,7 @@ class ResetPassword extends SimplePage
             $otpService->verifikasiDanReset($noTelepon, $data['otp'], $data['password']);
         } catch (\RuntimeException $e) {
             Notification::make()->title($e->getMessage())->warning()->send();
+
             return;
         }
 

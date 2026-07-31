@@ -2,22 +2,22 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Exports\BukuExporter;
+use App\Filament\Imports\BukuImporter;
 use App\Filament\Resources\BukuResource\Pages;
 use App\Models\Buku;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use App\Filament\Exports\BukuExporter;
-use App\Filament\Imports\BukuImporter;
-use Filament\Actions\ExportAction;
-use Filament\Actions\ImportAction;
 
 class BukuResource extends Resource
 {
@@ -87,10 +87,10 @@ class BukuResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(BukuImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Buku::class) ?? false),
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('cover')

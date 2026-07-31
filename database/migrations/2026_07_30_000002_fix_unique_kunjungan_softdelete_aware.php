@@ -37,10 +37,10 @@ return new class extends Migration
                 ) STORED
         ");
 
-        DB::statement("
+        DB::statement('
             ALTER TABLE kunjungans
             ADD UNIQUE INDEX kunjungans_unik_aktif_unique (unik_aktif)
-        ");
+        ');
     }
 
     public function down(): void

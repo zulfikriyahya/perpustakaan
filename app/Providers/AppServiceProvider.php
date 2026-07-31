@@ -8,8 +8,8 @@ use App\Models\User;
 use App\Observers\DendaObserver;
 use App\Observers\SettingObserver;
 use App\Observers\UserObserver;
-use Illuminate\Support\ServiceProvider;
 use BezhanSalleh\FilamentShield\Facades\FilamentShield;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {

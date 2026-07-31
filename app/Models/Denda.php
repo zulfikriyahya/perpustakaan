@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -32,7 +33,7 @@ class Denda extends Model
             'nominal' => 'decimal:2',
             'status_lunas' => 'boolean',
             'tanggal_lunas' => 'datetime',
-            'status_refund' => \App\Enums\StatusRefund::class,
+            'status_refund' => StatusRefund::class,
         ];
     }
 

@@ -417,8 +417,8 @@ class PeminjamanService
             'nominal' => 0,
             'status_lunas' => true,
             'tanggal_lunas' => now(),
-            'keterangan' => trim(($denda->keterangan ? $denda->keterangan . ' | ' : '')
-                . ($sudahTerbayar
+            'keterangan' => trim(($denda->keterangan ? $denda->keterangan.' | ' : '')
+                .($sudahTerbayar
                     ? 'Dibatalkan otomatis (SUDAH TERBAYAR SEBELUM KOREKSI - perlu refund manual di luar sistem): koreksi kondisi Pengembalian.'
                     : 'Dibatalkan otomatis: koreksi kondisi Pengembalian.')),
         ]);

@@ -51,7 +51,7 @@ class PasswordResetOtpService
             eventCode: 'reset_password_otp',
             nomorTujuan: $user->no_telepon,
             variables: ['nama' => $user->nama, 'otp' => $otp],
-            referenceId: "reset-otp-{$user->id}-" . now()->timestamp,
+            referenceId: "reset-otp-{$user->id}-".now()->timestamp,
         );
     }
 

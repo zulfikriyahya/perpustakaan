@@ -13,7 +13,6 @@ use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
-
 class PointService
 {
     public function __construct(
@@ -101,7 +100,7 @@ class PointService
         $reward = Reward::query()
             ->where('aktif', true)
             ->where('threshold_point', '<=', $user->akumulasi_point)
-            ->whereDoesntHave('rewardLogs', fn($q) => $q->where('user_id', $user->id))
+            ->whereDoesntHave('rewardLogs', fn ($q) => $q->where('user_id', $user->id))
             ->orderByDesc('threshold_point')
             ->first();
 
@@ -172,6 +171,7 @@ class PointService
             referenceId: "punishment-{$punishmentLog->id}",
         );
     }
+
     /**
      * Reverse SATU Point log (mis. saat koreksi kondisi Pengembalian
      * membatalkan alasan event tersebut). Insert entry Point BARU dengan

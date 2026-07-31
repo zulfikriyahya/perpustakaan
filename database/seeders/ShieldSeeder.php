@@ -49,6 +49,12 @@ class ShieldSeeder extends Seeder
                 'ForceDeleteAny:LevelBadgeLog',
                 'Replicate:LevelBadgeLog',
                 'Reorder:LevelBadgeLog',
+                'ViewAny:FirmwareRelease',
+                'View:FirmwareRelease',
+                'Create:FirmwareRelease',
+                'Update:FirmwareRelease',
+                'Delete:FirmwareRelease',
+                'DeleteAny:FirmwareRelease',
             ] as $permissionName
         ) {
             Permission::firstOrCreate([

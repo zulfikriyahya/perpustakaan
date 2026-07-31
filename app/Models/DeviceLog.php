@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\StatusOtaFirmware;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
@@ -22,6 +23,9 @@ class DeviceLog extends Model
         'rfid_db_entries',
         'online',
         'last_seen_at',
+        'ota_status',
+        'ota_error',
+        'ota_reported_at',
     ];
 
     protected function casts(): array
@@ -30,6 +34,8 @@ class DeviceLog extends Model
             'sd_ok' => 'boolean',
             'online' => 'boolean',
             'last_seen_at' => 'datetime',
+            'ota_status' => StatusOtaFirmware::class,
+            'ota_reported_at' => 'datetime',
         ];
     }
 }

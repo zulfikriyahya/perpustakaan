@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources;
 
+use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\BukuExporter;
 use App\Filament\Imports\BukuImporter;
 use App\Filament\Resources\BukuResource\Pages;
 use App\Filament\Resources\BukuResource\RelationManagers\EksemplarsRelationManager;
 use App\Models\Buku;
+use App\Models\Eksemplar;
 use App\Models\Rak;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ExportAction;
@@ -17,6 +19,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
@@ -108,10 +111,6 @@ class BukuResource extends Resource
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
-                // Import/Export Eksemplar TIDAK lagi ada di sini - dipindah
-                // sepenuhnya ke EksemplarsRelationManager (satu lokasi,
-                // sebelumnya duplikat di dua tempat dengan sumber
-                // otorisasi berbeda - lihat EksemplarPolicy baru).
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -130,11 +129,6 @@ class BukuResource extends Resource
                     ->label('Total Eksemplar')
                     ->counts('eksemplars')
                     ->sortable(),
-                // GAP-SPEC ditutup: "stok tersedia" = HANYA status Tersedia
-                // (Buku::stokTersedia()) - Dipinjam, Rusak, DAN Hilang semua
-                // dikecualikan, bukan cuma Dipinjam+Hilang. Dihitung
-                // on-the-fly (bukan counts() bawaan) karena butuh filter
-                // where status, bukan sekadar hitung semua baris relasi.
                 TextColumn::make('stok_tersedia')
                     ->label('Stok Tersedia')
                     ->state(fn (Buku $record) => $record->stokTersedia())
@@ -151,7 +145,35 @@ class BukuResource extends Resource
             ])
             ->actions([
                 DeleteAction::make(),
-                ForceDeleteAction::make(),
+                // GAP-SPEC ditutup (dikonfirmasi user, Opsi B): force-delete
+                // diizinkan, eksemplar_id di riwayat Peminjaman jadi null
+                // (lihat migration 2026_08_02_000007). TAPI diblok kalau
+                // masih ada Peminjaman Aktif/Terlambat - bukan pilihan
+                // bisnis, ini guard wajib supaya alur pinjam yang sedang
+                // berjalan tidak rusak (lihat catatan PeminjamanService).
+                ForceDeleteAction::make()
+                    ->action(function (Buku $record) {
+                        $adaPeminjamanBerjalan = Eksemplar::query()
+                            ->withTrashed()
+                            ->where('buku_id', $record->id)
+                            ->whereHas('peminjamans', fn ($q) => $q->whereIn('status', [
+                                StatusPeminjaman::Aktif,
+                                StatusPeminjaman::Terlambat,
+                            ]))
+                            ->exists();
+
+                        if ($adaPeminjamanBerjalan) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada Peminjaman Aktif/Terlambat yang menggunakan eksemplar buku ini. Selesaikan/kembalikan dulu sebelum force delete.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
                 RestoreAction::make(),
             ])
             ->filters([

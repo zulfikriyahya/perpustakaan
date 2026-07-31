@@ -1914,7 +1914,41 @@ void checkOtaUpdate() {
   playToneNotify();
   delay(2000);
 }
-
+/**
+ * Kontrak BARU: lapor hasil OTA ke backend Sistem Perpustakaan sebelum
+ * restart (kontrak "success" hanya berarti proses flashing selesai,
+ * BUKAN konfirmasi boot firmware baru berhasil - tidak ada rollback
+ * confirmation di firmware ini, lihat catatan di performOtaUpdate()).
+ * Best-effort: kegagalan kirim laporan ini TIDAK menghentikan alur
+ * restart/recovery, hanya di-skip diam-diam kalau WiFi/HTTP gagal.
+ */
+void reportOtaStatus(const char *version, const char *status, const char *errorMsg) {
+  if (!isWifiConnected()) {
+    return;
+  }
+  HTTPClient http;
+  http.setTimeout(8000);
+  http.setConnectTimeout(5000);
+  char url[80];
+  strcpy(url, apiBaseUrl);
+  strcat(url, "/api/perpustakaan/firmware/report");
+  if (!http.begin(getHttpClient(), url)) {
+    return;
+  }
+  http.addHeader(F("Content-Type"), F("application/json"));
+  http.addHeader(F("X-API-KEY"), apiKey);
+  DynamicJsonDocument doc(256);
+  doc["device_id"] = deviceId;
+  doc["version"] = version;
+  doc["status"] = status;
+  if (errorMsg && strlen(errorMsg) > 0) {
+    doc["error"] = errorMsg;
+  }
+  String payload;
+  serializeJson(doc, payload);
+  http.POST(payload);
+  http.end();
+}
 void performOtaUpdate() {
   if (!otaState.updateAvailable || isSignalWeak())
     return;
@@ -1937,6 +1971,9 @@ void performOtaUpdate() {
     showOLED(F("UPDATE GAGAL"), buf);
     playToneError();
     http.end();
+    char errBuf[24];
+    snprintf(errBuf, sizeof(errBuf), "download HTTP %d", code);
+    reportOtaStatus(FIRMWARE_VERSION, "failed", errBuf);
     otaState.updateAvailable = false;
     restoreWdtNormal();
     return;
@@ -1955,6 +1992,7 @@ void performOtaUpdate() {
     showOLED(F("UPDATE GAGAL"), "NO SPACE");
     playToneError();
     http.end();
+    reportOtaStatus(FIRMWARE_VERSION, "failed", "Update.begin: NO SPACE");
     otaState.updateAvailable = false;
     restoreWdtNormal();
     return;
@@ -1979,6 +2017,8 @@ void performOtaUpdate() {
   if (Update.end() && Update.isFinished()) {
     showOLED(F("UPDATE OK"), "RESTART...");
     playToneSuccess();
+    // Lapor SUKSES sebelum restart - konteks HTTP hilang setelah restart.
+    reportOtaStatus(otaState.version, "success", nullptr);
     delay(2000);
     restoreWdtNormal();
     ESP.restart();
@@ -1986,6 +2026,9 @@ void performOtaUpdate() {
     snprintf(buf, sizeof(buf), "ERR %d", Update.getError());
     showOLED(F("UPDATE GAGAL"), buf);
     playToneError();
+    char errBuf[24];
+    snprintf(errBuf, sizeof(errBuf), "Update.end err %d", Update.getError());
+    reportOtaStatus(FIRMWARE_VERSION, "failed", errBuf);
     otaState.updateAvailable = false;
   }
   restoreWdtNormal();

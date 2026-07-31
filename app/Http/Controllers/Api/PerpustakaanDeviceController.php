@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\EventTypePoint;
 use App\Enums\JenisTransaksi;
 use App\Enums\SourceKunjungan;
+use App\Enums\StatusOtaFirmware;
 use App\Http\Controllers\Controller;
 use App\Models\DeviceLog;
 use App\Models\FirmwareRelease;
@@ -311,5 +312,49 @@ class PerpustakaanDeviceController extends Controller
     protected function bandingkanVersi(string $a, string $b): int
     {
         return $this->normalisasiVersi($a) <=> $this->normalisasiVersi($b);
+    }
+
+    /**
+     * Kontrak BARU: firmware lapor hasil OTA setelah proses update/reboot.
+     * Request: { "device_id": string, "version": string, "status": "success"|"failed", "error"?: string }
+     * Response selalu { "status": "ok" } dengan HTTP 200 selama device_id
+     * terisi - device tidak perlu retry berdasarkan response ini (best
+     * effort logging, bukan bagian kritis alur OTA).
+     *
+     * Jika status "success", firmware_version di DeviceLog ikut
+     * diperbarui ke versi baru (device sudah berhasil boot versi
+     * tersebut). Jika "failed", firmware_version TIDAK diubah (device
+     * masih menjalankan versi lama) - hanya ota_error yang dicatat.
+     */
+    public function firmwareReport(Request $request): JsonResponse
+    {
+        $deviceId = (string) $request->input('device_id');
+
+        if ($deviceId === '') {
+            return response()->json(['error' => 'device_id wajib diisi'], 422);
+        }
+
+        $status = StatusOtaFirmware::tryFrom((string) $request->input('status'));
+
+        if (! $status) {
+            return response()->json(['error' => 'status harus "success" atau "failed"'], 422);
+        }
+
+        $update = [
+            'ota_status' => $status,
+            'ota_error' => $status === StatusOtaFirmware::Gagal ? (string) $request->input('error', '') : null,
+            'ota_reported_at' => now(),
+        ];
+
+        if ($status === StatusOtaFirmware::Sukses && $request->filled('version')) {
+            $update['firmware_version'] = (string) $request->input('version');
+        }
+
+        DeviceLog::query()->updateOrCreate(
+            ['device_id' => $deviceId],
+            $update
+        );
+
+        return response()->json(['status' => 'ok']);
     }
 }

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Route;
  *   POST /api/perpustakaan/heartbeat
  *   GET  /api/perpustakaan/config
  *   POST /api/perpustakaan/firmware/check
+ *   POST /api/perpustakaan/firmware/report  (BARU - kontrak OTA report, firmware akan disesuaikan)
  *
  * Semua endpoint di bawah prefix ini wajib header X-API-KEY (lihat
  * AuthenticateDeviceApiKey) - firmware mengirim header ini di SETIAP request
@@ -32,4 +33,5 @@ Route::prefix('perpustakaan')
         Route::post('/heartbeat', [PerpustakaanDeviceController::class, 'heartbeat']);
         Route::get('/config', [PerpustakaanDeviceController::class, 'config']);
         Route::post('/firmware/check', [PerpustakaanDeviceController::class, 'firmwareCheck']);
+        Route::post('/firmware/report', [PerpustakaanDeviceController::class, 'firmwareReport']);
     });

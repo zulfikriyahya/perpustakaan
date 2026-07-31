@@ -15,7 +15,9 @@ class PeminjamanExporter extends Exporter
     {
         return [
             ExportColumn::make('user.nama')->label('Peminjam'),
-            ExportColumn::make('eksemplar.buku.judul')->label('Buku'),
+            ExportColumn::make('eksemplar.buku.judul')
+                ->label('Buku')
+                ->formatStateUsing(fn ($state) => $state ?? '(eksemplar sudah dihapus permanen)'),
             ExportColumn::make('tanggal_pinjam'),
             ExportColumn::make('tanggal_jatuh_tempo'),
             ExportColumn::make('status'),

@@ -99,12 +99,11 @@ Ketentuan:
 ---
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
-- Finalkan Fitur Point, Reward dan Punishment
 - Perbaiki:
 ```markdown
-# Illuminate\Database\Eloquent\RelationNotFoundException - Internal Server Error
+# Illuminate\Database\QueryException - Internal Server Error
 
-Call to undefined relationship [buku] on model [App\Models\Peminjaman].
+SQLSTATE[23000]: Integrity constraint violation: 1451 Cannot delete or update a parent row: a foreign key constraint fails (`perpustakaan`.`peminjamans`, CONSTRAINT `peminjamans_eksemplar_id_foreign` FOREIGN KEY (`eksemplar_id`) REFERENCES `eksemplars` (`id`)) (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: perpustakaan, SQL: delete from `bukus` where `id` = 019fb90a-a9de-7221-bb1e-89ba6f40a0f6)
 
 PHP 8.4.22
 Laravel 13.23.0
@@ -112,82 +111,167 @@ localhost:8000
 
 ## Stack Trace
 
-0 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/RelationNotFoundException.php:35
-1 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:975
-2 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Relations/Relation.php:119
-3 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:971
-4 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:945
-5 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:925
-6 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:891
-7 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Relations/Relation.php:212
-8 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Relations/Relation.php:175
-9 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:956
-10 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:925
-11 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:891
-12 - app/Services/LaporanBulananService.php:77
-13 - app/Services/LaporanBulananService.php:35
-14 - app/Filament/Pages/LaporanBulanan.php:76
-15 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:36
-16 - vendor/laravel/framework/src/Illuminate/Container/Util.php:43
-17 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:96
-18 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:35
-19 - vendor/livewire/livewire/src/Wrapped.php:23
-20 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:708
-21 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:242
-22 - vendor/livewire/livewire/src/LivewireManager.php:131
-23 - vendor/livewire/livewire/src/Mechanisms/HandleRequests/HandleRequests.php:205
-24 - vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php:46
-25 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:276
-26 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:216
-27 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:822
-28 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
-29 - vendor/livewire/livewire/src/Mechanisms/HandleRequests/RequireLivewireHeaders.php:19
-30 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-31 - vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php:52
-32 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-33 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php:104
-34 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-35 - vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php:48
-36 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-37 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:120
-38 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:63
-39 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-40 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php:36
-41 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-42 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php:74
-43 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-44 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
-45 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:821
-46 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:800
-47 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:764
-48 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:753
-49 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:200
-50 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
-51 - vendor/livewire/livewire/src/Features/SupportDisablingBackButtonCache/DisableBackButtonCacheMiddleware.php:19
-52 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-53 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php:27
-54 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-55 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php:47
-56 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-57 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php:27
-58 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-59 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php:109
-60 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-61 - vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php:61
-62 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-63 - vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php:58
-64 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-65 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php:22
-66 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-67 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePathEncoding.php:28
-68 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
-69 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
-70 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:175
-71 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:144
-72 - vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1227
-73 - public/index.php:20
-74 - vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php:23
+0 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:857
+1 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:813
+2 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:614
+3 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:578
+4 - vendor/laravel/framework/src/Illuminate/Database/Query/Builder.php:4521
+5 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:1526
+6 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/SoftDeletes.php:124
+7 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php:1759
+8 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/SoftDeletes.php:59
+9 - vendor/filament/actions/src/ForceDeleteAction.php:42
+10 - vendor/filament/support/src/Concerns/EvaluatesClosures.php:36
+11 - vendor/filament/actions/src/Concerns/CanCustomizeProcess.php:23
+12 - vendor/filament/actions/src/ForceDeleteAction.php:42
+13 - vendor/filament/support/src/Concerns/EvaluatesClosures.php:36
+14 - vendor/filament/actions/src/Action.php:678
+15 - vendor/filament/actions/src/Concerns/InteractsWithActions.php:306
+16 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:36
+17 - vendor/laravel/framework/src/Illuminate/Container/Util.php:43
+18 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:96
+19 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:35
+20 - vendor/livewire/livewire/src/Wrapped.php:23
+21 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:708
+22 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:242
+23 - vendor/livewire/livewire/src/LivewireManager.php:131
+24 - vendor/livewire/livewire/src/Mechanisms/HandleRequests/HandleRequests.php:205
+25 - vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php:46
+26 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:276
+27 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:216
+28 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:822
+29 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
+30 - vendor/livewire/livewire/src/Mechanisms/HandleRequests/RequireLivewireHeaders.php:19
+31 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+32 - vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php:52
+33 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+34 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php:104
+35 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+36 - vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php:48
+37 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+38 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:120
+39 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:63
+40 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+41 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php:36
+42 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+43 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php:74
+44 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+45 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
+46 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:821
+47 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:800
+48 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:764
+49 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:753
+50 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:200
+51 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
+52 - vendor/livewire/livewire/src/Features/SupportDisablingBackButtonCache/DisableBackButtonCacheMiddleware.php:19
+53 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+54 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php:27
+55 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+56 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php:47
+57 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+58 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php:27
+59 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+60 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php:109
+61 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+62 - vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php:61
+63 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+64 - vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php:58
+65 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+66 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php:22
+67 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+68 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePathEncoding.php:28
+69 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+70 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
+71 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:175
+72 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:144
+73 - vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1227
+74 - public/index.php:20
+75 - vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php:23
 
+## Previous exception
+
+### 1. PDOException
+
+SQLSTATE[23000]: Integrity constraint violation: 1451 Cannot delete or update a parent row: a foreign key constraint fails (`perpustakaan`.`peminjamans`, CONSTRAINT `peminjamans_eksemplar_id_foreign` FOREIGN KEY (`eksemplar_id`) REFERENCES `eksemplars` (`id`))
+
+0 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:626
+1 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:626
+2 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:846
+3 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:813
+4 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:614
+5 - vendor/laravel/framework/src/Illuminate/Database/Connection.php:578
+6 - vendor/laravel/framework/src/Illuminate/Database/Query/Builder.php:4521
+7 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:1526
+8 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/SoftDeletes.php:124
+9 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php:1759
+10 - vendor/laravel/framework/src/Illuminate/Database/Eloquent/SoftDeletes.php:59
+11 - vendor/filament/actions/src/ForceDeleteAction.php:42
+12 - vendor/filament/support/src/Concerns/EvaluatesClosures.php:36
+13 - vendor/filament/actions/src/Concerns/CanCustomizeProcess.php:23
+14 - vendor/filament/actions/src/ForceDeleteAction.php:42
+15 - vendor/filament/support/src/Concerns/EvaluatesClosures.php:36
+16 - vendor/filament/actions/src/Action.php:678
+17 - vendor/filament/actions/src/Concerns/InteractsWithActions.php:306
+18 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:36
+19 - vendor/laravel/framework/src/Illuminate/Container/Util.php:43
+20 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:96
+21 - vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:35
+22 - vendor/livewire/livewire/src/Wrapped.php:23
+23 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:708
+24 - vendor/livewire/livewire/src/Mechanisms/HandleComponents/HandleComponents.php:242
+25 - vendor/livewire/livewire/src/LivewireManager.php:131
+26 - vendor/livewire/livewire/src/Mechanisms/HandleRequests/HandleRequests.php:205
+27 - vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php:46
+28 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:276
+29 - vendor/laravel/framework/src/Illuminate/Routing/Route.php:216
+30 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:822
+31 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
+32 - vendor/livewire/livewire/src/Mechanisms/HandleRequests/RequireLivewireHeaders.php:19
+33 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+34 - vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php:52
+35 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+36 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php:104
+37 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+38 - vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php:48
+39 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+40 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:120
+41 - vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php:63
+42 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+43 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php:36
+44 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+45 - vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php:74
+46 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+47 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
+48 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:821
+49 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:800
+50 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:764
+51 - vendor/laravel/framework/src/Illuminate/Routing/Router.php:753
+52 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:200
+53 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:180
+54 - vendor/livewire/livewire/src/Features/SupportDisablingBackButtonCache/DisableBackButtonCacheMiddleware.php:19
+55 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+56 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php:27
+57 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+58 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php:47
+59 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+60 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php:27
+61 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+62 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php:109
+63 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+64 - vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php:61
+65 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+66 - vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php:58
+67 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+68 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php:22
+69 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+70 - vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePathEncoding.php:28
+71 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:219
+72 - vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php:137
+73 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:175
+74 - vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php:144
+75 - vendor/laravel/framework/src/Illuminate/Foundation/Application.php:1227
+76 - public/index.php:20
+77 - vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php:23
 
 ## Request
 
@@ -202,11 +286,11 @@ POST /livewire-f8c356db/update
 * **accept-encoding**: gzip, deflate, br, zstd
 * **content-type**: application/json
 * **x-livewire**: 1
-* **referer**: http://localhost:8000/dashboard/laporan-bulanan
-* **content-length**: 1005
+* **referer**: http://localhost:8000/dashboard/bukus?filters[trashed][value]=1
+* **content-length**: 3376
 * **origin**: http://localhost:8000
 * **connection**: keep-alive
-* **cookie**: _ga=GA1.1.476939021.1778443708; perpustakaan-session=eyJpdiI6ImROTTRSa1NjK3RCaDRWakZoRks1enc9PSIsInZhbHVlIjoid0dCVi9qNmdaMzVTR01CenhLeFFNM3FFRHoyWGVxMXZzLzVsaUxJbldVZkU1MTJFOWZtYVJzcVk1Nm1QM2ZjQkN3dGhzL3ArNVJyeElNc3lnWG5kSW5FclhDVkNYejQrb1k3UTdnL2QrL1loL1JqZ3BBTDdJTUcwOTRuVG1kS2oiLCJtYWMiOiI4MTdkMjZiMDFhZDcwZTE5MzU2N2M5NjhiZDY2ZWE4OTVjZWE4NTVjOGM3OGE4MjFiMzY3NDMwZGNiYjBiYmM0IiwidGFnIjoiIn0%3D; XSRF-TOKEN=eyJpdiI6ImdpYjB5djM5TVptS2REZjlONStKM2c9PSIsInZhbHVlIjoibjU1M1VpOFV3d0ZrRTBxeVFvNHlLdmVsMEZDdEZPVXhkbFNCeVdWTit3Qk5BMW0rZGpJVEQvbU96dVh1NklpWGp0Mk0veVRHWE1zMjN5QXpNTExvQ3lKN25iL0ppNUhxdzZ6ZHdidlQvOHdVRWJ6Wlh5cCsyMEpRdXFSVks2bWwiLCJtYWMiOiIzNjQ3ODhmYTIzNWExZWQzODVkYWI2MTRhNGM1MGZiNjFjZTUxMjc3Mjk3ZDFiNjVhYjg4MjZjOGNhOWE3ZTZjIiwidGFnIjoiIn0%3D
+* **cookie**: _ga=GA1.1.476939021.1778443708; perpustakaan-session=eyJpdiI6InFYSGpob2txUlRUT1BvRktpeDZMamc9PSIsInZhbHVlIjoiRUtZaS9qRXhrYldsbW56OUwvcDJxQVY4ai9NL0tYRHJyUUJXbXRvaTI2VEN4TEJZUFgvQXlKY0FlU0g3NlNHbTBCbkNJVjNNSThBYmc5bi92OFFmTjJFaGtoN2F0K1Btb2xCVWxLYXJsVDVGVFNzVGZVRk9tZTVGRDg2Uk96TFQiLCJtYWMiOiI0OGU5OWJlYzIxNGE3ZGIxOGIxOTlkOWQ1NTY5NjhlYzRjNjQ1ZDQxZTY0MzNmN2NjMjE5ZGVkNWY5ODAwZmIzIiwidGFnIjoiIn0%3D; XSRF-TOKEN=eyJpdiI6IlRjWVU2dURwWTJRNXdRd2k3ZGFRMkE9PSIsInZhbHVlIjoicEo0R0ZUTEJ0b0hlR3pWQmQ5RDNDdmhzVzZFRGhKb1FkSE11bVNMcmR1OGZBMlFkTUgyQ25YaXY4OW1RdWFiMXNtVnlNa0NjdkFVSjI2UjJxK0l2VXQ5dDExd21jSUxBMXRiaGFKK2Z2aUV5WXhQejQybk9vYVN5akpoYlpXdDAiLCJtYWMiOiIyYjA0MzcwNWE1Nzg2NjM3MmYzNWZkNDFiODg4ODM5ZWQ2Y2ZhNjkwNDUxZTYxNzk0MDBjMjBkMGJjZDhjNWI0IiwidGFnIjoiIn0%3D
 * **sec-fetch-dest**: empty
 * **sec-fetch-mode**: cors
 * **sec-fetch-site**: same-origin
@@ -224,21 +308,10 @@ No route parameter data available.
 
 ## Database Queries
 
-* mysql - select * from `users` where `id` = 1 and `users`.`deleted_at` is null limit 1 (1.39 ms)
-* mysql - select `permissions`.*, `model_has_permissions`.`model_id` as `pivot_model_id`, `model_has_permissions`.`permission_id` as `pivot_permission_id`, `model_has_permissions`.`model_type` as `pivot_model_type` from `permissions` inner join `model_has_permissions` on `permissions`.`id` = `model_has_permissions`.`permission_id` where `model_has_permissions`.`model_id` in (1) and `model_has_permissions`.`model_type` = 'App\Models\User' (0.55 ms)
-* mysql - select `roles`.*, `model_has_roles`.`model_id` as `pivot_model_id`, `model_has_roles`.`role_id` as `pivot_role_id`, `model_has_roles`.`model_type` as `pivot_model_type` from `roles` inner join `model_has_roles` on `roles`.`id` = `model_has_roles`.`role_id` where `model_has_roles`.`model_id` in (1) and `model_has_roles`.`model_type` = 'App\Models\User' (0.43 ms)
-* mysql - select * from `peminjamans` where `tanggal_pinjam` between '2026-08-01' and '2026-08-31' and `peminjamans`.`deleted_at` is null order by `tanggal_pinjam` asc (0.48 ms)
-* mysql - select * from `users` where `users`.`id` in (2) and `users`.`deleted_at` is null (0.34 ms)
-* mysql - select * from `eksemplars` where `eksemplars`.`id` in ('019fb90a-a9e8-7029-81b4-65fd5e3de702', '019fb90a-a9ea-71ae-8931-62ea46fbee3f', '019fb90a-a9ec-7096-97e0-d7a58109c652') and `eksemplars`.`deleted_at` is null (0.41 ms)
-* mysql - select * from `bukus` where `bukus`.`id` in ('019fb90a-a9de-7221-bb1e-89ba6f40a0f6') and `bukus`.`deleted_at` is null (0.36 ms)
-* mysql - select * from `pengembalians` where `tanggal_kembali` between '2026-08-01' and '2026-08-31' and `pengembalians`.`deleted_at` is null order by `tanggal_kembali` asc (0.53 ms)
-* mysql - select * from `peminjamans` where `peminjamans`.`id` in ('019fb916-7155-7281-b722-c0add801b695', '019fb916-715f-7229-aded-43f44161a6e9', '019fb928-3a21-7371-a392-7af7fc5874ab', '019fb928-4c02-70d2-be96-ca18870466f8', '019fb928-6123-70e1-bb58-925239f5f1b2', '019fb92c-0d90-7198-aeaf-e3320d127075', '019fb92c-79dd-7045-b518-b12b390f21ba', '019fb93a-dd83-73d0-8ddc-bf3266b45edc') and `peminjamans`.`deleted_at` is null (0.49 ms)
-* mysql - select * from `users` where `users`.`id` in (1, 2) and `users`.`deleted_at` is null (0.5 ms)
-* mysql - select * from `eksemplars` where `eksemplars`.`id` in ('019fb90a-a9e8-7029-81b4-65fd5e3de702', '019fb90a-a9ea-71ae-8931-62ea46fbee3f', '019fb90a-a9ec-7096-97e0-d7a58109c652') and `eksemplars`.`deleted_at` is null (0.45 ms)
-* mysql - select * from `bukus` where `bukus`.`id` in ('019fb90a-a9de-7221-bb1e-89ba6f40a0f6') and `bukus`.`deleted_at` is null (0.55 ms)
-* mysql - select * from `dendas` where `created_at` between '2026-08-01 00:00:00' and '2026-08-31 23:59:59' and `dendas`.`deleted_at` is null order by `created_at` asc (0.72 ms)
-* mysql - select * from `users` where `users`.`id` in (2) and `users`.`deleted_at` is null (0.48 ms)
-* mysql - select * from `peminjamans` where `peminjamans`.`id` in ('019fb94b-5f02-724b-8d3b-8f1d6fc509ae') and `peminjamans`.`deleted_at` is null (0.53 ms)
+* mysql - select * from `users` where `id` = 1 and `users`.`deleted_at` is null limit 1 (1.75 ms)
+* mysql - select `permissions`.*, `model_has_permissions`.`model_id` as `pivot_model_id`, `model_has_permissions`.`permission_id` as `pivot_permission_id`, `model_has_permissions`.`model_type` as `pivot_model_type` from `permissions` inner join `model_has_permissions` on `permissions`.`id` = `model_has_permissions`.`permission_id` where `model_has_permissions`.`model_id` in (1) and `model_has_permissions`.`model_type` = 'App\Models\User' (0.54 ms)
+* mysql - select `roles`.*, `model_has_roles`.`model_id` as `pivot_model_id`, `model_has_roles`.`role_id` as `pivot_role_id`, `model_has_roles`.`model_type` as `pivot_model_type` from `roles` inner join `model_has_roles` on `roles`.`id` = `model_has_roles`.`role_id` where `model_has_roles`.`model_id` in (1) and `model_has_roles`.`model_type` = 'App\Models\User' (0.78 ms)
+* mysql - select `bukus`.*, (select count(*) from `eksemplars` where `bukus`.`id` = `eksemplars`.`buku_id` and `eksemplars`.`deleted_at` is null) as `eksemplars_count` from `bukus` where `bukus`.`id` = '019fb90a-a9de-7221-bb1e-89ba6f40a0f6' limit 1 (0.96 ms)
 
 ```
 

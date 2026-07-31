@@ -85,6 +85,7 @@ class PeminjamanResource extends Resource
                     ->sortable(),
                 TextColumn::make('eksemplar.buku.judul')
                     ->label('Buku')
+                    ->placeholder('(eksemplar sudah dihapus permanen)')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('tanggal_pinjam')

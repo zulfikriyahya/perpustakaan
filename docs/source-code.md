@@ -390,6 +390,51 @@ class DendaExporter extends Exporter
 ```
 ---
 
+## app/Filament/Exports/EksemplarExporter.php
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\Eksemplar;
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+
+class EksemplarExporter extends Exporter
+{
+    protected static ?string $model = Eksemplar::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('barcode'),
+            ExportColumn::make('buku.isbn')
+                ->label('ISBN Buku'),
+            ExportColumn::make('buku.judul')
+                ->label('Judul Buku'),
+            ExportColumn::make('rak.nama')
+                ->label('Rak'),
+            ExportColumn::make('status')
+                ->formatStateUsing(fn (Eksemplar $record) => $record->status->value),
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        $body = 'Export Eksemplar selesai, '.number_format($export->successful_rows).' baris berhasil diekspor.';
+
+        if ($failedRowsCount = $export->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
 ## app/Filament/Exports/JurusanExporter.php
 ```php
 <?php
@@ -1080,6 +1125,7 @@ namespace App\Filament\Imports;
 
 use App\Enums\StatusEksemplar;
 use App\Models\Buku;
+use App\Models\Eksemplar;
 use App\Models\Kategori;
 use App\Models\Rak;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
@@ -1196,9 +1242,6 @@ class BukuImporter extends Importer
      */
     protected function beforeSave(): void
     {
-        // FIX: baris "$this->record->rak_id = ..." DIHAPUS. Buku tidak lagi
-        // punya kolom rak_id (migration 2026_08_02_000003) - rak hanya
-        // relevan di level Eksemplar, ditangani di afterSave().
         if (! empty($this->data['kategori'])) {
             $namaKategoris = array_values(array_filter(array_map('trim', explode(';', $this->data['kategori']))));
             $kategoris = Kategori::query()->whereIn('nama', $namaKategoris)->get(['id', 'nama']);
@@ -1219,8 +1262,7 @@ class BukuImporter extends Importer
             $this->record->kategoris()->sync($this->kategoriIdsTerresolve);
         }
 
-        // TODO: GAP-SPEC - strategi generate barcode otomatis saat import
-        // belum dikonfirmasi selain format dasar ini. Format:
+        // GAP-SPEC ditutup: format barcode auto-generate FINAL:
         // "{ISBN-or-JUDULSLUG}-{urutan}". Konfirmasi sebelumnya: stok
         // diakumulasi (tambah eksemplar sejumlah selisih), tidak pernah
         // mengurangi eksemplar existing meski stok di file diturunkan.
@@ -1233,8 +1275,18 @@ class BukuImporter extends Importer
         $selisih = $stokDiminta - $eksemplarSaatIni;
 
         for ($i = 0; $i < $selisih; $i++) {
+            $barcode = strtoupper(($this->record->isbn ?: Str::slug($this->record->judul)).'-'.($eksemplarSaatIni + $i + 1));
+
+            // Pengaman tambahan: barcode kolom unique - kalau ternyata sudah
+            // dipakai (mis. import diulang setelah barcode existing diedit
+            // manual jadi format lain yang kebetulan bentrok), fallback ke
+            // suffix UUID pendek supaya baris tidak gagal total.
+            if (Eksemplar::query()->where('barcode', $barcode)->exists()) {
+                $barcode .= '-'.strtoupper(Str::random(4));
+            }
+
             $this->record->eksemplars()->create([
-                'barcode' => strtoupper(($this->record->isbn ?: Str::slug($this->record->judul)).'-'.($eksemplarSaatIni + $i + 1)),
+                'barcode' => $barcode,
                 'rak_id' => $rak?->id,
                 'status' => StatusEksemplar::Tersedia,
             ]);
@@ -1247,6 +1299,187 @@ class BukuImporter extends Importer
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
             $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+        }
+
+        return $body;
+    }
+}
+
+```
+---
+
+## app/Filament/Imports/EksemplarImporter.php
+```php
+<?php
+
+namespace App\Filament\Imports;
+
+use App\Enums\StatusEksemplar;
+use App\Models\Buku;
+use App\Models\Eksemplar;
+use App\Models\Rak;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
+use Filament\Actions\Imports\ImportColumn;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import;
+
+/**
+ * Upsert berdasarkan 'barcode' (satu baris = satu unit fisik). TERPISAH
+ * dari BukuImporter (yang beroperasi per-judul/agregat stok) - lihat
+ * keputusan di percakapan: menggabungkan keduanya akan mencampur dua
+ * granularitas berbeda (per-judul vs per-unit fisik) dalam satu importer.
+ *
+ * ATURAN KERAS - tidak boleh bypass PeminjamanService/PointService (Aturan
+ * poin 3, dikonfirmasi eksplisit):
+ * - Baris TIDAK BOLEH set status ke/dari 'Dipinjam' - status ini HANYA
+ *   boleh berubah lewat PeminjamanService::prosesPeminjaman()/
+ *   prosesPengembalian(). Baris yang mencoba ini GAGAL TOTAL.
+ * - Kalau eksemplar existing (ditemukan by barcode) statusnya SEDANG
+ *   'Dipinjam', SELURUH baris ditolak (tidak ada field lain yang
+ *   ter-update juga) - selaras persis dengan EksemplarsRelationManager
+ *   yang men-disable Edit/Delete untuk status ini.
+ */
+class EksemplarImporter extends Importer
+{
+    protected static ?string $model = Eksemplar::class;
+
+    protected ?string $bukuIdTerresolve = null;
+
+    protected ?string $rakIdTerresolve = null;
+
+    protected ?StatusEksemplar $statusTerresolve = null;
+
+    public static function getColumns(): array
+    {
+        return [
+            ImportColumn::make('barcode')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255'])
+                ->example('9789793062792-1')
+                ->helperText('Kunci upsert. Kalau barcode sudah ada, baris ini meng-update eksemplar tersebut (rak/status). Kalau belum ada, dibuat eksemplar baru (wajib isi ISBN Buku).'),
+            ImportColumn::make('isbn')
+                ->label('ISBN Buku')
+                ->rules(['nullable', 'string'])
+                ->example('9789793062792')
+                ->helperText('WAJIB diisi untuk eksemplar BARU (barcode belum ada). Untuk eksemplar yang SUDAH ADA, kolom ini diabaikan - pemindahan eksemplar ke judul buku lain tidak didukung lewat import.')
+                // lookup-only, buku_id di-assign manual di beforeSave().
+                ->fillRecordUsing(fn (?string $state) => null),
+            ImportColumn::make('rak')
+                ->label('Rak (nama, opsional)')
+                ->rules(['nullable', 'string'])
+                ->example('Rak A')
+                ->helperText('Isi persis sesuai nama Rak yang sudah ada. Kosongkan untuk tidak mengubah rak eksemplar existing, atau tidak memberi rak pada eksemplar baru.')
+                // lookup-only, rak_id di-assign manual di beforeSave().
+                ->fillRecordUsing(fn (?string $state) => null),
+            ImportColumn::make('status')
+                ->rules(['nullable', 'string'])
+                ->example('tersedia')
+                ->helperText("Hanya 'tersedia', 'rusak', atau 'hilang'. TIDAK BISA di-set/diubah ke/dari 'dipinjam' lewat import - itu hanya lewat proses Peminjaman/Pengembalian.")
+                // divalidasi & di-assign manual di beforeSave(), bukan
+                // langsung ->rules(['in:...']) supaya pesan errornya lebih
+                // jelas via RowImportFailedException.
+                ->fillRecordUsing(fn (?string $state) => null),
+        ];
+    }
+
+    public function resolveRecord(): ?Eksemplar
+    {
+        $barcode = trim($this->data['barcode']);
+
+        return Eksemplar::query()->where('barcode', $barcode)->first()
+            ?? new Eksemplar(['barcode' => $barcode]);
+    }
+
+    protected function beforeSave(): void
+    {
+        $isEksemplarBaru = ! $this->record->exists;
+
+        // GAP-SPEC ditutup: eksemplar existing statusnya Dipinjam -> baris
+        // ditolak total, tidak ada field lain yang ikut ter-update.
+        if (! $isEksemplarBaru && $this->record->status === StatusEksemplar::Dipinjam) {
+            throw new RowImportFailedException(
+                "Eksemplar dengan barcode '{$this->record->barcode}' sedang berstatus Dipinjam - tidak bisa diubah lewat import. Ubah hanya lewat proses Pengembalian."
+            );
+        }
+
+        // Resolusi Buku (WAJIB untuk eksemplar baru, diabaikan untuk existing).
+        if ($isEksemplarBaru) {
+            $isbn = trim($this->data['isbn'] ?? '');
+
+            if ($isbn === '') {
+                throw new RowImportFailedException(
+                    "Barcode '{$this->record->barcode}' belum terdaftar - kolom ISBN Buku wajib diisi untuk membuat eksemplar baru."
+                );
+            }
+
+            $buku = Buku::query()->where('isbn', $isbn)->first();
+
+            if (! $buku) {
+                throw new RowImportFailedException(
+                    "Buku dengan ISBN '{$isbn}' tidak ditemukan. Tambahkan Buku-nya dulu di Master Data > Buku."
+                );
+            }
+
+            $this->bukuIdTerresolve = $buku->id;
+        }
+
+        // Resolusi Rak (opsional, berlaku untuk baru maupun existing).
+        if (! empty($this->data['rak'])) {
+            $namaRak = trim($this->data['rak']);
+            $rak = Rak::query()->where('nama', $namaRak)->first();
+
+            if (! $rak) {
+                throw new RowImportFailedException(
+                    "Rak '{$namaRak}' tidak ditemukan. Cek ejaan atau tambahkan Rak-nya dulu di Master Data > Rak."
+                );
+            }
+
+            $this->rakIdTerresolve = $rak->id;
+        }
+
+        // Resolusi & validasi Status - TIDAK BOLEH 'dipinjam' sama sekali.
+        if (! empty($this->data['status'])) {
+            $statusMentah = strtolower(trim($this->data['status']));
+
+            if ($statusMentah === StatusEksemplar::Dipinjam->value) {
+                throw new RowImportFailedException(
+                    "Status 'dipinjam' tidak bisa di-set lewat import - status ini hanya berubah otomatis lewat proses Peminjaman."
+                );
+            }
+
+            $statusValid = collect(StatusEksemplar::cases())->firstWhere('value', $statusMentah);
+
+            if (! $statusValid) {
+                throw new RowImportFailedException(
+                    "Status '{$this->data['status']}' tidak dikenal. Gunakan salah satu: tersedia, rusak, hilang."
+                );
+            }
+
+            $this->statusTerresolve = $statusValid;
+        } elseif ($isEksemplarBaru) {
+            // default untuk eksemplar baru kalau kolom status dikosongkan
+            $this->statusTerresolve = StatusEksemplar::Tersedia;
+        }
+
+        if ($this->bukuIdTerresolve !== null) {
+            $this->record->buku_id = $this->bukuIdTerresolve;
+        }
+
+        if ($this->rakIdTerresolve !== null) {
+            $this->record->rak_id = $this->rakIdTerresolve;
+        }
+
+        if ($this->statusTerresolve !== null) {
+            $this->record->status = $this->statusTerresolve;
+        }
+    }
+
+    public static function getCompletedNotificationBody(Import $import): string
+    {
+        $body = 'Import Eksemplar selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
+
+        if ($failedRowsCount = $import->getFailedRowsCount()) {
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         return $body;
@@ -3315,8 +3548,12 @@ class TransaksiCepat extends Page
 
 namespace App\Filament\Resources\BukuResource\Pages;
 
+use App\Enums\StatusEksemplar;
 use App\Filament\Resources\BukuResource;
+use App\Models\Eksemplar;
+use App\Models\Rak;
 use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Support\Str;
 
 class CreateBuku extends CreateRecord
 {
@@ -3325,6 +3562,43 @@ class CreateBuku extends CreateRecord
     protected function getRedirectUrl(): string
     {
         return static::getResource()::getUrl('index');
+    }
+
+    /**
+     * GAP-SPEC ditutup: buku bisa langsung dibuat sekaligus dengan N
+     * Eksemplar awal (field 'jumlah_eksemplar_awal' non-persisten, lihat
+     * BukuResource::form()). Logika generate barcode SENGAJA disamakan
+     * persis dengan BukuImporter::afterSave() - satu sumber kebenaran
+     * format barcode (Aturan poin 3), bukan duplikasi logika terpisah.
+     */
+    protected function afterCreate(): void
+    {
+        $jumlah = (int) ($this->data['jumlah_eksemplar_awal'] ?? 0);
+
+        if ($jumlah <= 0) {
+            return;
+        }
+
+        $buku = $this->record;
+        $rak = ! empty($this->data['rak_id_eksemplar_awal'])
+            ? Rak::query()->find($this->data['rak_id_eksemplar_awal'])
+            : null;
+
+        for ($i = 0; $i < $jumlah; $i++) {
+            $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)).'-'.($i + 1));
+
+            // Pengaman sama seperti BukuImporter - hindari gagal karena
+            // unique constraint kalau barcode kebetulan sudah dipakai.
+            if (Eksemplar::query()->where('barcode', $barcode)->exists()) {
+                $barcode .= '-'.strtoupper(Str::random(4));
+            }
+
+            $buku->eksemplars()->create([
+                'barcode' => $barcode,
+                'rak_id' => $rak?->id,
+                'status' => StatusEksemplar::Tersedia,
+            ]);
+        }
     }
 }
 
@@ -3397,8 +3671,12 @@ use App\Filament\Imports\BukuImporter;
 use App\Filament\Resources\BukuResource\Pages;
 use App\Filament\Resources\BukuResource\RelationManagers\EksemplarsRelationManager;
 use App\Models\Buku;
+use App\Models\Rak;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -3408,6 +3686,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class BukuResource extends Resource
@@ -3459,6 +3738,27 @@ class BukuResource extends Resource
                 ->helperText('Dipakai sebagai basis perhitungan Denda kerusakan/kehilangan untuk semua eksemplar judul ini.'),
             Textarea::make('deskripsi')
                 ->columnSpanFull(),
+            // GAP-SPEC ditutup: field non-persisten, hanya dipakai saat
+            // create (lihat CreateBuku::afterCreate()) untuk sekaligus
+            // membuat N Eksemplar baru - tidak ada kolom 'jumlah_eksemplar'
+            // di tabel bukus, jadi dehydrated(false) dan disembunyikan di
+            // context edit (Aturan poin 3 - ubah stok setelah create tetap
+            // HANYA lewat tab Eksemplar/BukuImporter, bukan di sini).
+            TextInput::make('jumlah_eksemplar_awal')
+                ->label('Jumlah Eksemplar Awal')
+                ->numeric()
+                ->minValue(0)
+                ->default(0)
+                ->helperText('Opsional - langsung membuat N eksemplar berstatus Tersedia. Jumlah eksemplar SETELAH buku dibuat tetap dikelola lewat tab Eksemplar atau Import Buku.')
+                ->dehydrated(false)
+                ->visibleOn('create'),
+            Select::make('rak_id_eksemplar_awal')
+                ->label('Rak untuk Eksemplar Awal')
+                ->options(fn () => Rak::query()->pluck('nama', 'id'))
+                ->searchable()
+                ->helperText('Opsional - rak yang sama dipakaikan ke semuaeksemplar awal yang dibuat.')
+                ->dehydrated(false)
+                ->visibleOn('create'),
         ]);
     }
 
@@ -3472,6 +3772,10 @@ class BukuResource extends Resource
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                // Import/Export Eksemplar TIDAK lagi ada di sini - dipindah
+                // sepenuhnya ke EksemplarsRelationManager (satu lokasi,
+                // sebelumnya duplikat di dua tempat dengan sumber
+                // otorisasi berbeda - lihat EksemplarPolicy baru).
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -3490,6 +3794,16 @@ class BukuResource extends Resource
                     ->label('Total Eksemplar')
                     ->counts('eksemplars')
                     ->sortable(),
+                // GAP-SPEC ditutup: "stok tersedia" = HANYA status Tersedia
+                // (Buku::stokTersedia()) - Dipinjam, Rusak, DAN Hilang semua
+                // dikecualikan, bukan cuma Dipinjam+Hilang. Dihitung
+                // on-the-fly (bukan counts() bawaan) karena butuh filter
+                // where status, bukan sekadar hitung semua baris relasi.
+                TextColumn::make('stok_tersedia')
+                    ->label('Stok Tersedia')
+                    ->state(fn (Buku $record) => $record->stokTersedia())
+                    ->badge()
+                    ->color(fn (Buku $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
                     ->money('IDR')
@@ -3499,7 +3813,13 @@ class BukuResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->actions([
+                DeleteAction::make(),
+                ForceDeleteAction::make(),
+                RestoreAction::make(),
+            ])
             ->filters([
+                TrashedFilter::make(),
                 SelectFilter::make('kategoris')
                     ->label('Kategori')
                     ->relationship('kategoris', 'nama'),
@@ -3533,6 +3853,13 @@ class BukuResource extends Resource
 namespace App\Filament\Resources\BukuResource\RelationManagers;
 
 use App\Enums\StatusEksemplar;
+use App\Filament\Exports\EksemplarExporter;
+use App\Filament\Imports\EksemplarImporter;
+use App\Models\Eksemplar;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -3569,6 +3896,17 @@ class EksemplarsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('barcode')
+            ->headerActions([
+                // Import/Export Eksemplar terpusat di sini (bukan di
+                // RakResource) - satu sumber kebenaran perubahan data
+                // Eksemplar, lihat docblock RakResource\EksemplarsRelationManager.
+                ImportAction::make()
+                    ->importer(EksemplarImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', Eksemplar::class) ?? false),
+                ExportAction::make()
+                    ->exporter(EksemplarExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('barcode')->searchable(),
                 TextColumn::make('rak.nama')->label('Rak'),
@@ -3583,6 +3921,18 @@ class EksemplarsRelationManager extends RelationManager
             ->filters([
                 SelectFilter::make('status')
                     ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+            ])
+            ->recordActions([
+                EditAction::make()
+                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                        ? 'Eksemplar sedang dipinjam - tidak bisa diedit manual di sini.'
+                        : null),
+                DeleteAction::make()
+                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                        ? 'Eksemplar sedang dipinjam - tidak bisa dihapus.'
+                        : null),
             ]);
     }
 }
@@ -3677,7 +4027,12 @@ class DendaResource extends Resource
                     ->label('User')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('peminjaman.buku.judul')
+                // BUG FIX (iterasi ini): 'peminjaman.buku.judul' DIHAPUS -
+                // Peminjaman tidak lagi punya relasi langsung ke Buku sejak
+                // migration 2026_08_02_000002-000004. Diganti
+                // 'peminjaman.eksemplar.buku.judul', konsisten dengan
+                // PengembalianResource yang sudah benar.
+                TextColumn::make('peminjaman.eksemplar.buku.judul')
                     ->label('Buku')
                     ->searchable()
                     ->toggleable(),
@@ -3783,7 +4138,7 @@ class DendaResource extends Resource
                             ->send();
                     }),
 
-                DeleteAction::make(), // digerbang DendaPolicy::delete() - hanya Admin, lihat ShieldSeeder
+                DeleteAction::make(), // digerbang DendaPolicy::delete() -hanya Admin, lihat ShieldSeeder
             ])
             ->toolbarActions([
                 DeleteBulkAction::make(), // digerbang DendaPolicy::deleteAny()
@@ -4110,6 +4465,15 @@ class KategoriResource extends Resource
                     ->label('Jumlah Buku')
                     ->counts('bukus')
                     ->sortable(),
+                TextColumn::make('eksemplars_count')
+                    ->label('Jumlah Eksemplar')
+                    ->counts('eksemplars')
+                    ->sortable(),
+                TextColumn::make('stok_tersedia')
+                    ->label('Stok Tersedia')
+                    ->state(fn (Kategori $record) => $record->stokTersedia())
+                    ->badge()
+                    ->color(fn (Kategori $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -5191,9 +5555,9 @@ use RuntimeException;
  * Seluruh efek samping (stok, Denda, status Peminjaman) wajib lewat
  * PeminjamanService::koreksiKondisiPengembalian() (Aturan poin 3, DRY).
  *
- * TODO: ShieldSeeder perlu diberi permission 'Update:Pengembalian' untuk
- * role Pustakawan DAN Admin (dikonfirmasi keduanya boleh koreksi) - Action
- * ini digerbang oleh PengembalianPolicy::update().
+ * RESOLVED (iterasi ini): permission 'Update:Pengembalian' untuk role
+ * Pustakawan dan Admin (super_admin) SUDAH ada di ShieldSeeder - dicek
+ * ulang, TODO sebelumnya sudah basi/tidak perlu tindakan lanjutan.
  */
 class PengembalianResource extends Resource
 {
@@ -5693,12 +6057,27 @@ class RakResource extends Resource
                     ->sortable(),
                 TextColumn::make('lokasi')
                     ->searchable(),
-                // FIX: dulu counts('bukus') - kolom bukus.rak_id sudah tidak
+                // dulu counts('bukus') - kolom bukus.rak_id sudah tidak
                 // ada, jadi dihitung dari eksemplars (lihat Rak::eksemplars()).
                 TextColumn::make('eksemplars_count')
                     ->label('Jumlah Eksemplar')
                     ->counts('eksemplars')
                     ->sortable(),
+                // GAP-SPEC ditutup: stok tersedia per rak, lihat
+                // Rak::stokTersedia() - definisi sama dengan Buku::stokTersedia().
+                TextColumn::make('stok_tersedia')
+                    ->label('Stok Tersedia')
+                    ->state(fn (Rak $record) => $record->stokTersedia())
+                    ->badge()
+                    ->color(fn (Rak $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
+                // judul unik, lihat Rak::jumlahJudulUnik(). Bukan hasil
+                // counts() bawaan (butuh distinct buku_id), jadi dihitung
+                // manual per baris - toggleable & default hidden supaya
+                // tidak mengubah tampilan existing.
+                TextColumn::make('jumlah_judul_unik')
+                    ->label('Jumlah Judul Unik')
+                    ->state(fn (Rak $record) => $record->jumlahJudulUnik())
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -6065,11 +6444,9 @@ use Filament\Tables\Table;
  * form/create/edit karena data ini hanya dihasilkan otomatis oleh
  * KenaikanKelasService (Aturan poin 3, DRY - satu sumber kebenaran).
  *
- * // TODO: GAP-SPEC - canAccess dibatasi via Policy standar
- * (ViewAny:RiwayatKelasSiswa). Saat ini di ShieldSeeder permission ini
- * HANYA otomatis dimiliki super_admin (lewat syncPermissions(all())) -
- * BELUM ditambahkan ke daftar permission Pustakawan. Konfirmasi apakah
- * Pustakawan/wali kelas juga perlu akses lihat riwayat ini.
+ * RESOLVED (iterasi ini): dicek ulang ke ShieldSeeder, permission
+ * 'ViewAny:RiwayatKelasSiswa' dan 'View:RiwayatKelasSiswa' SUDAH
+ * diberikan ke role Pustakawan. TODO sebelumnya sudah basi.
  */
 class RiwayatKelasSiswaResource extends Resource
 {
@@ -6632,6 +7009,7 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
 
@@ -6811,6 +7189,7 @@ class UserResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                TrashedFilter::make(),
                 SelectFilter::make('role')
                     ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
                 SelectFilter::make('status_akademik')
@@ -6962,6 +7341,13 @@ use Filament\Widgets\TableWidget;
  * Peminjaman yang mendekati/melewati jatuh tempo - untuk Admin & Pustakawan.
  * TODO: verifikasi signature terhadap versi filament/filament ^5.7 -
  * TableWidget/table() API diasumsikan sama seperti pola Resource table().
+ *
+ * BUG FIX (iterasi ini, pola sama dengan PengembalianResource/RakResource/
+ * TransaksiCepat/DendaResource): kolom 'buku.judul' DIHAPUS - Peminjaman
+ * tidak lagi punya relasi langsung ke Buku sejak migration
+ * 2026_08_02_000002-000004 (relasi kini lewat Eksemplar). Diganti jadi
+ * 'eksemplar.buku.judul', dan query diberi eager load 'eksemplar.buku'
+ * supaya tidak N+1 di tabel widget ini.
  */
 class PeminjamanJatuhTempoWidget extends TableWidget
 {
@@ -6982,12 +7368,13 @@ class PeminjamanJatuhTempoWidget extends TableWidget
         return $table
             ->query(
                 Peminjaman::query()
+                    ->with(['user', 'eksemplar.buku'])
                     ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat])
                     ->orderBy('tanggal_jatuh_tempo')
             )
             ->columns([
                 TextColumn::make('user.nama')->label('Peminjam'),
-                TextColumn::make('buku.judul')->label('Buku'),
+                TextColumn::make('eksemplar.buku.judul')->label('Buku'),
                 TextColumn::make('tanggal_jatuh_tempo')->label('Jatuh Tempo')->date('d M Y'),
                 TextColumn::make('status')->label('Status')->badge()
                     ->color(fn (StatusPeminjaman $state) => match ($state) {
@@ -7591,6 +7978,32 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
 ```
 ---
 
+## app/Models/BukuKategori.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+// Pivot model untuk buku_kategori, dipakai sebagai "through" table
+// pada Kategori::eksemplars() (hasManyThrough)
+class BukuKategori extends Model
+{
+    protected $table = 'buku_kategori';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected $primaryKey = 'buku_id';
+
+    protected $keyType = 'string';
+}
+
+```
+---
+
 ## app/Models/Buku.php
 ```php
 <?php
@@ -7860,21 +8273,18 @@ class Jurusan extends Model
 
 namespace App\Models;
 
+use App\Enums\StatusEksemplar;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Kategori extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'nama',
         'deskripsi',
@@ -7885,9 +8295,28 @@ class Kategori extends Model
         return $this->belongsToMany(Buku::class);
     }
 
+    // dihitung via pivot buku_kategori, bukan kolom langsung di eksemplars
+    public function eksemplars(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            Eksemplar::class,
+            BukuKategori::class,
+            'kategori_id', // FK di buku_kategori -> kategoris.id
+            'buku_id',     // FK di eksemplars -> bukus.id
+            'id',          // local key di Kategori
+            'buku_id',     // local key di buku_kategori (= bukus.id)
+        );
+    }
+
     public function raks(): BelongsToMany
     {
         return $this->belongsToMany(Rak::class);
+    }
+
+    // dihitung on-the-fly, sama pola dengan Buku::stokTersedia()
+    public function stokTersedia(): int
+    {
+        return $this->eksemplars()->where('status', StatusEksemplar::Tersedia)->count();
     }
 }
 
@@ -8368,6 +8797,7 @@ class Punishment extends Model
 
 namespace App\Models;
 
+use App\Enums\StatusEksemplar;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -8389,7 +8819,7 @@ class Rak extends Model
         return $this->belongsToMany(Kategori::class);
     }
 
-    // FIX: Rak tidak lagi punya relasi langsung ke Buku sejak migration
+    // Rak tidak lagi punya relasi langsung ke Buku sejak migration
     // 2026_08_02_000003 (bukus.rak_id di-drop). Rak sekarang berelasi ke
     // Eksemplar (kopi fisik), bukan ke Buku (judul).
     public function eksemplars(): HasMany
@@ -8397,11 +8827,21 @@ class Rak extends Model
         return $this->hasMany(Eksemplar::class);
     }
 
-    // TODO: GAP-SPEC - belum dikonfirmasi apakah Rak butuh hitungan "jumlah
-    // judul buku unik" (distinct Buku) selain "jumlah eksemplar". Kalau ya,
-    // tambahkan accessor terpisah pakai hasManyThrough(Buku::class,
-    // Eksemplar::class)->distinct('bukus.id') - belum ditambahkan di sini
-    // supaya tidak menebak kebutuhan tampilan.
+    // Jumlah judul Buku UNIK (distinct) di rak ini, terpisah dari jumlah
+    // eksemplar fisik (Rak::eksemplars()->count()).
+    public function jumlahJudulUnik(): int
+    {
+        return $this->eksemplars()->distinct('buku_id')->count('buku_id');
+    }
+
+    // GAP-SPEC ditutup: definisi "tersedia" DISAMAKAN persis dengan
+    // Buku::stokTersedia() - HANYA status Tersedia yang dihitung, Dipinjam/
+    // Rusak/Hilang semua dikecualikan (satu sumber kebenaran definisi
+    // "tersedia" di seluruh aplikasi, Aturan poin 3).
+    public function stokTersedia(): int
+    {
+        return $this->eksemplars()->where('status', StatusEksemplar::Tersedia)->count();
+    }
 }
 
 ```
@@ -9147,6 +9587,94 @@ class DendaPolicy
     public function reorder(AuthUser $authUser): bool
     {
         return $authUser->can('Reorder:Denda');
+    }
+}
+
+```
+---
+
+## app/Policies/EksemplarPolicy.php
+```php
+<?php
+
+namespace App\Policies;
+
+use App\Models\Eksemplar;
+use App\Models\User;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+/**
+ * TODO: GAP-SPEC - dibuat karena EksemplarsRelationManager memakai
+ * can('create'/'viewAny', Eksemplar::class) tapi belum pernah ada Policy
+ * terdaftar untuk model ini (Eksemplar bukan Filament Resource sendiri,
+ * jadi Shield tidak auto-generate). CRUD lengkap disediakan (bukan
+ * hanya ViewAny/Create) supaya EditAction/DeleteAction di
+ * EksemplarsRelationManager (yang implisit memanggil ability
+ * update/delete) tidak tiba-tiba mati begitu Policy ini terdaftar -
+ * lihat Aturan poin 17.
+ */
+class EksemplarPolicy
+{
+    use HandlesAuthorization;
+
+    public function viewAny(User $user): bool
+    {
+        return $user->can('ViewAny:Eksemplar');
+    }
+
+    public function view(User $user, Eksemplar $eksemplar): bool
+    {
+        return $user->can('View:Eksemplar');
+    }
+
+    public function create(User $user): bool
+    {
+        return $user->can('Create:Eksemplar');
+    }
+
+    public function update(User $user, Eksemplar $eksemplar): bool
+    {
+        return $user->can('Update:Eksemplar');
+    }
+
+    public function delete(User $user, Eksemplar $eksemplar): bool
+    {
+        return $user->can('Delete:Eksemplar');
+    }
+
+    public function deleteAny(User $user): bool
+    {
+        return $user->can('DeleteAny:Eksemplar');
+    }
+
+    public function restore(User $user, Eksemplar $eksemplar): bool
+    {
+        return $user->can('Restore:Eksemplar');
+    }
+
+    public function restoreAny(User $user): bool
+    {
+        return $user->can('RestoreAny:Eksemplar');
+    }
+
+    public function forceDelete(User $user, Eksemplar $eksemplar): bool
+    {
+        return $user->can('ForceDelete:Eksemplar');
+    }
+
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->can('ForceDeleteAny:Eksemplar');
+    }
+
+    public function replicate(User $user): bool
+    {
+        return $user->can('Replicate:Eksemplar');
+    }
+
+    public function reorder(User $user): bool
+    {
+        return $user->can('Reorder:Eksemplar');
     }
 }
 
@@ -14044,6 +14572,7 @@ class BukuFactory extends Factory
             'penulis' => fake()->name(),
             'penerbit' => fake()->company(),
             'isbn' => fake()->unique()->isbn13(),
+            'tahun_terbit' => fake()->year(),
             'harga_ganti' => fake()->randomFloat(2, 0, 500000),
             'deskripsi' => fake()->text(),
         ];
@@ -16270,7 +16799,7 @@ return new class extends Migration
     {
         Schema::create('eksemplars', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignUuid('buku_id')->constrained('bukus');
+            $table->foreignUuid('buku_id')->constrained('bukus')->cascadeOnDelete()->cascadeOnUpdate();
             $table->string('barcode')->unique();
             $table->foreignUuid('rak_id')->nullable()->constrained('raks');
             $table->enum('status', ['tersedia', 'dipinjam', 'rusak', 'hilang'])->default('tersedia');
@@ -16538,6 +17067,36 @@ class ShieldSeeder extends Seeder
             'guard_name' => 'web',
         ]);
 
+        // BARU iterasi ini - permission manual untuk Eksemplar, karena
+        // Eksemplar bukan Filament Resource sendiri (hanya RelationManager
+        // di bawah BukuResource) sehingga Shield tidak auto-generate
+        // permission untuknya. Dibutuhkan agar EksemplarPolicy (yang
+        // dipakai EksemplarsRelationManager - termasuk tombol Import/
+        // Export Eksemplar yang sekarang HANYA ada di sini, tidak lagi
+        // duplikat di BukuResource header) benar-benar bisa memberi akses,
+        // bukan selalu menolak karena permission belum pernah dibuat.
+        foreach (
+            [
+                'ViewAny:Eksemplar',
+                'View:Eksemplar',
+                'Create:Eksemplar',
+                'Update:Eksemplar',
+                'Delete:Eksemplar',
+                'DeleteAny:Eksemplar',
+                'Restore:Eksemplar',
+                'RestoreAny:Eksemplar',
+                'ForceDelete:Eksemplar',
+                'ForceDeleteAny:Eksemplar',
+                'Replicate:Eksemplar',
+                'Reorder:Eksemplar',
+            ] as $permissionName
+        ) {
+            Permission::firstOrCreate([
+                'name' => $permissionName,
+                'guard_name' => 'web',
+            ]);
+        }
+
         $superAdmin = Role::firstOrCreate([
             'name' => 'super_admin',
             'guard_name' => 'web',
@@ -16562,6 +17121,24 @@ class ShieldSeeder extends Seeder
                 'ForceDeleteAny:Buku',
                 'Replicate:Buku',
                 'Reorder:Buku',
+
+                // BARU iterasi ini - Pustakawan diberi CRUD penuh untuk
+                // Eksemplar, sepadan dengan akses Buku (Pustakawan adalah
+                // pengelola operasional harian koleksi fisik per dok
+                // Logic Module §1). Termasuk akses tombol Import/Export
+                // Eksemplar di EksemplarsRelationManager.
+                'ViewAny:Eksemplar',
+                'View:Eksemplar',
+                'Create:Eksemplar',
+                'Update:Eksemplar',
+                'Delete:Eksemplar',
+                'DeleteAny:Eksemplar',
+                'Restore:Eksemplar',
+                'RestoreAny:Eksemplar',
+                'ForceDelete:Eksemplar',
+                'ForceDeleteAny:Eksemplar',
+                'Replicate:Eksemplar',
+                'Reorder:Eksemplar',
 
                 'ViewAny:Kategori',
                 'View:Kategori',

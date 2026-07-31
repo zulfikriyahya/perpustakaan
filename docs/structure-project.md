@@ -22,6 +22,7 @@
 │   │   ├── Exports
 │   │   │   ├── BukuExporter.php
 │   │   │   ├── DendaExporter.php
+│   │   │   ├── EksemplarExporter.php
 │   │   │   ├── JurusanExporter.php
 │   │   │   ├── KategoriExporter.php
 │   │   │   ├── KelasExporter.php
@@ -40,6 +41,7 @@
 │   │   │   └── UserExporter.php
 │   │   ├── Imports
 │   │   │   ├── BukuImporter.php
+│   │   │   ├── EksemplarImporter.php
 │   │   │   ├── JurusanImporter.php
 │   │   │   ├── KategoriImporter.php
 │   │   │   ├── KelasImporter.php
@@ -183,6 +185,7 @@
 │   ├── Jobs
 │   │   └── KirimNotifikasiWhatsapp.php
 │   ├── Models
+│   │   ├── BukuKategori.php
 │   │   ├── Buku.php
 │   │   ├── Denda.php
 │   │   ├── DeviceLog.php
@@ -215,6 +218,7 @@
 │   ├── Policies
 │   │   ├── BukuPolicy.php
 │   │   ├── DendaPolicy.php
+│   │   ├── EksemplarPolicy.php
 │   │   ├── JurusanPolicy.php
 │   │   ├── KategoriPolicy.php
 │   │   ├── KelasPolicy.php
@@ -372,10 +376,8 @@
 │   ├── CreatesApplication.php
 │   └── TestCase.php
 ├── artisan
-├── .blueprint
 ├── composer.json
 ├── composer.lock
-├── draft.yaml
 ├── .editorconfig
 ├── .env
 ├── .env.example
@@ -384,10 +386,9 @@
 ├── Makefile
 ├── .npmrc
 ├── package.json
-├── .phpunit.result.cache
 ├── phpunit.xml
 ├── README.md
 ├── vite.config.js
 └── yarn.lock
 
-88 directories, 303 files
+88 directories, 304 files

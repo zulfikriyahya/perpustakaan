@@ -66,7 +66,12 @@ class DendaResource extends Resource
                     ->label('User')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('peminjaman.buku.judul')
+                // BUG FIX (iterasi ini): 'peminjaman.buku.judul' DIHAPUS -
+                // Peminjaman tidak lagi punya relasi langsung ke Buku sejak
+                // migration 2026_08_02_000002-000004. Diganti
+                // 'peminjaman.eksemplar.buku.judul', konsisten dengan
+                // PengembalianResource yang sudah benar.
+                TextColumn::make('peminjaman.eksemplar.buku.judul')
                     ->label('Buku')
                     ->searchable()
                     ->toggleable(),
@@ -172,7 +177,7 @@ class DendaResource extends Resource
                             ->send();
                     }),
 
-                DeleteAction::make(), // digerbang DendaPolicy::delete() - hanya Admin, lihat ShieldSeeder
+                DeleteAction::make(), // digerbang DendaPolicy::delete() -hanya Admin, lihat ShieldSeeder
             ])
             ->toolbarActions([
                 DeleteBulkAction::make(), // digerbang DendaPolicy::deleteAny()

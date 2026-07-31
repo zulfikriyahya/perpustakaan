@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\StatusEksemplar;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,7 +24,7 @@ class Rak extends Model
         return $this->belongsToMany(Kategori::class);
     }
 
-    // FIX: Rak tidak lagi punya relasi langsung ke Buku sejak migration
+    // Rak tidak lagi punya relasi langsung ke Buku sejak migration
     // 2026_08_02_000003 (bukus.rak_id di-drop). Rak sekarang berelasi ke
     // Eksemplar (kopi fisik), bukan ke Buku (judul).
     public function eksemplars(): HasMany
@@ -31,9 +32,19 @@ class Rak extends Model
         return $this->hasMany(Eksemplar::class);
     }
 
-    // TODO: GAP-SPEC - belum dikonfirmasi apakah Rak butuh hitungan "jumlah
-    // judul buku unik" (distinct Buku) selain "jumlah eksemplar". Kalau ya,
-    // tambahkan accessor terpisah pakai hasManyThrough(Buku::class,
-    // Eksemplar::class)->distinct('bukus.id') - belum ditambahkan di sini
-    // supaya tidak menebak kebutuhan tampilan.
+    // Jumlah judul Buku UNIK (distinct) di rak ini, terpisah dari jumlah
+    // eksemplar fisik (Rak::eksemplars()->count()).
+    public function jumlahJudulUnik(): int
+    {
+        return $this->eksemplars()->distinct('buku_id')->count('buku_id');
+    }
+
+    // GAP-SPEC ditutup: definisi "tersedia" DISAMAKAN persis dengan
+    // Buku::stokTersedia() - HANYA status Tersedia yang dihitung, Dipinjam/
+    // Rusak/Hilang semua dikecualikan (satu sumber kebenaran definisi
+    // "tersedia" di seluruh aplikasi, Aturan poin 3).
+    public function stokTersedia(): int
+    {
+        return $this->eksemplars()->where('status', StatusEksemplar::Tersedia)->count();
+    }
 }

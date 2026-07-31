@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('eksemplars', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignUuid('buku_id')->constrained('bukus');
+            $table->foreignUuid('buku_id')->constrained('bukus')->cascadeOnDelete()->cascadeOnUpdate();
             $table->string('barcode')->unique();
             $table->foreignUuid('rak_id')->nullable()->constrained('raks');
             $table->enum('status', ['tersedia', 'dipinjam', 'rusak', 'hilang'])->default('tersedia');

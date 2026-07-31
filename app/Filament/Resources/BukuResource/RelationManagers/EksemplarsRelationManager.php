@@ -3,6 +3,13 @@
 namespace App\Filament\Resources\BukuResource\RelationManagers;
 
 use App\Enums\StatusEksemplar;
+use App\Filament\Exports\EksemplarExporter;
+use App\Filament\Imports\EksemplarImporter;
+use App\Models\Eksemplar;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -39,6 +46,17 @@ class EksemplarsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('barcode')
+            ->headerActions([
+                // Import/Export Eksemplar terpusat di sini (bukan di
+                // RakResource) - satu sumber kebenaran perubahan data
+                // Eksemplar, lihat docblock RakResource\EksemplarsRelationManager.
+                ImportAction::make()
+                    ->importer(EksemplarImporter::class)
+                    ->authorize(fn () => auth()->user()?->can('create', Eksemplar::class) ?? false),
+                ExportAction::make()
+                    ->exporter(EksemplarExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('barcode')->searchable(),
                 TextColumn::make('rak.nama')->label('Rak'),
@@ -53,6 +71,18 @@ class EksemplarsRelationManager extends RelationManager
             ->filters([
                 SelectFilter::make('status')
                     ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+            ])
+            ->recordActions([
+                EditAction::make()
+                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                        ? 'Eksemplar sedang dipinjam - tidak bisa diedit manual di sini.'
+                        : null),
+                DeleteAction::make()
+                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                        ? 'Eksemplar sedang dipinjam - tidak bisa dihapus.'
+                        : null),
             ]);
     }
 }

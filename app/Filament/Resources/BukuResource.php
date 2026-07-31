@@ -7,8 +7,12 @@ use App\Filament\Imports\BukuImporter;
 use App\Filament\Resources\BukuResource\Pages;
 use App\Filament\Resources\BukuResource\RelationManagers\EksemplarsRelationManager;
 use App\Models\Buku;
+use App\Models\Rak;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -18,6 +22,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class BukuResource extends Resource
@@ -69,6 +74,27 @@ class BukuResource extends Resource
                 ->helperText('Dipakai sebagai basis perhitungan Denda kerusakan/kehilangan untuk semua eksemplar judul ini.'),
             Textarea::make('deskripsi')
                 ->columnSpanFull(),
+            // GAP-SPEC ditutup: field non-persisten, hanya dipakai saat
+            // create (lihat CreateBuku::afterCreate()) untuk sekaligus
+            // membuat N Eksemplar baru - tidak ada kolom 'jumlah_eksemplar'
+            // di tabel bukus, jadi dehydrated(false) dan disembunyikan di
+            // context edit (Aturan poin 3 - ubah stok setelah create tetap
+            // HANYA lewat tab Eksemplar/BukuImporter, bukan di sini).
+            TextInput::make('jumlah_eksemplar_awal')
+                ->label('Jumlah Eksemplar Awal')
+                ->numeric()
+                ->minValue(0)
+                ->default(0)
+                ->helperText('Opsional - langsung membuat N eksemplar berstatus Tersedia. Jumlah eksemplar SETELAH buku dibuat tetap dikelola lewat tab Eksemplar atau Import Buku.')
+                ->dehydrated(false)
+                ->visibleOn('create'),
+            Select::make('rak_id_eksemplar_awal')
+                ->label('Rak untuk Eksemplar Awal')
+                ->options(fn () => Rak::query()->pluck('nama', 'id'))
+                ->searchable()
+                ->helperText('Opsional - rak yang sama dipakaikan ke semuaeksemplar awal yang dibuat.')
+                ->dehydrated(false)
+                ->visibleOn('create'),
         ]);
     }
 
@@ -82,6 +108,10 @@ class BukuResource extends Resource
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                // Import/Export Eksemplar TIDAK lagi ada di sini - dipindah
+                // sepenuhnya ke EksemplarsRelationManager (satu lokasi,
+                // sebelumnya duplikat di dua tempat dengan sumber
+                // otorisasi berbeda - lihat EksemplarPolicy baru).
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -100,6 +130,16 @@ class BukuResource extends Resource
                     ->label('Total Eksemplar')
                     ->counts('eksemplars')
                     ->sortable(),
+                // GAP-SPEC ditutup: "stok tersedia" = HANYA status Tersedia
+                // (Buku::stokTersedia()) - Dipinjam, Rusak, DAN Hilang semua
+                // dikecualikan, bukan cuma Dipinjam+Hilang. Dihitung
+                // on-the-fly (bukan counts() bawaan) karena butuh filter
+                // where status, bukan sekadar hitung semua baris relasi.
+                TextColumn::make('stok_tersedia')
+                    ->label('Stok Tersedia')
+                    ->state(fn (Buku $record) => $record->stokTersedia())
+                    ->badge()
+                    ->color(fn (Buku $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
                     ->money('IDR')
@@ -109,7 +149,13 @@ class BukuResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->actions([
+                DeleteAction::make(),
+                ForceDeleteAction::make(),
+                RestoreAction::make(),
+            ])
             ->filters([
+                TrashedFilter::make(),
                 SelectFilter::make('kategoris')
                     ->label('Kategori')
                     ->relationship('kategoris', 'nama'),

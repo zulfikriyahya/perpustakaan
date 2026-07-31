@@ -78,6 +78,15 @@ class KategoriResource extends Resource
                     ->label('Jumlah Buku')
                     ->counts('bukus')
                     ->sortable(),
+                TextColumn::make('eksemplars_count')
+                    ->label('Jumlah Eksemplar')
+                    ->counts('eksemplars')
+                    ->sortable(),
+                TextColumn::make('stok_tersedia')
+                    ->label('Stok Tersedia')
+                    ->state(fn (Kategori $record) => $record->stokTersedia())
+                    ->badge()
+                    ->color(fn (Kategori $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

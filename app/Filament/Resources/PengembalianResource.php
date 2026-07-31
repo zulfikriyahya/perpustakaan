@@ -31,9 +31,9 @@ use RuntimeException;
  * Seluruh efek samping (stok, Denda, status Peminjaman) wajib lewat
  * PeminjamanService::koreksiKondisiPengembalian() (Aturan poin 3, DRY).
  *
- * TODO: ShieldSeeder perlu diberi permission 'Update:Pengembalian' untuk
- * role Pustakawan DAN Admin (dikonfirmasi keduanya boleh koreksi) - Action
- * ini digerbang oleh PengembalianPolicy::update().
+ * RESOLVED (iterasi ini): permission 'Update:Pengembalian' untuk role
+ * Pustakawan dan Admin (super_admin) SUDAH ada di ShieldSeeder - dicek
+ * ulang, TODO sebelumnya sudah basi/tidak perlu tindakan lanjutan.
  */
 class PengembalianResource extends Resource
 {

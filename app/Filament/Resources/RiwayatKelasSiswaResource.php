@@ -15,11 +15,9 @@ use Filament\Tables\Table;
  * form/create/edit karena data ini hanya dihasilkan otomatis oleh
  * KenaikanKelasService (Aturan poin 3, DRY - satu sumber kebenaran).
  *
- * // TODO: GAP-SPEC - canAccess dibatasi via Policy standar
- * (ViewAny:RiwayatKelasSiswa). Saat ini di ShieldSeeder permission ini
- * HANYA otomatis dimiliki super_admin (lewat syncPermissions(all())) -
- * BELUM ditambahkan ke daftar permission Pustakawan. Konfirmasi apakah
- * Pustakawan/wali kelas juga perlu akses lihat riwayat ini.
+ * RESOLVED (iterasi ini): dicek ulang ke ShieldSeeder, permission
+ * 'ViewAny:RiwayatKelasSiswa' dan 'View:RiwayatKelasSiswa' SUDAH
+ * diberikan ke role Pustakawan. TODO sebelumnya sudah basi.
  */
 class RiwayatKelasSiswaResource extends Resource
 {

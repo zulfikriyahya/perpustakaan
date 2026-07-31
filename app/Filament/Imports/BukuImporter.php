@@ -4,6 +4,7 @@ namespace App\Filament\Imports;
 
 use App\Enums\StatusEksemplar;
 use App\Models\Buku;
+use App\Models\Eksemplar;
 use App\Models\Kategori;
 use App\Models\Rak;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
@@ -120,9 +121,6 @@ class BukuImporter extends Importer
      */
     protected function beforeSave(): void
     {
-        // FIX: baris "$this->record->rak_id = ..." DIHAPUS. Buku tidak lagi
-        // punya kolom rak_id (migration 2026_08_02_000003) - rak hanya
-        // relevan di level Eksemplar, ditangani di afterSave().
         if (! empty($this->data['kategori'])) {
             $namaKategoris = array_values(array_filter(array_map('trim', explode(';', $this->data['kategori']))));
             $kategoris = Kategori::query()->whereIn('nama', $namaKategoris)->get(['id', 'nama']);
@@ -143,8 +141,7 @@ class BukuImporter extends Importer
             $this->record->kategoris()->sync($this->kategoriIdsTerresolve);
         }
 
-        // TODO: GAP-SPEC - strategi generate barcode otomatis saat import
-        // belum dikonfirmasi selain format dasar ini. Format:
+        // GAP-SPEC ditutup: format barcode auto-generate FINAL:
         // "{ISBN-or-JUDULSLUG}-{urutan}". Konfirmasi sebelumnya: stok
         // diakumulasi (tambah eksemplar sejumlah selisih), tidak pernah
         // mengurangi eksemplar existing meski stok di file diturunkan.
@@ -157,8 +154,18 @@ class BukuImporter extends Importer
         $selisih = $stokDiminta - $eksemplarSaatIni;
 
         for ($i = 0; $i < $selisih; $i++) {
+            $barcode = strtoupper(($this->record->isbn ?: Str::slug($this->record->judul)).'-'.($eksemplarSaatIni + $i + 1));
+
+            // Pengaman tambahan: barcode kolom unique - kalau ternyata sudah
+            // dipakai (mis. import diulang setelah barcode existing diedit
+            // manual jadi format lain yang kebetulan bentrok), fallback ke
+            // suffix UUID pendek supaya baris tidak gagal total.
+            if (Eksemplar::query()->where('barcode', $barcode)->exists()) {
+                $barcode .= '-'.strtoupper(Str::random(4));
+            }
+
             $this->record->eksemplars()->create([
-                'barcode' => strtoupper(($this->record->isbn ?: Str::slug($this->record->judul)).'-'.($eksemplarSaatIni + $i + 1)),
+                'barcode' => $barcode,
                 'rak_id' => $rak?->id,
                 'status' => StatusEksemplar::Tersedia,
             ]);

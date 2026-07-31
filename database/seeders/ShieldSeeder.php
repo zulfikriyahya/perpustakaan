@@ -29,6 +29,36 @@ class ShieldSeeder extends Seeder
             'guard_name' => 'web',
         ]);
 
+        // BARU iterasi ini - permission manual untuk Eksemplar, karena
+        // Eksemplar bukan Filament Resource sendiri (hanya RelationManager
+        // di bawah BukuResource) sehingga Shield tidak auto-generate
+        // permission untuknya. Dibutuhkan agar EksemplarPolicy (yang
+        // dipakai EksemplarsRelationManager - termasuk tombol Import/
+        // Export Eksemplar yang sekarang HANYA ada di sini, tidak lagi
+        // duplikat di BukuResource header) benar-benar bisa memberi akses,
+        // bukan selalu menolak karena permission belum pernah dibuat.
+        foreach (
+            [
+                'ViewAny:Eksemplar',
+                'View:Eksemplar',
+                'Create:Eksemplar',
+                'Update:Eksemplar',
+                'Delete:Eksemplar',
+                'DeleteAny:Eksemplar',
+                'Restore:Eksemplar',
+                'RestoreAny:Eksemplar',
+                'ForceDelete:Eksemplar',
+                'ForceDeleteAny:Eksemplar',
+                'Replicate:Eksemplar',
+                'Reorder:Eksemplar',
+            ] as $permissionName
+        ) {
+            Permission::firstOrCreate([
+                'name' => $permissionName,
+                'guard_name' => 'web',
+            ]);
+        }
+
         $superAdmin = Role::firstOrCreate([
             'name' => 'super_admin',
             'guard_name' => 'web',
@@ -53,6 +83,24 @@ class ShieldSeeder extends Seeder
                 'ForceDeleteAny:Buku',
                 'Replicate:Buku',
                 'Reorder:Buku',
+
+                // BARU iterasi ini - Pustakawan diberi CRUD penuh untuk
+                // Eksemplar, sepadan dengan akses Buku (Pustakawan adalah
+                // pengelola operasional harian koleksi fisik per dok
+                // Logic Module §1). Termasuk akses tombol Import/Export
+                // Eksemplar di EksemplarsRelationManager.
+                'ViewAny:Eksemplar',
+                'View:Eksemplar',
+                'Create:Eksemplar',
+                'Update:Eksemplar',
+                'Delete:Eksemplar',
+                'DeleteAny:Eksemplar',
+                'Restore:Eksemplar',
+                'RestoreAny:Eksemplar',
+                'ForceDelete:Eksemplar',
+                'ForceDeleteAny:Eksemplar',
+                'Replicate:Eksemplar',
+                'Reorder:Eksemplar',
 
                 'ViewAny:Kategori',
                 'View:Kategori',

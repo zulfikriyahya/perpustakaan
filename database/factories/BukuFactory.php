@@ -17,6 +17,7 @@ class BukuFactory extends Factory
             'penulis' => fake()->name(),
             'penerbit' => fake()->company(),
             'isbn' => fake()->unique()->isbn13(),
+            'tahun_terbit' => fake()->year(),
             'harga_ganti' => fake()->randomFloat(2, 0, 500000),
             'deskripsi' => fake()->text(),
         ];

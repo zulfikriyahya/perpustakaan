@@ -60,12 +60,27 @@ class RakResource extends Resource
                     ->sortable(),
                 TextColumn::make('lokasi')
                     ->searchable(),
-                // FIX: dulu counts('bukus') - kolom bukus.rak_id sudah tidak
+                // dulu counts('bukus') - kolom bukus.rak_id sudah tidak
                 // ada, jadi dihitung dari eksemplars (lihat Rak::eksemplars()).
                 TextColumn::make('eksemplars_count')
                     ->label('Jumlah Eksemplar')
                     ->counts('eksemplars')
                     ->sortable(),
+                // GAP-SPEC ditutup: stok tersedia per rak, lihat
+                // Rak::stokTersedia() - definisi sama dengan Buku::stokTersedia().
+                TextColumn::make('stok_tersedia')
+                    ->label('Stok Tersedia')
+                    ->state(fn (Rak $record) => $record->stokTersedia())
+                    ->badge()
+                    ->color(fn (Rak $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
+                // judul unik, lihat Rak::jumlahJudulUnik(). Bukan hasil
+                // counts() bawaan (butuh distinct buku_id), jadi dihitung
+                // manual per baris - toggleable & default hidden supaya
+                // tidak mengubah tampilan existing.
+                TextColumn::make('jumlah_judul_unik')
+                    ->label('Jumlah Judul Unik')
+                    ->state(fn (Rak $record) => $record->jumlahJudulUnik())
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

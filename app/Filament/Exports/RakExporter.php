@@ -27,7 +27,7 @@ class RakExporter extends Exporter
              * hasil export diimpor ulang tanpa diedit.
              */
             ExportColumn::make('kategoris')
-                ->label('Kategori Terkait')
+                ->label('Kategori')
                 ->formatStateUsing(fn (Rak $record) => $record->kategoris->pluck('nama')->implode('; ')),
         ];
     }

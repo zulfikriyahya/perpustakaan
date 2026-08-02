@@ -44,7 +44,7 @@ class EksemplarsRelationManager extends RelationManager
         return $schema->components([
             TextInput::make('barcode')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             Select::make('rak_id')
                 ->label('Rak')

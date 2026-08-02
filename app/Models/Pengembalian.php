@@ -32,11 +32,11 @@ class Pengembalian extends Model
 
     public function peminjaman(): BelongsTo
     {
-        return $this->belongsTo(Peminjaman::class);
+        return $this->belongsTo(Peminjaman::class)->withTrashed();
     }
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'diproses_oleh');
+        return $this->belongsTo(User::class, 'diproses_oleh')->withTrashed();
     }
 }

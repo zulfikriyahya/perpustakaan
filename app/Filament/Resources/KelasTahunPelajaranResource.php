@@ -12,12 +12,16 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 /**
@@ -80,6 +84,7 @@ class KelasTahunPelajaranResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('tahun_pelajaran_id')->label('Tahun Pelajaran')->relationship('tahunPelajaran', 'nama'),
+                TrashedFilter::make(),
             ])
             ->recordActions([
                 Action::make('proses_kenaikan')
@@ -88,6 +93,20 @@ class KelasTahunPelajaranResource extends Resource
                     ->color('warning')
                     ->url(fn (KelasTahunPelajaran $record) => ProsesKenaikanKelas::getUrl(['ktp' => $record->id])),
                 DeleteAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make()
+                    ->action(function (KelasTahunPelajaran $record) {
+                        if ($record->siswaAktif()->exists()) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada siswa aktif di Kelas Tahun Pelajaran ini.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
             ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }

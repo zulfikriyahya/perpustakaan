@@ -49,7 +49,7 @@ class BukuExporter extends Exporter
             ExportColumn::make('isbn')->label('ISBN'),
             ExportColumn::make('tahun_terbit')->label('Tahun Terbit'),
             ExportColumn::make('eksemplars')
-                ->label('Jumlah Eksemplar')
+                ->label('Stok (Jumlah Eksemplar)')
                 ->formatStateUsing(fn (Buku $record) => (string) $record->eksemplars->count()),
             ExportColumn::make('rak')
                 ->label('Rak (distinct, lihat catatan)')

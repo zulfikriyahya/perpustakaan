@@ -30,6 +30,7 @@ class UserExporter extends Exporter
     {
         return [
             ExportColumn::make('nama'),
+            ExportColumn::make('jenis_kelamin')->label('Jenis Kelamin'),
             ExportColumn::make('role'),
             ExportColumn::make('nisn')->label('NISN'),
             ExportColumn::make('nip')->label('NIP'),

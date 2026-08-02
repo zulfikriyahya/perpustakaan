@@ -6,14 +6,19 @@ use App\Enums\JenisTransaksi;
 use App\Filament\Exports\TransaksiExporter;
 use App\Filament\Resources\TransaksiResource\Pages;
 use App\Filament\Resources\TransaksiResource\RelationManagers\PeminjamansRelationManager;
+use App\Models\Peminjaman;
 use App\Models\Transaksi;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 /**
@@ -74,14 +79,29 @@ class TransaksiResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('jenis')
-                    ->options(collect(JenisTransaksi::cases())->mapWithKeys(fn ($j) => [$j->value => ucfirst(str_replace('_', ' ', $j->value))])),
+                    ->options(collect(JenisTransaksi::cases())->mapWithKeys(fn ($j) => [$j->value => ucfirst(str_replace('_', '', $j->value))])),
+                TrashedFilter::make(),
             ])
             ->recordActions([
-                DeleteAction::make(), // digerbang TransaksiPolicy::delete() - hanya Admin
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // FK peminjamans.transaksi_id default RESTRICT.
+                ForceDeleteAction::make()
+                    ->action(function (Transaksi $record) {
+                        $dipakai = Peminjaman::query()->withTrashed()
+                            ->where('transaksi_id', $record->id)->exists();
+
+                        if ($dipakai) {
+                            Notification::make()->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Transaksi ini masih direferensikan oleh Peminjaman.')->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
             ])
-            ->toolbarActions([
-                DeleteBulkAction::make(),
-            ])
+            ->toolbarActions([DeleteBulkAction::make()])
             ->defaultSort('tanggal', 'desc');
     }
 

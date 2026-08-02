@@ -32,12 +32,12 @@ class Eksemplar extends Model
 
     public function buku(): BelongsTo
     {
-        return $this->belongsTo(Buku::class);
+        return $this->belongsTo(Buku::class)->withTrashed();
     }
 
     public function rak(): BelongsTo
     {
-        return $this->belongsTo(Rak::class);
+        return $this->belongsTo(Rak::class)->withTrashed();
     }
 
     public function peminjamans(): HasMany

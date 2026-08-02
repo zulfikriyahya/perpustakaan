@@ -6,18 +6,23 @@ use App\Filament\Exports\PunishmentExporter;
 use App\Filament\Imports\PunishmentImporter;
 use App\Filament\Resources\PunishmentResource\Pages;
 use App\Models\Punishment;
+use App\Models\PunishmentLog;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class PunishmentResource extends Resource
@@ -35,7 +40,7 @@ class PunishmentResource extends Resource
         return $schema->components([
             TextInput::make('nama')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             Textarea::make('deskripsi')
                 ->columnSpanFull(),
@@ -60,11 +65,9 @@ class PunishmentResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(PunishmentImporter::class)
+                ImportAction::make()->importer(PunishmentImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Punishment::class) ?? false),
-                ExportAction::make()
-                    ->exporter(PunishmentExporter::class)
+                ExportAction::make()->exporter(PunishmentExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Punishment::class) ?? false),
             ])
             ->columns([
@@ -74,8 +77,28 @@ class PunishmentResource extends Resource
                 IconColumn::make('aktif')->boolean(),
                 TextColumn::make('punishment_logs_count')->label('Jumlah Diterapkan')->counts('punishmentLogs'),
             ])
-            ->filters([TernaryFilter::make('aktif')])
-            ->recordActions([DeleteAction::make()])
+            ->filters([TernaryFilter::make('aktif'), TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // FK punishment_logs.punishment_id default RESTRICT.
+                ForceDeleteAction::make()
+                    ->action(function (Punishment $record) {
+                        $dipakai = PunishmentLog::query()->withTrashed()
+                            ->where('punishment_id', $record->id)->exists();
+
+                        if ($dipakai) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Punishment ini masih punya riwayat penerapan.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 

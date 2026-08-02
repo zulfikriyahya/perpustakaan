@@ -22,20 +22,19 @@ class KelasTahunPelajaran extends Model
 
     public function kelas(): BelongsTo
     {
-        return $this->belongsTo(Kelas::class);
+        return $this->belongsTo(Kelas::class)->withTrashed();
     }
 
     public function tahunPelajaran(): BelongsTo
     {
-        return $this->belongsTo(TahunPelajaran::class);
+        return $this->belongsTo(TahunPelajaran::class)->withTrashed();
     }
 
     public function waliKelas(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'wali_kelas_id');
+        return $this->belongsTo(User::class, 'wali_kelas_id')->withTrashed();
     }
 
-    // Siswa yang SAAT INI aktif di KTP ini (bukan histori).
     public function siswaAktif(): HasMany
     {
         return $this->hasMany(User::class, 'kelas_tahun_pelajaran_id');

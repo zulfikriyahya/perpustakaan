@@ -9,10 +9,13 @@ use App\Models\Kunjungan;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 /**
@@ -72,13 +75,14 @@ class KunjunganResource extends Resource
             ->filters([
                 SelectFilter::make('source')
                     ->options(collect(SourceKunjungan::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+                TrashedFilter::make(),
             ])
             ->recordActions([
-                DeleteAction::make(), // digerbang KunjunganPolicy::delete() - hanya Admin
+                DeleteAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make(),
             ])
-            ->toolbarActions([
-                DeleteBulkAction::make(),
-            ])
+            ->toolbarActions([DeleteBulkAction::make()])
             ->defaultSort('tanggal', 'desc');
     }
 

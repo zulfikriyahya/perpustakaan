@@ -34,12 +34,12 @@ class Transaksi extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'diproses_oleh');
+        return $this->belongsTo(User::class, 'diproses_oleh')->withTrashed();
     }
 
     public function peminjamans(): HasMany

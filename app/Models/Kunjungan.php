@@ -31,7 +31,7 @@ class Kunjungan extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     // Unik per hari per user hanya untuk baris AKTIF (deleted_at IS NULL) - dijaga

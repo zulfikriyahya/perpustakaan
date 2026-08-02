@@ -6,16 +6,21 @@ use App\Filament\Exports\KelasExporter;
 use App\Filament\Imports\KelasImporter;
 use App\Filament\Resources\KelasResource\Pages;
 use App\Models\Kelas;
+use App\Models\KelasTahunPelajaran;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class KelasResource extends Resource
@@ -33,13 +38,16 @@ class KelasResource extends Resource
         return $schema->components([
             TextInput::make('nama')
                 ->label('Nama Kelas (mis. X IPA 1)')
-                // BARU iterasi ini - unik secara global (dikonfirmasi),
-                // lihat migration 2026_08_02_000001_add_unique_nama_to_kelas_table
-                // dan KelasImporter (Aturan poin 3/11 - validasi
-                // konsisten antara form manual dan import).
-                ->unique(ignoreRecord: true)
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                ->unique(
+                    table: 'kelas',
+                    column: 'nama',
+                    ignoreRecord: true,
+                    modifyRuleUsing: fn ($rule, $get) => $rule
+                        ->whereNull('deleted_at')
+                        ->where('jurusan_id', $get('jurusan_id')),
+                ),
             TextInput::make('tingkat')
                 ->numeric()
                 ->integer()
@@ -50,7 +58,10 @@ class KelasResource extends Resource
                 ->label('Jurusan')
                 ->relationship('jurusan', 'nama')
                 ->searchable()
-                ->preload(),
+                ->preload()
+                ->required()
+                ->live()
+                ->helperText('Setiap Kelas wajib punya Jurusan. Nama Kelas unik per Jurusan (boleh sama di Jurusan berbeda).'),
         ]);
     }
 
@@ -58,11 +69,9 @@ class KelasResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(KelasImporter::class)
+                ImportAction::make()->importer(KelasImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Kelas::class) ?? false),
-                ExportAction::make()
-                    ->exporter(KelasExporter::class)
+                ExportAction::make()->exporter(KelasExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Kelas::class) ?? false),
             ])
             ->columns([
@@ -73,8 +82,36 @@ class KelasResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('jurusan_id')->label('Jurusan')->relationship('jurusan', 'nama'),
+                TrashedFilter::make(),
             ])
-            ->recordActions([DeleteAction::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // TODO: GAP-SPEC - blokir force-delete jika ada KTP (termasuk
+                // yang sudah di-soft-delete) di bawah Kelas ini yang masih
+                // punya siswa aktif - mencegah cascade DB diam-diam
+                // memutus assignment siswa yang sedang berjalan.
+                ForceDeleteAction::make()
+                    ->action(function (Kelas $record) {
+                        $adaSiswaAktif = KelasTahunPelajaran::query()
+                            ->withTrashed()
+                            ->where('kelas_id', $record->id)
+                            ->whereHas('siswaAktif')
+                            ->exists();
+
+                        if ($adaSiswaAktif) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada siswa aktif di Kelas Tahun Pelajaran bawah Kelas ini.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 

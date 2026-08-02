@@ -107,6 +107,10 @@ class UserImporter extends Importer
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
                 ->example('Yahya Zulfikri'),
+            ImportColumn::make('jenis_kelamin')
+                ->label('Jenis Kelamin (L/P, opsional)')
+                ->rules(['nullable', 'in:L,P'])
+                ->example('L'),
             ImportColumn::make('nisn')
                 ->label('NISN')
                 ->helperText('Isi salah satu: NISN (untuk siswa) atau NIP (untuk pegawai/pustakawan).')
@@ -133,7 +137,7 @@ class UserImporter extends Importer
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('2025/2026')
+                ->example('2026/2027')
                 // BUG FIX - lookup-only, lihat docblock class.
                 ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jabatan')

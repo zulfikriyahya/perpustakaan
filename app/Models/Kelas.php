@@ -24,7 +24,9 @@ class Kelas extends Model
 
     public function jurusan(): BelongsTo
     {
-        return $this->belongsTo(Jurusan::class);
+        // withTrashed - Jurusan bisa diarsipkan tapi Kelas lama tetap harus
+        // menunjukkan nama jurusannya di histori (Aturan konfirmasi iterasi ini).
+        return $this->belongsTo(Jurusan::class)->withTrashed();
     }
 
     public function kelasTahunPelajarans(): HasMany

@@ -420,12 +420,14 @@
 │   │   ├── 2026_08_02_000009_create_login_otps_table.php
 │   │   ├── 2026_08_02_000010_add_jenis_kelamin_to_users_table.php
 │   │   ├── 2026_08_02_000011_create_whatsapp_logs_table.php
-│   │   └── 2026_08_02_000012_create_snapshot_harians_table.php
+│   │   ├── 2026_08_02_000012_create_snapshot_harians_table.php
+│   │   ├── 2026_08_03_000001_make_unique_constraints_soft_delete_aware.php
+│   │   ├── 2026_08_03_000002_kelas_wajib_jurusan_unique_per_jurusan.php
+│   │   └── 2026_08_03_000003_optimalkan_index_query_panas.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
 │   │   └── ShieldSeeder.php
-│   ├── database.sqlite
 │   └── .gitignore
 ├── deploy
 │   └── supervisor
@@ -447,7 +449,12 @@
 │       │   │   ├── proses-kenaikan-kelas.blade.php
 │       │   │   └── transaksi-cepat.blade.php
 │       │   └── partials
-│       │       └── chart-export-script.blade.php
+│       │       ├── app-footer.blade.php
+│       │       ├── auth-footer.blade.php
+│       │       ├── auth-styles.blade.php
+│       │       ├── chart-export-script.blade.php
+│       │       ├── global-footer-style.blade.php
+│       │       └── global-logo-style.blade.php
 │       ├── pdf
 │       │   ├── chart-export.blade.php
 │       │   ├── label-barcode.blade.php
@@ -480,4 +487,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-116 directories, 365 files
+116 directories, 372 files

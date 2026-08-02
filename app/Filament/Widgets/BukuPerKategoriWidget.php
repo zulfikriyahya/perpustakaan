@@ -13,7 +13,9 @@ use Filament\Widgets\ChartWidget;
  */
 class BukuPerKategoriWidget extends ChartWidget
 {
-    protected static ?int $sort = 8;
+    protected static ?int $sort = 3;
+
+    protected ?string $maxHeight = '500px';
 
     protected int|string|array $columnSpan = 1;
 

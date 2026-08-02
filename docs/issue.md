@@ -100,7 +100,9 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- Perbaiki dan finalkan fitur softdeletes dari semua model/migration/data, dan semua perilakunya agar project ini solid dan tidak ada bottleneck.
+- perbaiki tampilan footer untuk halaman auth (&copy 2026 MTs Negeri 1 Pandeglang | built with ♥️ by <a href="https://github.com/zulfikriyahya"> Yahya Zulfikri </a>) [ini berbeda posisinya dengan semua halaman biasa/ dashboard]
+- tambahkan tombol (bukan link/inline teks) kembali ke halaman login / 'halaman login'
+- gunakan custom css jika tidak memungkinkan menggunakan bawaan tailwindcss
 
 ---
 

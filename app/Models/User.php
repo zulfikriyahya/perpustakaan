@@ -67,12 +67,12 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
 
     public function levelBadge(): BelongsTo
     {
-        return $this->belongsTo(LevelBadge::class);
+        return $this->belongsTo(LevelBadge::class)->withTrashed();
     }
 
     public function kelasTahunPelajaran(): BelongsTo
     {
-        return $this->belongsTo(KelasTahunPelajaran::class);
+        return $this->belongsTo(KelasTahunPelajaran::class)->withTrashed();
     }
 
     public function riwayatKelas(): HasMany

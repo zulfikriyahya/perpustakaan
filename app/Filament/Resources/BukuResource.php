@@ -59,7 +59,7 @@ class BukuResource extends Resource
                 ->maxLength(255),
             TextInput::make('isbn')
                 ->label('ISBN')
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255)
                 ->helperText('1 ISBN = 1 judul. Jumlah eksemplar fisik dikelola di tab Eksemplar setelah buku disimpan.'),
             TextInput::make('tahun_terbit')

@@ -6,16 +6,21 @@ use App\Filament\Exports\LevelBadgeExporter;
 use App\Filament\Imports\LevelBadgeImporter;
 use App\Filament\Resources\LevelBadgeResource\Pages;
 use App\Models\LevelBadge;
+use App\Models\User;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class LevelBadgeResource extends Resource
@@ -33,7 +38,7 @@ class LevelBadgeResource extends Resource
         return $schema->components([
             TextInput::make('nama_badge')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             TextInput::make('min_point')
                 ->numeric()
@@ -58,11 +63,9 @@ class LevelBadgeResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(LevelBadgeImporter::class)
+                ImportAction::make()->importer(LevelBadgeImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', LevelBadge::class) ?? false),
-                ExportAction::make()
-                    ->exporter(LevelBadgeExporter::class)
+                ExportAction::make()->exporter(LevelBadgeExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', LevelBadge::class) ?? false),
             ])
             ->columns([
@@ -73,7 +76,31 @@ class LevelBadgeResource extends Resource
                 TextColumn::make('urutan')->sortable(),
             ])
             ->defaultSort('urutan')
-            ->recordActions([DeleteAction::make()])
+            ->filters([TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // FK users.level_badge_id default RESTRICT - WAJIB cek
+                // pemakaian (termasuk User ter-soft-delete) sebelum force-delete.
+                ForceDeleteAction::make()
+                    ->action(function (LevelBadge $record) {
+                        $dipakai = User::query()
+                            ->withTrashed()
+                            ->where('level_badge_id', $record->id)
+                            ->exists();
+
+                        if ($dipakai) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada User yang memakai Level Badge ini.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 

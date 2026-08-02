@@ -438,7 +438,7 @@ class BukuExporter extends Exporter
             ExportColumn::make('isbn')->label('ISBN'),
             ExportColumn::make('tahun_terbit')->label('Tahun Terbit'),
             ExportColumn::make('eksemplars')
-                ->label('Jumlah Eksemplar')
+                ->label('Stok (Jumlah Eksemplar)')
                 ->formatStateUsing(fn (Buku $record) => (string) $record->eksemplars->count()),
             ExportColumn::make('rak')
                 ->label('Rak (distinct, lihat catatan)')
@@ -1037,7 +1037,7 @@ class RakExporter extends Exporter
              * hasil export diimpor ulang tanpa diedit.
              */
             ExportColumn::make('kategoris')
-                ->label('Kategori Terkait')
+                ->label('Kategori')
                 ->formatStateUsing(fn (Rak $record) => $record->kategoris->pluck('nama')->implode('; ')),
         ];
     }
@@ -1251,6 +1251,7 @@ class UserExporter extends Exporter
     {
         return [
             ExportColumn::make('nama'),
+            ExportColumn::make('jenis_kelamin')->label('Jenis Kelamin'),
             ExportColumn::make('role'),
             ExportColumn::make('nisn')->label('NISN'),
             ExportColumn::make('nip')->label('NIP'),
@@ -1777,23 +1778,20 @@ use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
 /**
- * Upsert berdasarkan 'nama' SAJA (dikonfirmasi: nama Kelas unik secara
- * global lintas Jurusan - lihat migration
- * 2026_08_02_000001_add_unique_nama_to_kelas_table). Sebelumnya upsert
- * key adalah kombinasi (nama, jurusan_id) - DIUBAH sesuai konfirmasi ini.
+ * Upsert berdasarkan (jurusan_id, nama) - DIUBAH (iterasi ini,
+ * dikonfirmasi user): nama Kelas sekarang unik PER JURUSAN, bukan
+ * global lagi (lihat migration
+ * 2026_08_03_000002_kelas_wajib_jurusan_unique_per_jurusan.php).
+ * 'jurusan_kode' SEKARANG WAJIB diisi - setiap Kelas harus punya
+ * Jurusan (dikonfirmasi user: "semua kelas memiliki jurusan").
  *
- * 'jurusan_kode' tetap direferensikan via kode unik Jurusan (bukan nama)
- * untuk menghindari ambiguitas nama Jurusan.
- *
- * BUG FIX (ditemukan iterasi ini): 'jurusan_kode' adalah kolom
- * lookup-only (bukan kolom asli tabel 'kelas' - lihat Schema kelas: id,
- * nama, tingkat, jurusan_id, timestamps). Tanpa ->fillRecordUsing(),
- * Filament otomatis meng-assign $record->jurusan_kode = state SEBELUM
- * save(), yang lolos dari validasi Eloquent (properti dinamis tetap
- * dianggap dirty attribute) dan menyebabkan SQLSTATE[42S22] "Unknown
- * column 'jurusan_kode'" saat INSERT/UPDATE - baris gagal total dengan
- * pesan generik "Terjadi kesalahan sistem". fillRecordUsing() no-op
- * memastikan resolusi HANYA lewat resolveRecord() (Aturan poin 3, DRY).
+ * BUG FIX (iterasi sebelumnya, tetap berlaku): 'jurusan_kode' adalah
+ * kolom lookup-only (bukan kolom asli tabel 'kelas'). Tanpa
+ * ->fillRecordUsing(), Filament otomatis meng-assign
+ * $record->jurusan_kode = state SEBELUM save(), yang menyebabkan
+ * SQLSTATE[42S22] "Unknown column 'jurusan_kode'". fillRecordUsing()
+ * no-op memastikan resolusi HANYA lewat resolveRecord() (Aturan
+ * poin 3, DRY).
  */
 class KelasImporter extends Importer
 {
@@ -1804,7 +1802,7 @@ class KelasImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->label('Nama kelas (mis. X IPA 1)')
-                ->helperText('Harus unik secara global - tidak boleh ada 2Kelas dengan nama sama meski beda Jurusan.')
+                ->helperText('Unik per Jurusan - boleh ada nama sama di Jurusan berbeda (mis. "X-1" di IPA dan "X-1" di IPS).')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
                 ->example('X IPA 1'),
@@ -1815,9 +1813,10 @@ class KelasImporter extends Importer
                 ->rules(['required', 'integer', 'min:1'])
                 ->example('10'),
             ImportColumn::make('jurusan_kode')
-                ->label('Kode Jurusan (opsional)')
-                ->helperText('Lihat daftar kode di menu Master Data > Jurusan. Kosongkan jika kelas ini tidak terikat jurusan tertentu.')
-                ->rules(['nullable', 'string', 'max:255'])
+                ->label('Kode Jurusan (wajib)')
+                ->helperText('Lihat daftar kode di menu Master Data > Jurusan. Setiap Kelas wajib punya Jurusan.')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255'])
                 ->example('IPA')
                 // BUG FIX - lihat docblock class. Kolom ini bukan kolom
                 // asli tabel 'kelas', jangan biarkan Filament auto-assign.
@@ -1827,27 +1826,16 @@ class KelasImporter extends Importer
 
     public function resolveRecord(): ?Kelas
     {
-        $record = Kelas::query()->firstOrNew(['nama' => trim($this->data['nama'])]);
+        $jurusan = Jurusan::query()->where('kode', $this->data['jurusan_kode'])->first();
 
-        if (! empty($this->data['jurusan_kode'])) {
-            $jurusan = Jurusan::query()->where('kode', $this->data['jurusan_kode'])->first();
-
-            if (! $jurusan) {
-                throw new RowImportFailedException("Jurusan dengan kode \"{$this->data['jurusan_kode']}\" tidak ditemukan.");
-            }
-
-            $record->jurusan_id = $jurusan->id;
-        } else {
-            // DIKONFIRMASI: kolom jurusan_kode dikosongkan (baik saat
-            // create maupun UPDATE Kelas existing) -> jurusan_id
-            // di-null-kan/dilepas, BUKAN dibiarkan tidak berubah. Admin
-            // yang re-import Kelas untuk update field lain (mis. hanya
-            // 'tingkat') WAJIB tetap mengisi jurusan_kode di file jika
-            // tidak ingin assignment Jurusan-nya ikut terhapus.
-            $record->jurusan_id = null;
+        if (! $jurusan) {
+            throw new RowImportFailedException("Jurusan dengan kode \"{$this->data['jurusan_kode']}\" tidak ditemukan.");
         }
 
-        return $record;
+        return Kelas::query()->firstOrNew([
+            'jurusan_id' => $jurusan->id,
+            'nama' => trim($this->data['nama']),
+        ]);
     }
 
     public static function getCompletedNotificationBody(Import $import): string
@@ -1871,7 +1859,6 @@ class KelasImporter extends Importer
 
 namespace App\Filament\Imports;
 
-use App\Enums\RoleUser;
 use App\Models\Jurusan;
 use App\Models\Kelas;
 use App\Models\KelasTahunPelajaran;
@@ -1929,7 +1916,7 @@ class KelasTahunPelajaranImporter extends Importer
                 ->label('Tahun pelajaran')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
-                ->example('2025/2026')
+                ->example('2026/2027')
                 ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('wali_kelas_nip')
                 ->label('NIP wali kelas (opsional)')
@@ -1978,11 +1965,18 @@ class KelasTahunPelajaranImporter extends Importer
         $waliKelas = User::query()->where('nip', trim($this->data['wali_kelas_nip']))->first();
 
         if (! $waliKelas) {
-            throw new RowImportFailedException("NIP wali kelas \"{$this->data['wali_kelas_nip']}\" tidak ditemukan. Pastikan user dengan NIP tersebutsudah terdaftar.");
+            throw new RowImportFailedException("NIP wali kelas \"{$this->data['wali_kelas_nip']}\" tidak ditemukan. Pastikan user dengan NIP tersebut sudah terdaftar.");
         }
 
-        if ($waliKelas->role === RoleUser::Admin) {
-            throw new RowImportFailedException('User dengan NIP tersebut berperan sebagai admin, tidak bisa dijadikan wali kelas.');
+        // FIX (iterasi ini): sebelumnya hanya menolak role Admin - tidak
+        // selaras dengan KelasTahunPelajaranResource::form() yang membatasi
+        // kandidat wali kelas HANYA role pustakawan/pegawai (whereIn di
+        // relationship Select, lihat komentar "FIX" di file tersebut). Siswa
+        // bisa lolos jadi wali kelas lewat import padahal opsi itu tidak
+        // pernah muncul di form manual - disamakan di sini (Aturan poin 11 -
+        // telusuri semua titik pemakaian saat mengubah aturan bisnis).
+        if (! in_array($waliKelas->role->value, ['pustakawan', 'pegawai'], true)) {
+            throw new RowImportFailedException('User dengan NIP tersebut bukan Pustakawan/Pegawai - hanya kedua role ini yang bisa dijadikan wali kelas (sama seperti pilihan di form manual).');
         }
 
         $this->record->update(['wali_kelas_id' => $waliKelas->id]);
@@ -2328,10 +2322,10 @@ class TahunPelajaranImporter extends Importer
     {
         return [
             ImportColumn::make('nama')
-                ->label('Nama (mis. 2025/2026)')
+                ->label('Nama (mis. 2026/2027)')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
-                ->example('2025/2026'),
+                ->example('2026/2027'),
             ImportColumn::make('tanggal_mulai')
                 ->helperText('Gunakan format tanggal YYYY-MM-DD (mis. 2025-07-14) supaya tidak salah baca oleh Excel/Google Sheets di komputer dengan format regional berbeda.')
                 ->requiredMapping()
@@ -2480,6 +2474,10 @@ class UserImporter extends Importer
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
                 ->example('Yahya Zulfikri'),
+            ImportColumn::make('jenis_kelamin')
+                ->label('Jenis Kelamin (L/P, opsional)')
+                ->rules(['nullable', 'in:L,P'])
+                ->example('L'),
             ImportColumn::make('nisn')
                 ->label('NISN')
                 ->helperText('Isi salah satu: NISN (untuk siswa) atau NIP (untuk pegawai/pustakawan).')
@@ -2506,7 +2504,7 @@ class UserImporter extends Importer
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('2025/2026')
+                ->example('2026/2027')
                 // BUG FIX - lookup-only, lihat docblock class.
                 ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jabatan')
@@ -2788,6 +2786,7 @@ use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
+use Illuminate\Validation\ValidationException;
 
 /**
  * TODO: verifikasi signature terhadap versi package yang terpasang
@@ -2807,6 +2806,19 @@ use Illuminate\Support\HtmlString;
  * pakai NISN/NIP. Diperbaiki dengan menyimpan no_telepon hasil resolve
  * di property $noTeleponOtp saat kirimOtpLogin() berhasil, dipakai ulang
  * di authenticate() - bukan raw input field lagi.
+ *
+ * BUG FIX (iterasi ini) - Filament\Auth\Pages\Login::throwFailureValidationException()
+ * bawaan hardcode menempelkan pesan gagal login ke key 'data.email'
+ * (lihat vendor/filament/filament/src/Auth/Pages/Login.php). Form kustom
+ * kita memakai field 'login' (bukan 'email'), jadi pesan tsb menempel ke
+ * field yang tidak pernah dirender di schema manapun - user tidak melihat
+ * apa pun saat kredensial password salah (parent::authenticate() dipanggil
+ * apa adanya untuk mode 'password', lihat method authenticate() di bawah).
+ * Diperbaiki dengan override method ini: target key diarahkan ke
+ * 'data.login' (field yang benar-benar ada), DAN ditambahkan toast
+ * eksplisit supaya konsisten dengan gaya notifikasi lain di halaman ini
+ * (poin toast informatif) - inline error saja dianggap terlalu mudah
+ * terlewat mengingat field password ada di bawahnya.
  */
 class Login extends BaseLogin
 {
@@ -2837,19 +2849,20 @@ class Login extends BaseLogin
                 ->password()
                 ->revealable()
                 ->required()
-                ->visible(fn () => $this->mode === 'password')
-                ->dehydrated(fn () => $this->mode === 'password'),
+                ->visible(fn() => $this->mode === 'password')
+                ->dehydrated(fn() => $this->mode === 'password'),
             TextInput::make('otp')
                 ->label('Kode OTP')
                 ->minLength(6)
                 ->maxLength(6)
                 ->required()
-                ->visible(fn () => $this->mode === 'otp' && $this->otpTerkirim)
-                ->dehydrated(fn () => $this->mode === 'otp'),
+                ->extraInputAttributes(['class' => 'auth-otp-input', 'inputmode' => 'numeric'])
+                ->visible(fn() => $this->mode === 'otp' && $this->otpTerkirim)
+                ->dehydrated(fn() => $this->mode === 'otp'),
             Text::make('Kode OTP berlaku 5 menit. Tidak menerima? Klik "Password" lalu "OTP WhatsApp" lagi untuk kirim ulang.')
                 ->size('xs')
                 ->color('gray')
-                ->visible(fn () => $this->mode === 'otp' && $this->otpTerkirim),
+                ->visible(fn() => $this->mode === 'otp' && $this->otpTerkirim),
             $this->getRememberFormComponent(),
         ]);
     }
@@ -2860,7 +2873,7 @@ class Login extends BaseLogin
             ->label('NISN / NIP / No. Telepon')
             ->required()
             ->autofocus()
-            ->disabled(fn () => $this->mode === 'otp' && $this->otpTerkirim)
+            ->disabled(fn() => $this->mode === 'otp' && $this->otpTerkirim)
             ->extraInputAttributes(['tabindex' => 1]);
     }
 
@@ -2890,6 +2903,7 @@ class Login extends BaseLogin
                 ->title('Akun tidak ditemukan')
                 ->body('Pastikan NISN, NIP, atau No. Telepon sesuai yang terdaftar.')
                 ->warning()
+                ->icon('heroicon-o-user-circle')
                 ->send();
 
             return;
@@ -2898,18 +2912,25 @@ class Login extends BaseLogin
         try {
             app(LoginOtpService::class)->kirimOtp($user);
         } catch (\RuntimeException $e) {
-            Notification::make()->title('Belum bisa mengirim OTP')->body($e->getMessage())->warning()->send();
+            Notification::make()
+                ->title('Belum bisa mengirim OTP')
+                ->body($e->getMessage())
+                ->warning()
+                ->icon('heroicon-o-clock')
+                ->send();
 
             return;
         }
 
-        // simpan no_telepon ASLI hasil resolve - bukan raw input 'login',
-        // supaya verifikasi OTP di authenticate() tetap benar walau user
-        // login pakai NISN/NIP.
         $this->noTeleponOtp = $user->no_telepon;
         $this->otpTerkirim = true;
 
-        Notification::make()->title('Kode OTP terkirim ke WhatsApp terdaftar.')->success()->send();
+        Notification::make()
+            ->title('Kode OTP terkirim')
+            ->body('Cek pesan WhatsApp di nomor terdaftar, kode berlaku 5 menit.')
+            ->success()
+            ->icon('heroicon-o-chat-bubble-left-right')
+            ->send();
     }
 
     protected function getCredentialsFromFormData(array $data): array
@@ -2926,6 +2947,24 @@ class Login extends BaseLogin
             $field => $login,
             'password' => $data['password'],
         ];
+    }
+
+    /**
+     * BUG FIX - lihat docblock class. parent::throwFailureValidationException()
+     * menempel ke 'data.email' yang tidak eksis di form kita.
+     */
+    protected function throwFailureValidationException(): never
+    {
+        Notification::make()
+            ->title('Gagal masuk')
+            ->body('NISN/NIP/No. Telepon atau password yang Anda masukkan salah.')
+            ->danger()
+            ->icon('heroicon-o-x-circle')
+            ->send();
+
+        throw ValidationException::withMessages([
+            'data.login' => __('filament-panels::auth/pages/login.messages.failed'),
+        ]);
     }
 
     /**
@@ -2966,7 +3005,12 @@ class Login extends BaseLogin
         try {
             $user = app(LoginOtpService::class)->verifikasiUntukLogin($this->noTeleponOtp, (string) $data['otp']);
         } catch (\RuntimeException $e) {
-            Notification::make()->title($e->getMessage())->danger()->send();
+            Notification::make()
+                ->title('Gagal memverifikasi OTP')
+                ->body($e->getMessage())
+                ->danger()
+                ->icon('heroicon-o-x-circle')
+                ->send();
 
             return null;
         }
@@ -2978,16 +3022,19 @@ class Login extends BaseLogin
     }
 
     /**
-     * Override TOTAL dari content() bawaan - menyisipkan baris toggle mode
-     * (Actions link) SEBELUM form, memakai Schema Component API asli
-     * (bukan Blade custom) supaya konsisten dengan cara Filament merender
-     * halaman ini. Struktur RenderHook before/after dipertahankan sama
-     * seperti base class.
+     * FITUR BARU - footer disisipkan di ATAS frame (sebelum mode
+     * switcher/form), BUKAN lagi di bawah body via BODY_END global -
+     * lihat DashboardPanelProvider yang mengecualikan halaman auth dari
+     * footer bawah supaya tidak dobel.
      */
     public function content(Schema $schema): Schema
     {
         return $schema->components([
             RenderHook::make(PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE),
+            Text::make(new HtmlString(
+                view('filament.partials.auth-styles')->render() .
+                    view('filament.partials.app-footer', ['authTop' => true])->render()
+            )),
             $this->getModeSwitcherComponent(),
             $this->getFormContentComponent(),
             RenderHook::make(PanelsRenderHook::AUTH_LOGIN_FORM_AFTER),
@@ -2999,20 +3046,20 @@ class Login extends BaseLogin
         return Actions::make([
             Action::make('mode_password')
                 ->label('Password')
-                ->action(fn () => $this->gantiMode('password'))
+                ->action(fn() => $this->gantiMode('password'))
                 ->extraAttributes([
                     'class' => 'flex-1 !justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors '
-                        .($this->mode === 'password'
+                        . ($this->mode === 'password'
                             ? 'bg-white text-gray-950 dark:bg-gray-700 dark:text-white'
                             : 'bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'),
                 ])
                 ->color('gray'),
             Action::make('mode_otp')
                 ->label('OTP WhatsApp')
-                ->action(fn () => $this->gantiMode('otp'))
+                ->action(fn() => $this->gantiMode('otp'))
                 ->extraAttributes([
                     'class' => 'flex-1 !justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors '
-                        .($this->mode === 'otp'
+                        . ($this->mode === 'otp'
                             ? 'bg-white text-gray-950 dark:bg-gray-700 dark:text-white'
                             : 'bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'),
                 ])
@@ -3030,11 +3077,11 @@ class Login extends BaseLogin
             Action::make('kirim_otp')
                 ->label('Kirim OTP')
                 ->action('kirimOtpLogin')
-                ->visible(fn () => $this->mode === 'otp' && ! $this->otpTerkirim),
+                ->visible(fn() => $this->mode === 'otp' && ! $this->otpTerkirim),
             Action::make('authenticate')
-                ->label(fn () => $this->mode === 'otp' ? 'Verifikasi & Masuk' : 'Masuk')
+                ->label(fn() => $this->mode === 'otp' ? 'Verifikasi & Masuk' : 'Masuk')
                 ->submit('authenticate')
-                ->visible(fn () => $this->mode === 'password' || $this->otpTerkirim),
+                ->visible(fn() => $this->mode === 'password' || $this->otpTerkirim),
         ];
     }
 }
@@ -3118,14 +3165,11 @@ class RequestPasswordReset extends SimplePage
         $user = $this->resolveUser($data['login']);
 
         if (! $user) {
-            // TODO: GAP-SPEC - notifikasi eksplisit "tidak terdaftar" atas
-            // permintaan (trade-off: bisa dipakai enumerasi identifier
-            // terdaftar). Lihat catatan sebelumnya jika ingin direvert ke
-            // pesan generik.
             Notification::make()
                 ->title('Akun tidak ditemukan')
                 ->body('Pastikan NISN, NIP, atau No. Telepon yang dimasukkan sesuai dengan yang terdaftar di sistem perpustakaan.')
                 ->warning()
+                ->icon('heroicon-o-user-circle')
                 ->send();
 
             return;
@@ -3134,18 +3178,27 @@ class RequestPasswordReset extends SimplePage
         try {
             $otpService->kirimOtp($user);
         } catch (\RuntimeException $e) {
-            // rate limit OTP (lihat PasswordResetOtpService::kirimOtp) -
-            // ditangkap disini, bukan dibiarkan jadi fatal error.
             Notification::make()
                 ->title('Belum bisa mengirim OTP')
                 ->body($e->getMessage())
                 ->warning()
+                ->icon('heroicon-o-clock')
                 ->send();
 
             return;
         }
 
         Session::put('reset_password_no_telepon', $user->no_telepon);
+
+        // FITUR BARU - sebelumnya redirect diam-diam tanpa toast, user
+        // bisa bingung apakah OTP benar-benar terkirim sebelum landing
+        // di halaman berikutnya.
+        Notification::make()
+            ->title('Kode OTP terkirim')
+            ->body('Cek pesan WhatsApp di nomor terdaftar, lalu masukkan kodenya di halaman berikutnya.')
+            ->success()
+            ->icon('heroicon-o-chat-bubble-left-right')
+            ->send();
 
         $this->redirect(
             URL::signedRoute('filament.dashboard.auth.password-reset.reset')
@@ -3195,6 +3248,16 @@ class ResetPassword extends SimplePage
     public function mount(): void
     {
         if (! Session::has('reset_password_no_telepon')) {
+            // FITUR BARU - sebelumnya redirect diam-diam tanpa penjelasan,
+            // user yang buka URL ini langsung (mis. dari bookmark lama /
+            // signed URL kedaluwarsa) tidak tahu kenapa ditendang balik.
+            Notification::make()
+                ->title('Sesi reset password tidak ditemukan')
+                ->body('Silakan minta kode OTP baru terlebih dahulu.')
+                ->warning()
+                ->icon('heroicon-o-exclamation-triangle')
+                ->send();
+
             $this->redirect(route('filament.dashboard.auth.password-reset.request'));
 
             return;
@@ -3210,15 +3273,18 @@ class ResetPassword extends SimplePage
                 ->label('Kode OTP')
                 ->required()
                 ->minLength(6)
-                ->maxLength(6),
+                ->maxLength(6)
+                ->extraInputAttributes(['class' => 'auth-otp-input', 'inputmode' => 'numeric']),
             TextInput::make('password')
                 ->label('Password Baru')
                 ->password()
+                ->revealable()
                 ->required()
                 ->minLength(8),
             TextInput::make('password_confirmation')
                 ->label('Konfirmasi Password Baru')
                 ->password()
+                ->revealable()
                 ->required()
                 ->same('password'),
         ])->statePath('data');
@@ -3232,14 +3298,24 @@ class ResetPassword extends SimplePage
         try {
             $otpService->verifikasiDanReset($noTelepon, $data['otp'], $data['password']);
         } catch (\RuntimeException $e) {
-            Notification::make()->title($e->getMessage())->warning()->send();
+            Notification::make()
+                ->title('Gagal reset password')
+                ->body($e->getMessage())
+                ->danger()
+                ->icon('heroicon-o-x-circle')
+                ->send();
 
             return;
         }
 
         Session::forget('reset_password_no_telepon');
 
-        Notification::make()->title('Password berhasil direset, silakan login.')->success()->send();
+        Notification::make()
+            ->title('Password berhasil direset')
+            ->body('Silakan login menggunakan password baru Anda.')
+            ->success()
+            ->icon('heroicon-o-check-circle')
+            ->send();
 
         $this->redirect(route('filament.dashboard.auth.login'));
     }
@@ -3796,7 +3872,9 @@ use App\Services\PeminjamanService;
 use App\Services\RfidResolverService;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Computed;
 use RuntimeException;
 
 /**
@@ -3807,15 +3885,32 @@ use RuntimeException;
  * stok, Denda, Point, WA) tetap lewat PeminjamanService - halaman ini
  * murni orkestrasi UI (Aturan poin 3).
  *
- * FITUR BARU (iterasi ini): sebelumnya input hanya dicocokkan ke
- * Eksemplar.barcode. Sekarang jika tidak match barcode eksemplar manapun,
- * input dicoba resolve sebagai Buku.isbn (lihat resolveEksemplarDariIsbn())
- * - karena satu ISBN bisa punya banyak Eksemplar/copy fisik, sistem
- * otomatis memilih eksemplar yang relevan (lihat TODO: GAP-SPEC di
- * method tersebut untuk aturan pemilihannya). Property/method di-rename
- * dari $barcodeInput/scanBarcode() menjadi $kodeInput/scanKode() karena
- * sekarang menerima barcode ATAU ISBN, ditelusuri ke seluruh pemakaian
- * termasuk blade (Aturan poin 11).
+ * FITUR BARU (iterasi ini): TIDAK ADA toggle mode manual - satu input
+ * yang sama otomatis mendeteksi jenis pencarian:
+ *  - $kartuInput: dicoba sebagai kartu RFID/NISN persis (RfidResolverService)
+ *    dulu -> kalau gagal, FALLBACK ke pencarian User.nama (live, computed
+ *    property hasilCariUser()).
+ *  - $kodeInput: dicoba sebagai barcode Eksemplar persis, lalu ISBN Buku
+ *    persis -> kalau keduanya gagal, FALLBACK ke pencarian Buku.judul
+ *    (live, computed property hasilCariBuku()).
+ * Aturan auto-pick saat fallback nama/judul (lihat scanKartu()/scanKode()):
+ * tepat 1 hasil -> otomatis dipilih; >1 hasil -> operator WAJIB klik salah
+ * satu dari daftar yang muncul di bawah input (tidak ditebak); 0 hasil ->
+ * dianggap gagal seperti sebelumnya. Live-search tetap jalan di background
+ * selagi mengetik (termasuk saat scan kartu/barcode fisik) - untuk input
+ * digit murni hasil pencarian nama/judul biasanya kosong, jadi tidak
+ * mengganggu, hanya menambah 1 query ringan per keystroke (debounced
+ * 400ms dari sisi Alpine/Livewire).
+ *
+ * TODO: ASUMSI - pencarian by-nama/judul di halaman ini query langsung ke
+ * model User/Buku tanpa cek Policy viewAny:User / viewAny:Buku terpisah,
+ * KONSISTEN dengan perilaku scan (exact match) sebelumnya yang juga query
+ * tanpa policy tambahan - akses keseluruhan halaman tetap digerbang oleh
+ * canAccess() (Create:Peminjaman). Jika role yang boleh Create:Peminjaman
+ * TIDAK seharusnya bisa "menjelajahi" daftar nama siswa/buku secara bebas
+ * (berbeda dengan sekadar identifikasi via scan exact), ini perlu
+ * permission terpisah - konfirmasi ke tim sebelum production jika hal ini
+ * jadi concern.
  *
  * BUG FIX (iterasi sebelumnya): scan barcode sudah dipindah dari query
  * Buku.barcode/Peminjaman.buku_id (sudah tidak ada sejak migration
@@ -3823,14 +3918,19 @@ use RuntimeException;
  *
  * Reader RFID di komputer = USB keyboard-wedge (ketik ke input fokus,
  * seperti barcode scanner), BUKAN endpoint device Attendance Machine -
- * jangan disamakan dengan PerpustakaanDeviceController.
+ * jangan disamakan dengan PerpustakaanDeviceController. Fallback nama
+ * TIDAK mengubah/menyentuh jalur scan exact-match ini sama sekali - exact
+ * match SELALU dicoba lebih dulu sebelum fallback (Aturan poin 17 -
+ * kompatibilitas device fisik tidak berubah).
  *
  * Otorisasi: reuse Policy existing, tidak ada permission baru untuk
  * halaman ini sendiri - akses digerbang oleh Create:Peminjaman.
  *
  * Rate limit anti-scan-ganda: eksemplar yang sama (setelah diresolve dari
- * barcode ATAU ISBN) untuk user aktif yang sama tidak boleh diproses ulang
- * dalam window RATE_LIMIT_DETIK detik.
+ * barcode, ISBN, ATAU fallback judul) untuk user aktif yang sama tidak
+ * boleh diproses ulang dalam window RATE_LIMIT_DETIK detik - karena
+ * prosesEksemplar() dipakai bersama, rate limit otomatis berlaku ke
+ * jalur fallback juga tanpa kode tambahan.
  *
  * TODO: GAP-SPEC - window rate limit di-key per (user_id, eksemplar_id),
  * BUKAN global per eksemplar - asumsi: 2 user berbeda scan eksemplar yang
@@ -3842,7 +3942,11 @@ use RuntimeException;
  * TODO: verifikasi signature terhadap versi package yang terpasang
  * (filament/filament versi sesuai composer.json) - properti $view dan
  * $navigationIcon di bawah mengikuti API Filament v4/v5 (schema-based),
- * cek ulang jika versi terpasang berbeda.
+ * cek ulang jika versi terpasang berbeda. Termasuk atribut
+ * Livewire\Attributes\Computed - verifikasi tersedia di versi Livewire
+ * yang terpasang (composer.lock), jika tidak tersedia hapus atributnya -
+ * computed property Livewire tetap bekerja lewat pemanggilan langsung
+ * $this->hasilCariUser di Blade, hanya kehilangan caching per-request.
  */
 class TransaksiCepat extends Page
 {
@@ -3858,6 +3962,15 @@ class TransaksiCepat extends Page
      * Window rate limit anti-scan-ganda (detik). Lihat catatan class di atas.
      */
     protected const RATE_LIMIT_DETIK = 60;
+
+    /**
+     * Minimal karakter sebelum live-search fallback (nama/judul) dieksekusi
+     * ke DB - mencegah query "LIKE %%" yang menyapu seluruh tabel tiap kali
+     * input baru mulai diketik/dikosongkan.
+     */
+    protected const MIN_KARAKTER_CARI = 2;
+
+    protected const MAX_HASIL_CARI = 8;
 
     public ?string $kartuInput = '';
 
@@ -3877,27 +3990,145 @@ class TransaksiCepat extends Page
         return auth()->user()?->can('create', Peminjaman::class) ?? false;
     }
 
-    public function scanKartu(): void
+    /**
+     * Live-search fallback User by nama, berbasis isi $kartuInput saat ini.
+     * Livewire memanggil ulang otomatis tiap kali $kartuInput berubah
+     * karena dipakai langsung di Blade sbg $this->hasilCariUser.
+     *
+     * @return Collection<int, User>
+     */
+    #[Computed]
+    public function hasilCariUser(): Collection
     {
-        $input = trim((string) $this->kartuInput);
-        $this->kartuInput = '';
+        $kata = trim((string) $this->kartuInput);
+
+        if (mb_strlen($kata) < self::MIN_KARAKTER_CARI) {
+            return new Collection;
+        }
+
+        return User::query()
+            ->where('nama', 'like', "%{$kata}%")
+            ->orderBy('nama')
+            ->limit(self::MAX_HASIL_CARI)
+            ->get();
+    }
+
+    /**
+     * Live-search fallback Buku by judul, berbasis isi $kodeInput saat ini.
+     * Hanya buku yang punya minimal satu Eksemplar yang ditampilkan - buku
+     * tanpa eksemplar sama sekali tidak mungkin diproses pinjam/kembali.
+     *
+     * @return Collection<int, Buku>
+     */
+    #[Computed]
+    public function hasilCariBuku(): Collection
+    {
+        $kata = trim((string) $this->kodeInput);
+
+        if (mb_strlen($kata) < self::MIN_KARAKTER_CARI) {
+            return new Collection;
+        }
+
+        return Buku::query()
+            ->where('judul', 'like', "%{$kata}%")
+            ->whereHas('eksemplars')
+            ->orderBy('judul')
+            ->limit(self::MAX_HASIL_CARI)
+            ->get();
+    }
+
+    /**
+     * Enter ditekan pada input identifikasi user. $inputEksplisit dikirim
+     * langsung dari $event.target.value di Blade - hindari race condition
+     * debounce (lihat catatan sebelumnya).
+     *
+     * Input SELALU dikosongkan segera setelah nilai ditangkap, TERLEPAS
+     * dari hasil (sukses/gagal) - supaya operator bisa langsung scan/ketik
+     * ulang tanpa perlu menghapus manual sisa teks lama. PENGECUALIAN:
+     * saat hasil fallback nama >1 (ambigu), input SENGAJA tidak
+     * dikosongkan supaya daftar pilihan yang muncul di bawahnya tetap
+     * relevan dengan apa yang diketik (operator masih bisa
+     * mempersempit kata kunci alih-alih pilih dari daftar).
+     */
+    public function scanKartu(?string $inputEksplisit = null): void
+    {
+        $input = trim($inputEksplisit ?? (string) $this->kartuInput);
 
         if ($input === '') {
             return;
         }
 
         try {
-            $this->user = app(RfidResolverService::class)->resolveUser($input);
-        } catch (RuntimeException $e) {
-            Notification::make()->danger()->title('User tidak ditemukan')->body($e->getMessage())->send();
+            $user = app(RfidResolverService::class)->resolveUser($input);
+            $this->kartuInput = '';
+            $this->muatUser($user);
+
+            return;
+        } catch (RuntimeException) {
+            // Bukan kartu/NISN yang valid - lanjut ke fallback pencarian nama.
+        }
+
+        // Sinkronkan dulu supaya hasilCariUser() (baca dari $this->kartuInput)
+        // memakai nilai yang baru saja ditangkap, bukan nilai lama.
+        $this->kartuInput = $input;
+        $hasil = $this->hasilCariUser;
+
+        if ($hasil->count() === 1) {
+            $this->kartuInput = '';
+            $this->muatUser($hasil->first());
 
             return;
         }
 
-        $this->riwayatScan = [];
-        $this->bisaMeminjam = app(PeminjamanService::class)->bisaMeminjam($this->user);
+        if ($hasil->count() > 1) {
+            Notification::make()
+                ->info()
+                ->title('Ada beberapa user dengan nama serupa')
+                ->body('Pilih salah satu dari daftar di bawah input.')
+                ->send();
 
-        if ($this->user->status_suspend) {
+            return; // input & daftar hasil SENGAJA dibiarkan tampil untuk dipilih manual
+        }
+
+        $this->kartuInput = '';
+        Notification::make()
+            ->danger()
+            ->title('User tidak ditemukan')
+            ->body("Tidak ada kartu/NISN/nama yang cocok dengan '{$input}'.")
+            ->send();
+    }
+
+    /**
+     * Dipanggil saat operator klik salah satu hasil fallback pencarian
+     * nama. Menutup jalur yang SAMA dengan scanKartu() setelah user
+     * berhasil diresolve - lihat muatUser().
+     */
+    public function pilihUser(string $userId): void
+    {
+        $user = User::query()->find($userId);
+
+        if (! $user) {
+            Notification::make()->danger()->title('User tidak ditemukan')->body('Data mungkin sudah dihapus, coba cari ulang.')->send();
+
+            return;
+        }
+
+        $this->kartuInput = '';
+        $this->muatUser($user);
+    }
+
+    /**
+     * Satu sumber kebenaran untuk "apa yang terjadi setelah user berhasil
+     * diidentifikasi", dipakai baik oleh jalur exact-match maupun fallback
+     * nama (Aturan poin 3 - DRY).
+     */
+    protected function muatUser(User $user): void
+    {
+        $this->user = $user;
+        $this->riwayatScan = [];
+        $this->bisaMeminjam = app(PeminjamanService::class)->bisaMeminjam($user);
+
+        if ($user->status_suspend) {
             Notification::make()
                 ->warning()
                 ->title('User sedang suspend')
@@ -3906,10 +4137,18 @@ class TransaksiCepat extends Page
         }
     }
 
-    public function scanKode(): void
+    /**
+     * Enter ditekan pada input identifikasi buku. $inputEksplisit dikirim
+     * langsung dari $event.target.value di Blade - hindari race condition
+     * debounce (lihat catatan sebelumnya).
+     *
+     * Input SELALU dikosongkan segera setelah nilai ditangkap, TERLEPAS
+     * dari hasil, KECUALI saat hasil fallback judul >1 (ambigu) - sama
+     * seperti scanKartu() di atas.
+     */
+    public function scanKode(?string $inputEksplisit = null): void
     {
-        $kode = trim((string) $this->kodeInput);
-        $this->kodeInput = '';
+        $kode = trim($inputEksplisit ?? (string) $this->kodeInput);
 
         if ($kode === '' || ! $this->user) {
             return;
@@ -3918,19 +4157,89 @@ class TransaksiCepat extends Page
         $eksemplar = Eksemplar::query()->where('barcode', $kode)->with('buku')->first();
 
         if (! $eksemplar) {
-            $eksemplar = $this->resolveEksemplarDariIsbn($kode);
+            $buku = Buku::query()->where('isbn', $kode)->first();
+            $eksemplar = $buku ? $this->resolveEksemplarUntukBuku($buku) : null;
         }
 
-        if (! $eksemplar) {
-            $this->tambahRiwayat($kode, '-', 'error', 'Barcode/ISBN tidak ditemukan.', false);
+        if ($eksemplar) {
+            $this->kodeInput = '';
+            $this->prosesEksemplar($eksemplar);
 
             return;
         }
 
-        // Rate limit anti-scan-ganda - dicek SEBELUM logic pinjam/kembali,
-        // supaya eksemplar yang sama (baik diresolve dari barcode maupun
-        // ISBN) ter-scan 2x dalam window tidak memicu toggle
-        // pinjam->kembali->pinjam yang tidak diinginkan.
+        // Sinkronkan dulu supaya hasilCariBuku() (baca dari $this->kodeInput)
+        // memakai nilai yang baru saja ditangkap, bukan nilai lama.
+        $this->kodeInput = $kode;
+        $hasil = $this->hasilCariBuku;
+
+        if ($hasil->count() === 1) {
+            $this->pilihBuku($hasil->first()->id);
+
+            return;
+        }
+
+        if ($hasil->count() > 1) {
+            Notification::make()
+                ->info()
+                ->title('Ada beberapa buku dengan judul serupa')
+                ->body('Pilih salah satu dari daftar di bawah input.')
+                ->send();
+
+            return; // input & daftar hasil SENGAJA dibiarkan tampil untuk dipilih manual
+        }
+
+        $this->kodeInput = '';
+        $this->tambahRiwayat($kode, '-', 'error', 'Barcode/ISBN/judul tidak ditemukan.', false);
+    }
+
+    /**
+     * Dipanggil saat operator klik salah satu hasil fallback pencarian
+     * judul (atau otomatis dari scanKode() saat hasil fallback persis 1).
+     * Me-resolve ke SATU Eksemplar (aturan sama seperti jalur ISBN, lihat
+     * resolveEksemplarUntukBuku()) lalu diproses lewat jalur bersama
+     * prosesEksemplar() - tidak ada logic pinjam/kembali terduplikasi
+     * (Aturan poin 3 - DRY).
+     */
+    public function pilihBuku(string $bukuId): void
+    {
+        if (! $this->user) {
+            return;
+        }
+
+        $buku = Buku::query()->find($bukuId);
+
+        if (! $buku) {
+            Notification::make()->danger()->title('Buku tidak ditemukan')->body('Data mungkin sudah dihapus, coba cari ulang.')->send();
+
+            return;
+        }
+
+        $eksemplar = $this->resolveEksemplarUntukBuku($buku);
+
+        if (! $eksemplar) {
+            // Tidak ada Peminjaman aktif user ini utk buku ini, dan tidak
+            // ada Eksemplar berstatus Tersedia - beri pesan yang jelas
+            // (bukan silent no-op) supaya operator tahu kenapa tidak
+            // terjadi apa-apa setelah klik/Enter.
+            $this->kodeInput = '';
+            $this->tambahRiwayat('-', $buku->judul, 'error', 'Tidak ada eksemplar tersedia untuk buku ini, dan user tidak sedang meminjam eksemplar manapun dari buku ini.', false);
+
+            return;
+        }
+
+        $this->kodeInput = '';
+        $this->prosesEksemplar($eksemplar);
+    }
+
+    /**
+     * Logika inti pinjam/kembali per eksemplar (rate limit anti-scan-ganda
+     * + deteksi otomatis pinjam vs kembali + panggil PeminjamanService).
+     * Dipakai bersama oleh jalur exact-match (scanKode) dan fallback
+     * judul (pilihBuku) - tanpa duplikasi (Aturan poin 3 - DRY).
+     */
+    protected function prosesEksemplar(Eksemplar $eksemplar): void
+    {
         $rateLimitKey = "transaksi-cepat-scan:{$this->user->id}:{$eksemplar->id}";
 
         if (Cache::has($rateLimitKey)) {
@@ -3972,7 +4281,7 @@ class TransaksiCepat extends Page
                     // bukan berarti transaksi user saat ini bermasalah/bug.
                     throw new RuntimeException(
                         "Eksemplar barcode '{$eksemplar->barcode}' ({$eksemplar->buku->judul}) sedang tidak tersedia (status: {$eksemplar->status->value}). ".
-                            'Jika Anda mengira eksemplar ini seharusnya dikembalikan oleh user ini, periksa apakah barcode/ISBN yang di-scan sesuai dengan yang tadi dipinjam - satu judul buku bisa punya beberapa copy/eksemplar dengan barcode berbeda.'
+                            'Jika Anda mengira eksemplar ini seharusnya dikembalikan oleh user ini, periksa apakah barcode/ISBN/judul yang dipilih sesuai dengan yang tadi dipinjam - satu judul buku bisa punya beberapa copy/eksemplar dengan barcode berbeda.'
                     );
                 }
 
@@ -3994,13 +4303,14 @@ class TransaksiCepat extends Page
     }
 
     /**
-     * Resolve input sebagai ISBN Buku (dipanggil ketika input tidak match
-     * barcode Eksemplar manapun) -> pilih SATU Eksemplar yang relevan.
+     * Resolve SATU Buku (dari ISBN maupun dari fallback judul) -> pilih
+     * SATU Eksemplar yang relevan. Dipakai baik jalur ISBN maupun jalur
+     * fallback judul (Aturan poin 3 - DRY).
      *
-     * TODO: GAP-SPEC - aturan pemilihan eksemplar saat scan ISBN (bukan
-     * barcode eksemplar spesifik):
+     * TODO: GAP-SPEC - aturan pemilihan eksemplar saat scan ISBN atau
+     * fallback judul (bukan barcode eksemplar spesifik):
      *  1. PENGEMBALIAN: jika user ini punya Peminjaman aktif/terlambat atas
-     *     eksemplar manapun dari Buku ber-ISBN ini, ambil yang PALING LAMA
+     *     eksemplar manapun dari Buku ini, ambil yang PALING LAMA
      *     dipinjam (created_at terkecil). Asumsi: user jarang pinjam >1
      *     eksemplar dari judul yang sama secara bersamaan; kalau itu
      *     terjadi, operator TIDAK diminta memilih - sistem otomatis pilih
@@ -4009,18 +4319,10 @@ class TransaksiCepat extends Page
      *     ubah logic ini untuk melempar RuntimeException alih-alih memilih.
      *  2. PEMINJAMAN BARU: ambil 1 Eksemplar berstatus Tersedia dari Buku
      *     ini secara FIFO (created_at terkecil) - operator TIDAK memilih
-     *     eksemplar/copy fisik spesifik, sistem yang menentukan. Ini
-     *     konsisten dengan premis gap ("barcode identik dengan ISBN yang
-     *     dipinjam" - dianggap tidak ada preferensi copy tertentu).
+     *     eksemplar/copy fisik spesifik, sistem yang menentukan.
      */
-    protected function resolveEksemplarDariIsbn(string $isbn): ?Eksemplar
+    protected function resolveEksemplarUntukBuku(Buku $buku): ?Eksemplar
     {
-        $buku = Buku::query()->where('isbn', $isbn)->first();
-
-        if (! $buku) {
-            return null;
-        }
-
         $eksemplarDipinjamUser = Eksemplar::query()
             ->where('buku_id', $buku->id)
             ->whereHas('peminjamans', fn ($q) => $q
@@ -4244,7 +4546,7 @@ class BukuResource extends Resource
                 ->maxLength(255),
             TextInput::make('isbn')
                 ->label('ISBN')
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255)
                 ->helperText('1 ISBN = 1 judul. Jumlah eksemplar fisik dikelola di tab Eksemplar setelah buku disimpan.'),
             TextInput::make('tahun_terbit')
@@ -4491,7 +4793,7 @@ class EksemplarsRelationManager extends RelationManager
         return $schema->components([
             TextInput::make('barcode')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             Select::make('rak_id')
                 ->label('Rak')
@@ -4810,6 +5112,8 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -4819,6 +5123,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 /**
@@ -4912,11 +5217,11 @@ class DendaResource extends Resource
             ->filters([
                 SelectFilter::make('tipe')
                     ->options(collect(TipeDenda::cases())->mapWithKeys(fn ($t) => [$t->value => ucfirst($t->value)])),
-                TernaryFilter::make('status_lunas')
-                    ->label('Status Lunas'),
+                TernaryFilter::make('status_lunas')->label('Status Lunas'),
                 SelectFilter::make('status_refund')
                     ->label('Status Refund')
                     ->options(collect(StatusRefund::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
+                TrashedFilter::make(),
             ])
             ->recordActions([
                 Action::make('tandai_lunas')
@@ -4987,11 +5292,24 @@ class DendaResource extends Resource
                             ->send();
                     }),
 
-                DeleteAction::make(), // digerbang DendaPolicy::delete() -hanya Admin, lihat ShieldSeeder
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // TODO: GAP-SPEC - blokir force-delete jika status_lunas masih
+                // false dan nominal > 0 (hutang belum selesai) - jejak
+                // keuangan yang belum tuntas tidak boleh dimusnahkan permanen.
+                ForceDeleteAction::make()
+                    ->action(function (Denda $record) {
+                        if (! $record->status_lunas && (float) $record->nominal > 0) {
+                            Notification::make()->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Denda ini belum lunas - selesaikan pembayaran/pembatalan dulu.')->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
             ])
-            ->toolbarActions([
-                DeleteBulkAction::make(), // digerbang DendaPolicy::deleteAny()
-            ]);
+            ->toolbarActions([DeleteBulkAction::make()]);
     }
 
     public static function canCreate(): bool
@@ -5370,14 +5688,19 @@ use App\Filament\Exports\JurusanExporter;
 use App\Filament\Imports\JurusanImporter;
 use App\Filament\Resources\JurusanResource\Pages;
 use App\Models\Jurusan;
+use App\Models\Kelas;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class JurusanResource extends Resource
@@ -5394,7 +5717,9 @@ class JurusanResource extends Resource
     {
         return $schema->components([
             TextInput::make('nama')->required()->maxLength(255),
-            TextInput::make('kode')->required()->unique(ignoreRecord: true)->maxLength(255),
+            TextInput::make('kode')->required()
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                ->maxLength(255),
         ]);
     }
 
@@ -5402,11 +5727,9 @@ class JurusanResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(JurusanImporter::class)
+                ImportAction::make()->importer(JurusanImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Jurusan::class) ?? false),
-                ExportAction::make()
-                    ->exporter(JurusanExporter::class)
+                ExportAction::make()->exporter(JurusanExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Jurusan::class) ?? false),
             ])
             ->columns([
@@ -5415,7 +5738,35 @@ class JurusanResource extends Resource
                 TextColumn::make('kelas_count')->label('Jumlah Kelas')->counts('kelas'),
                 TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->recordActions([DeleteAction::make()])
+            ->filters([TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // DIUBAH (iterasi ini) - kelas.jurusan_id sekarang RESTRICT
+                // (bukan nullOnDelete lagi, lihat migration
+                // 2026_08_03_000002). WAJIB cek pemakaian (termasuk Kelas
+                // ter-soft-delete) sebelum force-delete, atau DB akan
+                // menolak dengan error 1451 mentah.
+                ForceDeleteAction::make()
+                    ->action(function (Jurusan $record) {
+                        $dipakai = Kelas::query()
+                            ->withTrashed()
+                            ->where('jurusan_id', $record->id)
+                            ->exists();
+
+                        if ($dipakai) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada Kelas yang memakai Jurusan ini.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 
@@ -5555,14 +5906,19 @@ use App\Filament\Exports\KategoriExporter;
 use App\Filament\Imports\KategoriImporter;
 use App\Filament\Resources\KategoriResource\Pages;
 use App\Models\Kategori;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class KategoriResource extends Resource
@@ -5609,41 +5965,31 @@ class KategoriResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(KategoriImporter::class)
+                ImportAction::make()->importer(KategoriImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Kategori::class) ?? false),
-                ExportAction::make()
-                    ->exporter(KategoriExporter::class)
+                ExportAction::make()->exporter(KategoriExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Kategori::class) ?? false),
             ])
             ->columns([
-                TextColumn::make('nama')
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('deskripsi')
-                    ->limit(50)
-                    ->toggleable(),
-                TextColumn::make('bukus_count')
-                    ->label('Jumlah Buku')
-                    ->counts('bukus')
-                    ->sortable(),
-                TextColumn::make('eksemplars_count')
-                    ->label('Jumlah Eksemplar')
-                    ->counts('eksemplars')
-                    ->sortable(),
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('deskripsi')->limit(50)->toggleable(),
+                TextColumn::make('bukus_count')->label('Jumlah Buku')->counts('bukus')->sortable(),
+                TextColumn::make('eksemplars_count')->label('Jumlah Eksemplar')->counts('eksemplars')->sortable(),
                 TextColumn::make('stok_tersedia')
                     ->label('Stok Tersedia')
                     ->state(fn (Kategori $record) => $record->stokTersedia())
                     ->badge()
                     ->color(fn (Kategori $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
-                TextColumn::make('created_at')
-                    ->dateTime('d F Y H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                //
-            ]);
+            ->filters([TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // Aman - pivot buku_kategori & kategori_rak cascadeOnDelete.
+                ForceDeleteAction::make(),
+            ])
+            ->toolbarActions([DeleteBulkAction::make()]);
     }
 
     public static function getPages(): array
@@ -5779,16 +6125,21 @@ use App\Filament\Exports\KelasExporter;
 use App\Filament\Imports\KelasImporter;
 use App\Filament\Resources\KelasResource\Pages;
 use App\Models\Kelas;
+use App\Models\KelasTahunPelajaran;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class KelasResource extends Resource
@@ -5806,13 +6157,16 @@ class KelasResource extends Resource
         return $schema->components([
             TextInput::make('nama')
                 ->label('Nama Kelas (mis. X IPA 1)')
-                // BARU iterasi ini - unik secara global (dikonfirmasi),
-                // lihat migration 2026_08_02_000001_add_unique_nama_to_kelas_table
-                // dan KelasImporter (Aturan poin 3/11 - validasi
-                // konsisten antara form manual dan import).
-                ->unique(ignoreRecord: true)
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                ->unique(
+                    table: 'kelas',
+                    column: 'nama',
+                    ignoreRecord: true,
+                    modifyRuleUsing: fn ($rule, $get) => $rule
+                        ->whereNull('deleted_at')
+                        ->where('jurusan_id', $get('jurusan_id')),
+                ),
             TextInput::make('tingkat')
                 ->numeric()
                 ->integer()
@@ -5823,7 +6177,10 @@ class KelasResource extends Resource
                 ->label('Jurusan')
                 ->relationship('jurusan', 'nama')
                 ->searchable()
-                ->preload(),
+                ->preload()
+                ->required()
+                ->live()
+                ->helperText('Setiap Kelas wajib punya Jurusan. Nama Kelas unik per Jurusan (boleh sama di Jurusan berbeda).'),
         ]);
     }
 
@@ -5831,11 +6188,9 @@ class KelasResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(KelasImporter::class)
+                ImportAction::make()->importer(KelasImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Kelas::class) ?? false),
-                ExportAction::make()
-                    ->exporter(KelasExporter::class)
+                ExportAction::make()->exporter(KelasExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Kelas::class) ?? false),
             ])
             ->columns([
@@ -5846,8 +6201,36 @@ class KelasResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('jurusan_id')->label('Jurusan')->relationship('jurusan', 'nama'),
+                TrashedFilter::make(),
             ])
-            ->recordActions([DeleteAction::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // TODO: GAP-SPEC - blokir force-delete jika ada KTP (termasuk
+                // yang sudah di-soft-delete) di bawah Kelas ini yang masih
+                // punya siswa aktif - mencegah cascade DB diam-diam
+                // memutus assignment siswa yang sedang berjalan.
+                ForceDeleteAction::make()
+                    ->action(function (Kelas $record) {
+                        $adaSiswaAktif = KelasTahunPelajaran::query()
+                            ->withTrashed()
+                            ->where('kelas_id', $record->id)
+                            ->whereHas('siswaAktif')
+                            ->exists();
+
+                        if ($adaSiswaAktif) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada siswa aktif di Kelas Tahun Pelajaran bawah Kelas ini.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 
@@ -5989,12 +6372,16 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 /**
@@ -6057,6 +6444,7 @@ class KelasTahunPelajaranResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('tahun_pelajaran_id')->label('Tahun Pelajaran')->relationship('tahunPelajaran', 'nama'),
+                TrashedFilter::make(),
             ])
             ->recordActions([
                 Action::make('proses_kenaikan')
@@ -6065,6 +6453,20 @@ class KelasTahunPelajaranResource extends Resource
                     ->color('warning')
                     ->url(fn (KelasTahunPelajaran $record) => ProsesKenaikanKelas::getUrl(['ktp' => $record->id])),
                 DeleteAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make()
+                    ->action(function (KelasTahunPelajaran $record) {
+                        if ($record->siswaAktif()->exists()) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada siswa aktif di Kelas Tahun Pelajaran ini.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
             ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
@@ -6263,10 +6665,13 @@ use App\Models\Kunjungan;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 /**
@@ -6326,13 +6731,14 @@ class KunjunganResource extends Resource
             ->filters([
                 SelectFilter::make('source')
                     ->options(collect(SourceKunjungan::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+                TrashedFilter::make(),
             ])
             ->recordActions([
-                DeleteAction::make(), // digerbang KunjunganPolicy::delete() - hanya Admin
+                DeleteAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make(),
             ])
-            ->toolbarActions([
-                DeleteBulkAction::make(),
-            ])
+            ->toolbarActions([DeleteBulkAction::make()])
             ->defaultSort('tanggal', 'desc');
     }
 
@@ -6593,16 +6999,21 @@ use App\Filament\Exports\LevelBadgeExporter;
 use App\Filament\Imports\LevelBadgeImporter;
 use App\Filament\Resources\LevelBadgeResource\Pages;
 use App\Models\LevelBadge;
+use App\Models\User;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class LevelBadgeResource extends Resource
@@ -6620,7 +7031,7 @@ class LevelBadgeResource extends Resource
         return $schema->components([
             TextInput::make('nama_badge')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             TextInput::make('min_point')
                 ->numeric()
@@ -6645,11 +7056,9 @@ class LevelBadgeResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(LevelBadgeImporter::class)
+                ImportAction::make()->importer(LevelBadgeImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', LevelBadge::class) ?? false),
-                ExportAction::make()
-                    ->exporter(LevelBadgeExporter::class)
+                ExportAction::make()->exporter(LevelBadgeExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', LevelBadge::class) ?? false),
             ])
             ->columns([
@@ -6660,7 +7069,31 @@ class LevelBadgeResource extends Resource
                 TextColumn::make('urutan')->sortable(),
             ])
             ->defaultSort('urutan')
-            ->recordActions([DeleteAction::make()])
+            ->filters([TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // FK users.level_badge_id default RESTRICT - WAJIB cek
+                // pemakaian (termasuk User ter-soft-delete) sebelum force-delete.
+                ForceDeleteAction::make()
+                    ->action(function (LevelBadge $record) {
+                        $dipakai = User::query()
+                            ->withTrashed()
+                            ->where('level_badge_id', $record->id)
+                            ->exists();
+
+                        if ($dipakai) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada User yang memakai Level Badge ini.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 
@@ -7463,18 +7896,23 @@ use App\Filament\Exports\PunishmentExporter;
 use App\Filament\Imports\PunishmentImporter;
 use App\Filament\Resources\PunishmentResource\Pages;
 use App\Models\Punishment;
+use App\Models\PunishmentLog;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class PunishmentResource extends Resource
@@ -7492,7 +7930,7 @@ class PunishmentResource extends Resource
         return $schema->components([
             TextInput::make('nama')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             Textarea::make('deskripsi')
                 ->columnSpanFull(),
@@ -7517,11 +7955,9 @@ class PunishmentResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(PunishmentImporter::class)
+                ImportAction::make()->importer(PunishmentImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Punishment::class) ?? false),
-                ExportAction::make()
-                    ->exporter(PunishmentExporter::class)
+                ExportAction::make()->exporter(PunishmentExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Punishment::class) ?? false),
             ])
             ->columns([
@@ -7531,8 +7967,28 @@ class PunishmentResource extends Resource
                 IconColumn::make('aktif')->boolean(),
                 TextColumn::make('punishment_logs_count')->label('Jumlah Diterapkan')->counts('punishmentLogs'),
             ])
-            ->filters([TernaryFilter::make('aktif')])
-            ->recordActions([DeleteAction::make()])
+            ->filters([TernaryFilter::make('aktif'), TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // FK punishment_logs.punishment_id default RESTRICT.
+                ForceDeleteAction::make()
+                    ->action(function (Punishment $record) {
+                        $dipakai = PunishmentLog::query()->withTrashed()
+                            ->where('punishment_id', $record->id)->exists();
+
+                        if ($dipakai) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Punishment ini masih punya riwayat penerapan.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 
@@ -7673,14 +8129,21 @@ use App\Filament\Exports\RakExporter;
 use App\Filament\Imports\RakImporter;
 use App\Filament\Resources\RakResource\Pages;
 use App\Filament\Resources\RakResource\RelationManagers\EksemplarsRelationManager;
+use App\Models\Eksemplar;
 use App\Models\Rak;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class RakResource extends Resource
@@ -7714,48 +8177,50 @@ class RakResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(RakImporter::class)
+                ImportAction::make()->importer(RakImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Rak::class) ?? false),
-                ExportAction::make()
-                    ->exporter(RakExporter::class)
+                ExportAction::make()->exporter(RakExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Rak::class) ?? false),
             ])
             ->columns([
-                TextColumn::make('nama')
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('lokasi')
-                    ->searchable(),
-                // dulu counts('bukus') - kolom bukus.rak_id sudah tidak
-                // ada, jadi dihitung dari eksemplars (lihat Rak::eksemplars()).
-                TextColumn::make('eksemplars_count')
-                    ->label('Jumlah Eksemplar')
-                    ->counts('eksemplars')
-                    ->sortable(),
-                // GAP-SPEC ditutup: stok tersedia per rak, lihat
-                // Rak::stokTersedia() - definisi sama dengan Buku::stokTersedia().
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('lokasi')->searchable(),
+                TextColumn::make('eksemplars_count')->label('Jumlah Eksemplar')->counts('eksemplars')->sortable(),
                 TextColumn::make('stok_tersedia')
                     ->label('Stok Tersedia')
                     ->state(fn (Rak $record) => $record->stokTersedia())
                     ->badge()
                     ->color(fn (Rak $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
-                // judul unik, lihat Rak::jumlahJudulUnik(). Bukan hasil
-                // counts() bawaan (butuh distinct buku_id), jadi dihitung
-                // manual per baris - toggleable & default hidden supaya
-                // tidak mengubah tampilan existing.
                 TextColumn::make('jumlah_judul_unik')
                     ->label('Jumlah Judul Unik')
                     ->state(fn (Rak $record) => $record->jumlahJudulUnik())
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('created_at')
-                    ->dateTime('d F Y H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                //
-            ]);
+            ->filters([TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // FK eksemplars.rak_id default RESTRICT - blokir jika masih
+                // dipakai (termasuk Eksemplar ter-soft-delete).
+                ForceDeleteAction::make()
+                    ->action(function (Rak $record) {
+                        $dipakai = Eksemplar::query()->withTrashed()
+                            ->where('rak_id', $record->id)->exists();
+
+                        if ($dipakai) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Rak ini masih dipakai Eksemplar - pindahkan dulu Eksemplar ke Rak lain.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
+            ->toolbarActions([DeleteBulkAction::make()]);
     }
 
     public static function getRelations(): array
@@ -8084,18 +8549,23 @@ use App\Filament\Exports\RewardExporter;
 use App\Filament\Imports\RewardImporter;
 use App\Filament\Resources\RewardResource\Pages;
 use App\Models\Reward;
+use App\Models\RewardLog;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class RewardResource extends Resource
@@ -8113,7 +8583,7 @@ class RewardResource extends Resource
         return $schema->components([
             TextInput::make('nama')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             Textarea::make('deskripsi')
                 ->columnSpanFull(),
@@ -8131,11 +8601,9 @@ class RewardResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(RewardImporter::class)
+                ImportAction::make()->importer(RewardImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Reward::class) ?? false),
-                ExportAction::make()
-                    ->exporter(RewardExporter::class)
+                ExportAction::make()->exporter(RewardExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Reward::class) ?? false),
             ])
             ->columns([
@@ -8144,8 +8612,27 @@ class RewardResource extends Resource
                 IconColumn::make('aktif')->boolean(),
                 TextColumn::make('reward_logs_count')->label('Jumlah Diperoleh')->counts('rewardLogs'),
             ])
-            ->filters([TernaryFilter::make('aktif')])
-            ->recordActions([DeleteAction::make()])
+            ->filters([TernaryFilter::make('aktif'), TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make()
+                    ->action(function (Reward $record) {
+                        $dipakai = RewardLog::query()->withTrashed()
+                            ->where('reward_id', $record->id)->exists();
+
+                        if ($dipakai) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Reward ini masih punya riwayat diperoleh.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 
@@ -8418,12 +8905,15 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\TahunPelajaranExporter;
 use App\Filament\Imports\TahunPelajaranImporter;
 use App\Filament\Resources\TahunPelajaranResource\Pages;
+use App\Models\KelasTahunPelajaran;
 use App\Models\TahunPelajaran;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -8431,6 +8921,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class TahunPelajaranResource extends Resource
@@ -8447,9 +8938,9 @@ class TahunPelajaranResource extends Resource
     {
         return $schema->components([
             TextInput::make('nama')
-                ->label('Nama (mis. 2025/2026)')
+                ->label('Nama (mis. 2026/2027)')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             DatePicker::make('tanggal_mulai')->required(),
             DatePicker::make('tanggal_selesai')->required()->afterOrEqual('tanggal_mulai'),
@@ -8460,11 +8951,9 @@ class TahunPelajaranResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(TahunPelajaranImporter::class)
+                ImportAction::make()->importer(TahunPelajaranImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', TahunPelajaran::class) ?? false),
-                ExportAction::make()
-                    ->exporter(TahunPelajaranExporter::class)
+                ExportAction::make()->exporter(TahunPelajaranExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', TahunPelajaran::class) ?? false),
             ])
             ->columns([
@@ -8473,6 +8962,7 @@ class TahunPelajaranResource extends Resource
                 TextColumn::make('tanggal_selesai')->date('d F Y'),
                 IconColumn::make('aktif')->boolean()->label('Aktif'),
             ])
+            ->filters([TrashedFilter::make()])
             ->recordActions([
                 Action::make('jadikan_aktif')
                     ->label('Jadikan Aktif')
@@ -8484,11 +8974,37 @@ class TahunPelajaranResource extends Resource
                     ->action(function (TahunPelajaran $record) {
                         TahunPelajaran::query()->where('id', '!=', $record->id)->update(['aktif' => false]);
                         $record->update(['aktif' => true]);
-
                         Notification::make()->success()->title('Tahun Pelajaran diaktifkan')->send();
                     }),
-                DeleteAction::make()
-                    ->visible(fn (TahunPelajaran $record) => ! $record->aktif),
+                DeleteAction::make()->visible(fn (TahunPelajaran $record) => ! $record->aktif),
+                RestoreAction::make(),
+                // TODO: GAP-SPEC - blokir force-delete jika sedang aktif ATAU
+                // ada KTP (termasuk trashed) di bawahnya yang masih punya
+                // siswa aktif.
+                ForceDeleteAction::make()
+                    ->action(function (TahunPelajaran $record) {
+                        if ($record->aktif) {
+                            Notification::make()->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Tahun Pelajaran ini sedang aktif.')->send();
+
+                            return;
+                        }
+
+                        $adaSiswaAktif = KelasTahunPelajaran::query()
+                            ->withTrashed()
+                            ->where('tahun_pelajaran_id', $record->id)
+                            ->whereHas('siswaAktif')
+                            ->exists();
+
+                        if ($adaSiswaAktif) {
+                            Notification::make()->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Masih ada siswa aktif di Kelas Tahun Pelajaran bawah Tahun Pelajaran ini.')->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
             ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
@@ -8585,14 +9101,19 @@ use App\Enums\JenisTransaksi;
 use App\Filament\Exports\TransaksiExporter;
 use App\Filament\Resources\TransaksiResource\Pages;
 use App\Filament\Resources\TransaksiResource\RelationManagers\PeminjamansRelationManager;
+use App\Models\Peminjaman;
 use App\Models\Transaksi;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 /**
@@ -8653,14 +9174,29 @@ class TransaksiResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('jenis')
-                    ->options(collect(JenisTransaksi::cases())->mapWithKeys(fn ($j) => [$j->value => ucfirst(str_replace('_', ' ', $j->value))])),
+                    ->options(collect(JenisTransaksi::cases())->mapWithKeys(fn ($j) => [$j->value => ucfirst(str_replace('_', '', $j->value))])),
+                TrashedFilter::make(),
             ])
             ->recordActions([
-                DeleteAction::make(), // digerbang TransaksiPolicy::delete() - hanya Admin
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // FK peminjamans.transaksi_id default RESTRICT.
+                ForceDeleteAction::make()
+                    ->action(function (Transaksi $record) {
+                        $dipakai = Peminjaman::query()->withTrashed()
+                            ->where('transaksi_id', $record->id)->exists();
+
+                        if ($dipakai) {
+                            Notification::make()->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Transaksi ini masih direferensikan oleh Peminjaman.')->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
             ])
-            ->toolbarActions([
-                DeleteBulkAction::make(),
-            ])
+            ->toolbarActions([DeleteBulkAction::make()])
             ->defaultSort('tanggal', 'desc');
     }
 
@@ -8896,17 +9432,22 @@ namespace App\Filament\Resources;
 use App\Enums\JenisKelamin;
 use App\Enums\RoleUser;
 use App\Enums\StatusAkademik;
+use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\UserExporter;
 use App\Filament\Imports\UserImporter;
 use App\Filament\Resources\UserResource\Pages;
+use App\Models\Denda;
 use App\Models\KelasTahunPelajaran;
+use App\Models\Peminjaman;
 use App\Models\User;
 use App\Services\KenaikanKelasService;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -8948,15 +9489,39 @@ class UserResource extends Resource
                 ->maxLength(255),
             Select::make('role')
                 ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
-                ->required(),
+                ->required()
+                ->live()
+                // BARU (iterasi ini) - saat role diganti, bersihkan field
+                // NISN/NIP yang jadi tidak relevan (dihitung PeminjamanService?
+                // tidak - murni UI form, lihat visible()/dehydrated() di
+                // nisn/nip di bawah). Mencegah nilai lama nyangkut diam-diam
+                // di $record sebelum sempat disembunyikan dari tampilan.
+                ->afterStateUpdated(function ($state, callable $set) {
+                    if ($state === RoleUser::Siswa->value) {
+                        $set('nip', null);
+                    } else {
+                        $set('nisn', null);
+                    }
+                }),
             TextInput::make('nisn')
                 ->label('NISN')
-                ->unique(ignoreRecord: true)
-                ->maxLength(255),
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                ->maxLength(255)
+                // BARU - NISN hanya relevan untuk Siswa, disembunyikan untuk
+                // role lain. dehydrated() disamakan dengan visible() supaya
+                // field yang disembunyikan tidak ikut ter-submit/tersimpan
+                // (Aturan poin 3 - satu sumber kebenaran "role menentukan
+                // identitas yang valid", bukan dua tempat berbeda).
+                ->visible(fn (callable $get) => $get('role') === RoleUser::Siswa->value)
+                ->dehydrated(fn (callable $get) => $get('role') === RoleUser::Siswa->value),
             TextInput::make('nip')
                 ->label('NIP')
-                ->unique(ignoreRecord: true)
-                ->maxLength(255),
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                ->maxLength(255)
+                // BARU - NIP hanya relevan untuk Pegawai/Pustakawan/Admin,
+                // disembunyikan untuk Siswa. Pola sama dengan 'nisn' di atas.
+                ->visible(fn (callable $get) => $get('role') !== RoleUser::Siswa->value)
+                ->dehydrated(fn (callable $get) => $get('role') !== RoleUser::Siswa->value),
             Select::make('jenis_kelamin')
                 ->label('Jenis Kelamin')
                 ->options(collect(JenisKelamin::cases())->mapWithKeys(fn ($j) => [$j->value => $j->label()]))
@@ -9013,11 +9578,11 @@ class UserResource extends Resource
             TextInput::make('no_telepon')
                 ->label('No. Telepon')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             TextInput::make('no_kartu_rfid')
                 ->label('No. Kartu RFID')
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             TextInput::make('password')
                 ->password()
@@ -9045,12 +9610,8 @@ class UserResource extends Resource
                     ->authorize(fn () => auth()->user()?->can('viewAny', User::class) ?? false),
             ])
             ->columns([
-                ImageColumn::make('avatar')
-                    ->disk('public')
-                    ->circular(),
-                TextColumn::make('nama')
-                    ->searchable()
-                    ->sortable(),
+                ImageColumn::make('avatar')->disk('public')->circular(),
+                TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('role')
                     ->badge()
                     ->color(fn (RoleUser $state) => match ($state) {
@@ -9059,66 +9620,69 @@ class UserResource extends Resource
                         RoleUser::Pegawai => 'info',
                         RoleUser::Siswa => 'gray',
                     }),
-                TextColumn::make('nisn')
-                    ->label('NISN')
-                    ->searchable()
-                    ->toggleable(),
-                TextColumn::make('nip')
-                    ->label('NIP')
-                    ->searchable()
-                    ->toggleable(),
-                TextColumn::make('kelasTahunPelajaran.kelas.nama')
-                    ->label('Kelas')
-                    ->toggleable()
-                    ->placeholder('-'),
+                TextColumn::make('nisn')->label('NISN')->searchable()->toggleable(),
+                TextColumn::make('nip')->label('NIP')->searchable()->toggleable(),
+                TextColumn::make('kelasTahunPelajaran.kelas.nama')->label('Kelas')->toggleable()->placeholder('-'),
                 TextColumn::make('status_akademik')
-                    ->badge()
-                    ->toggleable()
+                    ->badge()->toggleable()
                     ->color(fn (StatusAkademik $state) => match ($state) {
                         StatusAkademik::Aktif => 'success',
                         StatusAkademik::Lulus => 'info',
                         StatusAkademik::Keluar => 'gray',
                     }),
-                TextColumn::make('no_telepon')
-                    ->label('No. Telepon')
-                    ->searchable(),
-                TextColumn::make('no_kartu_rfid')
-                    ->label('Kartu RFID')
-                    ->searchable()
-                    ->toggleable(),
+                TextColumn::make('no_telepon')->label('No. Telepon')->searchable(),
+                TextColumn::make('no_kartu_rfid')->label('Kartu RFID')->searchable()->toggleable(),
                 IconColumn::make('status_suspend')
-                    ->label('Suspend')
-                    ->boolean()
-                    // Dibalik dari default Filament - true (suspend) = merah
-                    // (masalah), false (aman) = hijau. Default bawaan
-                    // mewarnai false sebagai merah, keliru untuk flag ini.
-                    ->trueIcon('heroicon-o-lock-closed')
-                    ->falseIcon('heroicon-o-lock-open')
-                    ->trueColor('danger')
-                    ->falseColor('success'),
-                TextColumn::make('akumulasi_point')
-                    ->label('Point')
-                    ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime('d F Y H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->label('Suspend')->boolean()
+                    ->trueIcon('heroicon-o-lock-closed')->falseIcon('heroicon-o-lock-open')
+                    ->trueColor('danger')->falseColor('success'),
+                TextColumn::make('akumulasi_point')->label('Point')->sortable(),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 TrashedFilter::make(),
                 SelectFilter::make('role')
                     ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
                 SelectFilter::make('status_akademik')
-                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
-                TernaryFilter::make('status_suspend')
-                    ->label('Status Suspend'),
+                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', '', $s->value))])),
+                TernaryFilter::make('status_suspend')->label('Status Suspend'),
             ])
             ->recordActions([
                 DeleteAction::make()
-                    // super_admin tidak boleh dihapus, termasuk oleh
-                    // sesama super_admin - mencegah lock-out akun sistem.
                     ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
                         && (auth()->user()?->can('delete', $record) ?? false)),
+                RestoreAction::make(),
+                // TODO: GAP-SPEC - guard force-delete dipilih sepihak: blokir
+                // jika masih ada Peminjaman aktif/terlambat ATAU Denda belum
+                // lunas milik user ini (termasuk yang sudah di-soft-delete),
+                // supaya jejak keuangan/operasional tidak musnah diam-diam.
+                ForceDeleteAction::make()
+                    ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
+                        && (auth()->user()?->can('forceDelete', $record) ?? false))
+                    ->action(function (User $record) {
+                        $adaPeminjamanAktif = Peminjaman::query()
+                            ->withTrashed()
+                            ->where('user_id', $record->id)
+                            ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat])
+                            ->exists();
+                        $adaDendaBelumLunas = Denda::query()
+                            ->withTrashed()
+                            ->where('user_id', $record->id)
+                            ->where('status_lunas', false)
+                            ->exists();
+
+                        if ($adaPeminjamanAktif || $adaDendaBelumLunas) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Tidak bisa dihapus permanen')
+                                ->body('User ini masih punya Peminjaman aktif/terlambat atau Denda belum lunas.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
             ])
             ->toolbarActions([
                 BulkAction::make('assign_kelas')
@@ -9135,45 +9699,32 @@ class UserResource extends Resource
                                         $ktp->id => "{$ktp->kelas->nama} -{$ktp->tahunPelajaran->nama}",
                                     ])
                             )
-                            ->searchable()
-                            ->required(),
+                            ->searchable()->required(),
                     ])
                     ->action(function (Collection $records, array $data) {
                         $ktp = KelasTahunPelajaran::query()->findOrFail($data['kelas_tahun_pelajaran_id']);
                         $service = app(KenaikanKelasService::class);
-
                         $records->each(fn (User $user) => $service->assignKelas($user, $ktp));
 
-                        Notification::make()
-                            ->success()
-                            ->title($records->count().' user berhasil di-assign ke kelas.')
-                            ->send();
+                        Notification::make()->success()->title($records->count().' user berhasil di-assign ke kelas.')->send();
                     })
                     ->deselectRecordsAfterCompletion(),
                 DeleteBulkAction::make()
-                    // Filter record super_admin keluar dari proses bulk
-                    // delete - baris super_admin yang ikut ter-select akan
-                    // dilewati (tidak ikut terhapus), bukan meng-error-kan
-                    // seluruh aksi.
                     ->action(function (Collection $records) {
                         $dilindungi = $records->filter(fn (User $u) => $u->hasRole('super_admin'));
                         $bolehHapus = $records->reject(fn (User $u) => $u->hasRole('super_admin'));
-
                         $bolehHapus->each->delete();
 
                         if ($dilindungi->isNotEmpty()) {
                             Notification::make()
                                 ->warning()
                                 ->title('Sebagian user tidak dihapus')
-                                ->body($dilindungi->count().' user dengan role super_admin dilewati (tidak bisa dihapus lewat bulk delete).')
+                                ->body($dilindungi->count().' user dengan role super_admin dilewati.')
                                 ->send();
                         }
                     })
                     ->authorize(fn () => auth()->user()?->can('deleteAny', User::class) ?? false),
             ])
-            // Checkbox baris super_admin dinonaktifkan supaya tidak bisa
-            // ikut ter-select sama sekali (lapisan pencegahan pertama,
-            // sebelum sampai ke action() di atas).
             ->checkIfRecordIsSelectableUsing(fn (User $record) => ! $record->hasRole('super_admin'));
     }
 
@@ -9239,7 +9790,9 @@ use Filament\Widgets\ChartWidget;
  */
 class BukuPerKategoriWidget extends ChartWidget
 {
-    protected static ?int $sort = 8;
+    protected static ?int $sort = 3;
+
+    // protected static ?int maxHeight = 400;
 
     protected int|string|array $columnSpan = 1;
 
@@ -9683,7 +10236,7 @@ use Filament\Widgets\TableWidget;
  */
 class PeminjamanJatuhTempoWidget extends TableWidget
 {
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 8;
 
     protected int|string|array $columnSpan = 1;
 
@@ -9716,7 +10269,7 @@ class PeminjamanJatuhTempoWidget extends TableWidget
             $selisih === 1 => 'Besok jatuh tempo',
             $selisih > 1 => "{$selisih} hari lagi",
             $selisih === -1 => 'Terlambat 1 hari',
-            default => 'Terlambat '.abs($selisih).' hari',
+            default => 'Terlambat ' . abs($selisih) . ' hari',
         };
     }
 
@@ -9735,7 +10288,7 @@ class PeminjamanJatuhTempoWidget extends TableWidget
                 TextColumn::make('tanggal_jatuh_tempo')->label('Jatuh Tempo')->date('d F Y'),
                 TextColumn::make('sisa_hari')
                     ->label('Sisa Hari')
-                    ->state(fn (Peminjaman $record) => $this->formatSisaHari($this->hitungSelisihHari($record)))
+                    ->state(fn(Peminjaman $record) => $this->formatSisaHari($this->hitungSelisihHari($record)))
                     ->badge()
                     ->color(function (Peminjaman $record) {
                         $selisih = $this->hitungSelisihHari($record);
@@ -9743,7 +10296,7 @@ class PeminjamanJatuhTempoWidget extends TableWidget
                         return $selisih < 0 ? 'danger' : ($selisih <= 1 ? 'warning' : 'success');
                     }),
                 TextColumn::make('status')->label('Status')->badge()
-                    ->color(fn (StatusPeminjaman $state) => match ($state) {
+                    ->color(fn(StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Terlambat => 'danger',
                         StatusPeminjaman::Aktif => 'success',
                         default => 'gray',
@@ -11036,9 +11589,16 @@ class BukuKategori extends Model
 
     public $timestamps = false;
 
-    protected $primaryKey = 'buku_id';
-
-    protected $keyType = 'string';
+    // Primary key TIDAK di-set (dihapus dari versi sebelumnya) - tabel
+    // buku_kategori punya composite primary key [buku_id, kategori_id]
+    // (lihat migration create_buku_kategori_table), TIDAK bisa
+    // direpresentasikan lewat $primaryKey (Eloquent hanya mendukung satu
+    // kolom PK). Model ini murni "through" table read-only untuk
+    // hasManyThrough di Kategori::eksemplars() - tidak pernah dipanggil
+    // find()/save()/update() langsung, sehingga tidak butuh PK yang benar
+    // secara fungsional. Sebelumnya di-set keliru ke 'buku_id' saja, yang
+    // bisa menyesatkan jika suatu saat ada kode baru yang memanggil
+    // find()/save() di model ini secara langsung.
 }
 
 ```
@@ -11166,12 +11726,12 @@ class Denda extends Model
 
     public function peminjaman(): BelongsTo
     {
-        return $this->belongsTo(Peminjaman::class);
+        return $this->belongsTo(Peminjaman::class)->withTrashed();
     }
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 }
 
@@ -11261,12 +11821,12 @@ class Eksemplar extends Model
 
     public function buku(): BelongsTo
     {
-        return $this->belongsTo(Buku::class);
+        return $this->belongsTo(Buku::class)->withTrashed();
     }
 
     public function rak(): BelongsTo
     {
-        return $this->belongsTo(Rak::class);
+        return $this->belongsTo(Rak::class)->withTrashed();
     }
 
     public function peminjamans(): HasMany
@@ -11451,7 +12011,9 @@ class Kelas extends Model
 
     public function jurusan(): BelongsTo
     {
-        return $this->belongsTo(Jurusan::class);
+        // withTrashed - Jurusan bisa diarsipkan tapi Kelas lama tetap harus
+        // menunjukkan nama jurusannya di histori (Aturan konfirmasi iterasi ini).
+        return $this->belongsTo(Jurusan::class)->withTrashed();
     }
 
     public function kelasTahunPelajarans(): HasMany
@@ -11489,20 +12051,19 @@ class KelasTahunPelajaran extends Model
 
     public function kelas(): BelongsTo
     {
-        return $this->belongsTo(Kelas::class);
+        return $this->belongsTo(Kelas::class)->withTrashed();
     }
 
     public function tahunPelajaran(): BelongsTo
     {
-        return $this->belongsTo(TahunPelajaran::class);
+        return $this->belongsTo(TahunPelajaran::class)->withTrashed();
     }
 
     public function waliKelas(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'wali_kelas_id');
+        return $this->belongsTo(User::class, 'wali_kelas_id')->withTrashed();
     }
 
-    // Siswa yang SAAT INI aktif di KTP ini (bukan histori).
     public function siswaAktif(): HasMany
     {
         return $this->hasMany(User::class, 'kelas_tahun_pelajaran_id');
@@ -11552,7 +12113,7 @@ class Kunjungan extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     // Unik per hari per user hanya untuk baris AKTIF (deleted_at IS NULL) - dijaga
@@ -11597,12 +12158,12 @@ class LevelBadgeLog extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function levelBadge(): BelongsTo
     {
-        return $this->belongsTo(LevelBadge::class);
+        return $this->belongsTo(LevelBadge::class)->withTrashed();
     }
 }
 
@@ -11737,22 +12298,22 @@ class Peminjaman extends Model
 
     public function transaksi(): BelongsTo
     {
-        return $this->belongsTo(Transaksi::class);
+        return $this->belongsTo(Transaksi::class)->withTrashed();
     }
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function eksemplar(): BelongsTo
     {
-        return $this->belongsTo(Eksemplar::class);
+        return $this->belongsTo(Eksemplar::class)->withTrashed();
     }
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'diproses_oleh');
+        return $this->belongsTo(User::class, 'diproses_oleh')->withTrashed();
     }
 
     public function pengembalian(): HasOne
@@ -11805,12 +12366,12 @@ class Pengembalian extends Model
 
     public function peminjaman(): BelongsTo
     {
-        return $this->belongsTo(Peminjaman::class);
+        return $this->belongsTo(Peminjaman::class)->withTrashed();
     }
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'diproses_oleh');
+        return $this->belongsTo(User::class, 'diproses_oleh')->withTrashed();
     }
 }
 
@@ -11906,12 +12467,12 @@ class PunishmentLog extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function punishment(): BelongsTo
     {
-        return $this->belongsTo(Punishment::class);
+        return $this->belongsTo(Punishment::class)->withTrashed();
     }
 }
 
@@ -12056,12 +12617,12 @@ class RewardLog extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function reward(): BelongsTo
     {
-        return $this->belongsTo(Reward::class);
+        return $this->belongsTo(Reward::class)->withTrashed();
     }
 }
 
@@ -12146,12 +12707,12 @@ class RiwayatKelasSiswa extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function kelasTahunPelajaran(): BelongsTo
     {
-        return $this->belongsTo(KelasTahunPelajaran::class);
+        return $this->belongsTo(KelasTahunPelajaran::class)->withTrashed();
     }
 }
 
@@ -12321,12 +12882,12 @@ class Transaksi extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'diproses_oleh');
+        return $this->belongsTo(User::class, 'diproses_oleh')->withTrashed();
     }
 
     public function peminjamans(): HasMany
@@ -12409,12 +12970,12 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
 
     public function levelBadge(): BelongsTo
     {
-        return $this->belongsTo(LevelBadge::class);
+        return $this->belongsTo(LevelBadge::class)->withTrashed();
     }
 
     public function kelasTahunPelajaran(): BelongsTo
     {
-        return $this->belongsTo(KelasTahunPelajaran::class);
+        return $this->belongsTo(KelasTahunPelajaran::class)->withTrashed();
     }
 
     public function riwayatKelas(): HasMany
@@ -14563,6 +15124,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class DashboardPanelProvider extends PanelProvider
@@ -14578,13 +15140,58 @@ class DashboardPanelProvider extends PanelProvider
             ->id('dashboard')
             ->path('dashboard')
             ->login(Login::class)
+            /**
+             * Logo dark/light. brandLogo() menerima Htmlable, dua <img>
+             * dikirim sekaligus; mana yang tampil diatur via CSS
+             * global (renderHook HEAD_END di bawah).
+             * TODO: verifikasi signature terhadap versi package yang
+             * terpasang - brandLogo() menerima string|Htmlable|Closure
+             * di dokumentasi umum Filament v3+; belum diverifikasi
+             * terhadap filament/filament ^5.7 di composer.lock proyek ini.
+             */
+            ->brandLogo(new HtmlString(
+                '<img src="' . asset('images/brand-lightmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />' .
+                    '<img src="' . asset('images/brand-darkmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
+            ))
+            ->brandLogoHeight('2.5rem')
             ->spa()
             ->pages([
                 Dashboard::class,
             ])
             ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn(): string => view('filament.partials.global-logo-style')->render()
+                    . view('filament.partials.global-footer-style')->render(),
+            )
+            /**
+             * FITUR BARU - footer di BAWAH body, HANYA untuk halaman
+             * NON-auth (mis. Dashboard). Untuk halaman auth (Login,
+             * RequestPasswordReset, ResetPassword), footer disisipkan
+             * manual di ATAS frame form oleh masing-masing halaman
+             * (lihat Login::content() dan view Blade auth terkait) -
+             * DIHINDARI dobel dengan pengecekan routeIs() disini.
+             *
+             * TODO: GAP-SPEC - deteksi "halaman auth" via
+             * request()->routeIs('filament.dashboard.auth.*') diverifikasi
+             * BENAR terhadap route yang sudah dipakai di proyek ini
+             * (ResetPassword::prosesReset() memanggil
+             * route('filament.dashboard.auth.login'), RequestPasswordReset
+             * memakai 'filament.dashboard.auth.password-reset.request'/
+             * '.reset') - pola wildcard 'filament.dashboard.auth.*' AMAN
+             * mencakup ketiganya. Tetap WAJIB dicek visual (poin 12) jika
+             * suatu saat ada halaman auth baru dengan nama route berbeda
+             * (mis. registrasi, email verification) - footer bisa dobel
+             * atau tidak muncul jika pola route-nya tidak tercakup.
+             */
+            ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn (): string => view('filament.partials.chart-export-script')->render(),
+                fn(): string => request()->routeIs('filament.dashboard.auth.*')
+                    ? ''
+                    : view('filament.partials.app-footer')->render(),
+            )
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn(): string => view('filament.partials.chart-export-script')->render(),
             )
             ->passwordReset(
                 RequestPasswordReset::class,
@@ -19681,7 +20288,7 @@ return new class extends Migration
     {
         Schema::create('level_badges', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('nama_badge');
+            $table->string('nama_badge')->unique();
             $table->integer('min_point');
             $table->integer('max_point')->nullable();
             $table->string('icon')->nullable();
@@ -19714,7 +20321,7 @@ return new class extends Migration
     {
         Schema::create('rewards', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('nama');
+            $table->string('nama')->unique();
             $table->text('deskripsi')->nullable();
             $table->integer('threshold_point');
             $table->boolean('aktif')->default(true);
@@ -19777,7 +20384,7 @@ return new class extends Migration
     {
         Schema::create('punishments', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('nama');
+            $table->string('nama')->unique();
             $table->text('deskripsi')->nullable();
             $table->integer('threshold_point_minus');
             $table->integer('durasi_suspend_hari')->nullable();
@@ -20672,7 +21279,7 @@ return new class extends Migration
     {
         Schema::create('tahun_pelajarans', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('nama')->unique(); // mis. "2025/2026"
+            $table->string('nama')->unique(); // mis. "2026/2027"
             $table->date('tanggal_mulai');
             $table->date('tanggal_selesai');
             $table->boolean('aktif')->default(false);
@@ -21365,6 +21972,354 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('snapshot_harians');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_03_000001_make_unique_constraints_soft_delete_aware.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Membuat SEMUA unique constraint yang masih "polos" jadi soft-delete
+ * aware, mengikuti pola persis migration fix_unique_kunjungan_softdelete_aware
+ * (generated column STORED di MariaDB, partial unique index di SQLite
+ * testing). Dikonfirmasi user: SEMUA tabel di bawah termasuk cakupan
+ * (Aturan poin 16 - additive, tidak menghapus/mengubah kolom asli, rollback
+ * aman lewat down()).
+ *
+ * Setelah migration ini: keunikan dijaga oleh kolom bayangan *_aktif
+ * (bernilai NULL saat baris di-soft-delete). Validasi form Filament WAJIB
+ * diberi modifyRuleUsing(whereNull('deleted_at')) di Resource terkait -
+ * lihat file Resource yang diubah bersamaan iterasi ini - supaya validasi
+ * form tidak lebih ketat daripada constraint DB yang sebenarnya.
+ *
+ * PENGECUALIAN: kelas_tahun_pelajarans (lihat TODO: GAP-SPEC di
+ * buatUniqueAktifKomposit) - TIDAK dibuat soft-delete-aware, tetap pakai
+ * unique constraint standar dari create_kelas_tahun_pelajarans_table
+ * (dikonfirmasi user, opsi B).
+ */
+return new class extends Migration
+{
+    protected array $kolomTunggal = [
+        ['table' => 'users', 'column' => 'nisn'],
+        ['table' => 'users', 'column' => 'nip'],
+        ['table' => 'users', 'column' => 'no_telepon'],
+        ['table' => 'users', 'column' => 'no_kartu_rfid'],
+        ['table' => 'bukus', 'column' => 'isbn'],
+        ['table' => 'eksemplars', 'column' => 'barcode'],
+        ['table' => 'jurusans', 'column' => 'kode'],
+        ['table' => 'level_badges', 'column' => 'nama_badge'],
+        ['table' => 'punishments', 'column' => 'nama'],
+        ['table' => 'rewards', 'column' => 'nama'],
+        ['table' => 'tahun_pelajarans', 'column' => 'nama'],
+        // 'kelas'/'nama' DIPINDAH ke migration 2026_08_03_000002 - sekarang
+        // unique PER JURUSAN (composite jurusan_id+nama), bukan global lagi.
+    ];
+
+    /**
+     * Nama index unique asli tidak selalu mengikuti konvensi
+     * "{table}_{column}_unique". Kasus diketahui: users.nisn dulunya
+     * bernama users.nis saat unique() pertama kali dibuat - MariaDB
+     * TIDAK ikut me-rename index saat renameColumn() dijalankan
+     * (lihat migration rename_nis_to_nisn_in_users_table), sehingga
+     * index sebenarnya masih bernama users_nis_unique meski kolomnya
+     * sudah bernama nisn.
+     *
+     * Diverifikasi via: SHOW INDEX FROM users WHERE Column_name = 'nisn'
+     * -> Key_name = users_nis_unique.
+     *
+     * Key: "{table}.{column}", Value: nama index asli di DB.
+     */
+    protected array $overrideIndexLama = [
+        'users.nisn' => 'users_nis_unique',
+    ];
+
+    public function up(): void
+    {
+        $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+
+        foreach ($this->kolomTunggal as $kolom) {
+            $this->buatUniqueAktif($kolom['table'], $kolom['column'], $isSqlite);
+        }
+
+        // kelas_tahun_pelajarans SENGAJA tidak diproses di sini - lihat
+        // TODO: GAP-SPEC di buatUniqueAktifKomposit (dead code dihapus,
+        // dikonfirmasi user opsi B).
+    }
+
+    protected function indexLamaUntuk(string $table, string $column): string
+    {
+        return $this->overrideIndexLama["{$table}.{$column}"] ?? "{$table}_{$column}_unique";
+    }
+
+    protected function buatUniqueAktif(string $table, string $column, bool $isSqlite): void
+    {
+        $kolomAktif = "{$column}_aktif";
+        $indexAktif = "{$table}_{$kolomAktif}_unique";
+        $indexLama = $this->indexLamaUntuk($table, $column);
+
+        if ($isSqlite) {
+            DB::statement("
+                CREATE UNIQUE INDEX {$indexAktif}
+                ON {$table} ({$column})
+                WHERE deleted_at IS NULL
+            ");
+
+            return;
+        }
+
+        Schema::table($table, function ($t) use ($indexLama) {
+            $t->dropUnique($indexLama);
+        });
+
+        DB::statement("
+            ALTER TABLE {$table}
+            ADD COLUMN {$kolomAktif} VARCHAR(255)
+                GENERATED ALWAYS AS (
+                    CASE WHEN deleted_at IS NULL THEN {$column} ELSE NULL END
+                ) STORED
+        ");
+
+        DB::statement("ALTER TABLE {$table} ADD UNIQUE INDEX {$indexAktif} ({$kolomAktif})");
+    }
+
+    /**
+     * TODO: GAP-SPEC - kelas_tahun_pelajarans TIDAK dibuat soft-delete-aware.
+     *
+     * kelas_id dan tahun_pelajaran_id adalah kolom FK dengan ON DELETE
+     * CASCADE (sengaja - lihat create_kelas_tahun_pelajarans_table).
+     * MariaDB menolak meng-index generated column (VIRTUAL maupun STORED)
+     * yang bergantung pada kolom FK ber-CASCADE (error 1901 saat ADD
+     * INDEX) - root cause: MariaDB tidak menjamin generated column ikut
+     * konsisten saat FK cascade action berjalan (lihat MDEV-18114), jadi
+     * MariaDB defensif menolak kombinasi ini sepenuhnya di level DDL.
+     *
+     * Dikonfirmasi user (opsi B): tetap pakai unique constraint standar
+     * dari create_kelas_tahun_pelajarans_table
+     * (kelas_tahun_pelajarans_kelas_id_tahun_pelajaran_id_unique), TIDAK
+     * soft-delete-aware. FK ON DELETE CASCADE dipertahankan apa adanya -
+     * tidak diubah ke RESTRICT (Aturan poin 17, akan berdampak ke
+     * perilaku hapus Kelas/TahunPelajaran yang sudah berjalan).
+     *
+     * Konsekuensi: kombinasi (kelas_id, tahun_pelajaran_id) yang sudah
+     * di-soft-delete tetap "menahan" slotnya - tidak bisa dibuat baris
+     * baru dengan kombinasi sama sampai baris lama di-restore atau
+     * di-force-delete. Risiko dinilai rendah karena soft-delete pada
+     * Kelas/TahunPelajaran sendiri TIDAK memicu FK action apa pun (FK
+     * hanya bereaksi ke hard delete/forceDelete). Keunikan "kombinasi
+     * aktif" untuk kasus restore harus divalidasi di level aplikasi
+     * (mis. KelasTahunPelajaranResource form rule / Service terkait)
+     * jika suatu saat dibutuhkan, bukan di DB.
+     */
+    protected function buatUniqueAktifKomposit(bool $isSqlite): void
+    {
+        // Sengaja kosong - lihat TODO: GAP-SPEC di atas method ini.
+    }
+
+    public function down(): void
+    {
+        $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+
+        foreach (array_reverse($this->kolomTunggal) as $kolom) {
+            $this->rollbackUniqueAktif($kolom['table'], $kolom['column'], $isSqlite);
+        }
+    }
+
+    protected function rollbackUniqueAktif(string $table, string $column, bool $isSqlite): void
+    {
+        $kolomAktif = "{$column}_aktif";
+        $indexAktif = "{$table}_{$kolomAktif}_unique";
+        $indexLama = $this->indexLamaUntuk($table, $column);
+
+        if ($isSqlite) {
+            DB::statement("DROP INDEX {$indexAktif}");
+
+            return;
+        }
+
+        DB::statement("ALTER TABLE {$table} DROP INDEX {$indexAktif}");
+        DB::statement("ALTER TABLE {$table} DROP COLUMN {$kolomAktif}");
+
+        Schema::table($table, function ($t) use ($column, $indexLama) {
+            $t->unique($column, $indexLama);
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_03_000002_kelas_wajib_jurusan_unique_per_jurusan.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * MENGUBAH SKEMA kelas (Aturan poin 16) - dikonfirmasi user:
+ * 1. jurusan_id WAJIB diisi (NOT NULL) - "semua kelas memiliki jurusan".
+ *    Diverifikasi 0 baris jurusan_id NULL (aktif maupun soft-deleted)
+ *    sebelum migration ini ditulis - aman dijalankan tanpa migrasi data.
+ * 2. FK jurusan_id diubah dari ON DELETE SET NULL -> ON DELETE RESTRICT
+ *    (wajib, karena SET NULL kontradiktif dengan NOT NULL). Dikonfirmasi
+ *    user. Dampak: Jurusan tidak bisa di-force-delete selama masih ada
+ *    Kelas yang mereferensikannya - guard baru ditambahkan di
+ *    JurusanResource::ForceDeleteAction (lihat file terpisah).
+ * 3. Unique nama Kelas diubah dari GLOBAL -> PER JURUSAN (composite
+ *    jurusan_id + nama).
+ *
+ * TODO: GAP-SPEC - composite unique (jurusan_id, nama) di bawah TIDAK
+ * soft-delete-aware (bukan seperti 12 kolom tunggal di migration
+ * 2026_08_03_000001). Sudah dicoba STORED dan VIRTUAL generated column -
+ * KEDUANYA ditolak MariaDB dengan error 1901 ("cannot be used in the
+ * GENERATED ALWAYS AS clause"), meski FK jurusan_id memakai RESTRICT
+ * (bukan CASCADE/SET NULL seperti kasus kelas_tahun_pelajarans yang
+ * pembatasannya sudah didokumentasikan resmi). MariaDB 11.8.6 di
+ * environment ini ternyata menolak generated column berbasis kolom FK
+ * APAPUN aksinya - lebih ketat dari dokumentasi resmi MySQL/MariaDB yang
+ * hanya menyebut pembatasan untuk CASCADE/SET NULL. Root cause pastinya
+ * belum ditelusuri lebih lanjut (kemungkinan versi/build spesifik) -
+ * TIDAK dipaksakan lagi supaya tidak iterasi tebak-tebakan berulang.
+ *
+ * Konsekuensi: kombinasi (jurusan_id, nama) yang sudah di-soft-delete
+ * tetap "menahan" slotnya - admin tidak bisa membuat Kelas baru dengan
+ * kombinasi sama sampai Kelas lama di-restore atau di-force-delete.
+ * Sama seperti kelas_tahun_pelajarans, risiko dinilai rendah untuk
+ * konteks aplikasi ini (Aturan poin 16, dikonfirmasi pola sama dapat
+ * diterima).
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+
+        // 1. Lepas FK lama (nullOnDelete)
+        Schema::table('kelas', function ($table) {
+            $table->dropForeign(['jurusan_id']);
+        });
+
+        // 2. jurusan_id -> NOT NULL (MySQL/MariaDB only)
+        if (! $isSqlite) {
+            DB::statement('ALTER TABLE kelas MODIFY jurusan_id CHAR(36) NOT NULL');
+        }
+
+        // 3. FK baru dengan RESTRICT (default Laravel tanpa aksi eksplisit)
+        Schema::table('kelas', function ($table) {
+            $table->foreign('jurusan_id')->references('id')->on('jurusans');
+        });
+
+        // 4. Composite unique PER JURUSAN - STANDAR, bukan soft-delete-aware
+        //    (lihat TODO: GAP-SPEC di atas class).
+        Schema::table('kelas', function ($table) {
+            $table->unique(['jurusan_id', 'nama'], 'kelas_jurusan_id_nama_unique');
+        });
+    }
+
+    public function down(): void
+    {
+        $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+
+        Schema::table('kelas', function ($table) {
+            $table->dropUnique('kelas_jurusan_id_nama_unique');
+        });
+
+        Schema::table('kelas', function ($table) {
+            $table->dropForeign(['jurusan_id']);
+        });
+
+        if (! $isSqlite) {
+            DB::statement('ALTER TABLE kelas MODIFY jurusan_id CHAR(36) NULL');
+        }
+
+        Schema::table('kelas', function ($table) {
+            $table->foreign('jurusan_id')->references('id')->on('jurusans')->nullOnDelete();
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_03_000003_optimalkan_index_query_panas.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Index tambahan berdasarkan AUDIT QUERY AKTUAL (bukan tebakan dari nama
+ * kolom migration) - lihat DendaObserver::updated(),
+ * PeminjamanService::bisaMeminjam(), PerpustakaanDeviceController
+ * (syncBulk/kirimLangsung - HOT PATH tap RFID), PeminjamanJatuhTempoWidget,
+ * DendaTerbaruWidget, DendaStatsWidget.
+ *
+ * Additive only - tidak mengubah data/kolom existing. Index tunggal yang
+ * jadi FULLY REDUNDANT setelah composite ditambahkan (di-drop untuk
+ * menghindari beban write index ganda tanpa manfaat baca tambahan):
+ * - dendas.status_lunas (single) -> tercakup composite (status_lunas, created_at)
+ * - peminjamans.status (single) -> tercakup composite (status, tanggal_jatuh_tempo)
+ *
+ * peminjamans.tanggal_jatuh_tempo (single) SENGAJA DIPERTAHANKAN - tidak
+ * ada query saat ini yang filter kolom ini sendirian tanpa status, tapi
+ * risiko menyimpannya rendah dan berguna untuk kebutuhan sort/report masa
+ * depan (mis. laporan jatuh tempo lintas status).
+ *
+ * kunjungans: index user_id/tanggal single YANG SUDAH ADA TIDAK DISENTUH
+ * (bagian dari setup generated-column unique yang sensitif - lihat
+ * migration fix_unique_kunjungan_softdelete_aware) - composite baru di
+ * sini murni tambahan untuk mempercepat query duplikat harian yang
+ * dipanggil setiap tap device RFID.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('kunjungans', function (Blueprint $table) {
+            $table->index(['user_id', 'tanggal'], 'kunjungans_user_id_tanggal_idx');
+        });
+
+        Schema::table('dendas', function (Blueprint $table) {
+            $table->dropIndex(['status_lunas']);
+            $table->index(['user_id', 'status_lunas'], 'dendas_user_id_status_lunas_idx');
+            $table->index(['status_lunas', 'created_at'], 'dendas_status_lunas_created_at_idx');
+        });
+
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->dropIndex(['status']);
+            $table->index(['user_id', 'status'], 'peminjamans_user_id_status_idx');
+            $table->index(['status', 'tanggal_jatuh_tempo'], 'peminjamans_status_tanggal_jatuh_tempo_idx');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('peminjamans', function (Blueprint $table) {
+            $table->dropIndex('peminjamans_status_tanggal_jatuh_tempo_idx');
+            $table->dropIndex('peminjamans_user_id_status_idx');
+            $table->index('status');
+        });
+
+        Schema::table('dendas', function (Blueprint $table) {
+            $table->dropIndex('dendas_status_lunas_created_at_idx');
+            $table->dropIndex('dendas_user_id_status_lunas_idx');
+            $table->index('status_lunas');
+        });
+
+        Schema::table('kunjungans', function (Blueprint $table) {
+            $table->dropIndex('kunjungans_user_id_tanggal_idx');
+        });
     }
 };
 
@@ -22419,34 +23374,58 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 
 ## resources/views/filament/pages/auth/request-password-reset.blade.php
 ```blade
-<x-filament-panels::page.simple>
-    <form wire:submit="kirim">
-        {{ $this->form }}
+<div>
+    @include('filament.partials.auth-styles')
 
-        <div style="margin-top: 1.5rem;">
-            <x-filament::button type="submit" class="w-full">
-                Kirim OTP ke WhatsApp
-            </x-filament::button>
-        </div>
-    </form>
-</x-filament-panels::page.simple>
+    <x-filament-panels::page.simple>
+
+        <form wire:submit="kirim">
+            {{ $this->form }}
+
+            <div style="margin-top: 1.5rem;">
+                <x-filament::button type="submit" class="w-full" icon="heroicon-o-paper-airplane">
+                    Kirim OTP ke WhatsApp
+                </x-filament::button>
+            </div>
+        </form>
+
+        @include('filament.partials.app-footer', ['authTop' => true])
+    </x-filament-panels::page.simple>
+</div>
 
 ```
 ---
 
 ## resources/views/filament/pages/auth/reset-password.blade.php
 ```blade
-<x-filament-panels::page.simple>
-    <form wire:submit="prosesReset">
-        {{ $this->form }}
+<div>
+    @include('filament.partials.auth-styles')
 
-        <div style="margin-top: 1.5rem;">
-            <x-filament::button type="submit" class="w-full">
-                Reset Password
-            </x-filament::button>
+    <x-filament-panels::page.simple>
+
+        <form wire:submit="prosesReset">
+            {{ $this->form }}
+
+            <div style="margin-top: 1.5rem;">
+                <x-filament::button type="submit" class="w-full" icon="heroicon-o-check">
+                    Reset Password
+                </x-filament::button>
+            </div>
+        </form>
+
+        <div style="margin-top: 1rem; text-align: center;">
+            <x-filament::link
+                :href="route('filament.dashboard.auth.login')"
+                icon="heroicon-o-arrow-left"
+                icon-position="before"
+            >
+                Kembali ke halaman login
+            </x-filament::link>
         </div>
-    </form>
-</x-filament-panels::page.simple>
+
+    </x-filament-panels::page.simple>
+        @include('filament.partials.app-footer', ['authTop' => true])
+</div>
 
 ```
 ---
@@ -22543,142 +23522,362 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 ## resources/views/filament/pages/transaksi-cepat.blade.php
 ```blade
 <x-filament-panels::page>
-    <div style="max-width: 480px; margin: 0 auto;">
+    <style>
+        .transaksi-cepat-card {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
+        }
 
-        @if (! $user)
-            <div
-                x-data
-                x-init="$nextTick(() => $refs.kartu.focus())"
-                style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 4rem 1.5rem;"
-            >
-                <div style="display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 50%; background: var(--primary-50); margin-bottom: 1.5rem;">
-                    <x-filament::icon icon="heroicon-o-credit-card" style="width: 44px; height: 44px; color: var(--primary-600);" />
-                </div>
+        html.dark .transaksi-cepat-card {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                0 20px 50px -12px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(6px);
+        }
+    </style>
 
-                <h2 class="text-gray-950 dark:text-white" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem;">Tempelkan kartu RFID</h2>
-                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.875rem; margin-bottom: 1.5rem;">Scan kartu siswa atau pegawai untuk memulai transaksi.</p>
-
-                <input
-                    x-ref="kartu"
-                    type="text"
-                    wire:model="kartuInput"
-                    wire:keydown.enter="scanKartu"
-                    autofocus
-                    class="fi-input"
-                    style="width: 100%; max-width: 280px; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem;"
-                    placeholder="Tempelkan/scan kartu..."
-                />
-            </div>
-        @else
-            <div
-                x-data="{ show: false }"
-                x-init="requestAnimationFrame(() => show = true)"
-                x-transition:enter="transition ease-out duration-300"
-                x-transition:enter-start="opacity-0"
-                x-transition:enter-end="opacity-100"
-                style="display: flex; flex-direction: column; align-items: center; text-align: center;"
-            >
-                <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 50%; font-weight: 600; font-size: 22px; color: #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }}; margin-bottom: 0.75rem;">
-                    {{ collect(explode(' ', $user->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
-                </div>
-
-                <h2 class="text-gray-950 dark:text-white" style="font-size: 1.125rem; font-weight: 600; line-height: 1.3;">{{ $user->nama }}</h2>
-
-                <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0.5rem; margin-bottom: 1.5rem;">
-                    <x-filament::badge :color="$user->status_suspend ? 'danger' : 'success'">
-                        {{ $user->status_suspend ? 'Suspend' : 'Aktif' }}
-                    </x-filament::badge>
-                    <x-filament::badge :color="$bisaMeminjam ? 'success' : 'gray'">
-                        {{ $bisaMeminjam ? 'Bisa meminjam' : 'Tidak bisa meminjam baru' }}
-                    </x-filament::badge>
-                </div>
-
-                @if ($user->status_suspend)
-                    <div class="bg-warning-50 dark:bg-warning-500/10 text-warning-600 dark:text-warning-400" style="display: flex; align-items: flex-start; gap: 0.5rem; border-radius: 12px; padding: 0.75rem; font-size: 0.875rem; margin-bottom: 1.5rem; text-align: left; width: 100%;">
-                        <x-filament::icon icon="heroicon-o-exclamation-triangle" style="width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;" />
-                        <span>User masih bisa mengembalikan buku, tapi tidak bisa meminjam baru sampai Denda lunas.</span>
-                    </div>
-                @endif
-
-                <div x-data x-init="$refs.kode.focus()" style="width: 100%; margin-bottom: 1rem;">
-                    <input
-                        x-ref="kode"
-                        type="text"
-                        wire:model="kodeInput"
-                        wire:keydown.enter="scanKode"
-                        autofocus
-                        class="fi-input"
-                        style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem; font-size: 1rem;"
-                        placeholder="Scan barcode eksemplar atau ISBN buku..."
-                    />
-                </div>
-
-                <div style="margin-bottom: 2rem;">
-                    <x-filament::button
-                        wire:click="selesai"
-                        color="gray"
-                        icon="heroicon-o-arrow-path"
-                        size="sm"
+    <div style="display: flex; justify-content: center; padding: 2rem 1rem;">
+        <div
+            class="transaksi-cepat-card"
+            style="width: 100%; max-width: 460px; border-radius: 20px; padding: 2rem;"
+        >
+            @if (! $user)
+                {{-- Identifikasi user: satu input, auto-deteksi kartu/NISN vs nama --}}
+                <div
+                    x-data
+                    x-init="$nextTick(() => $refs.kartu.focus())"
+                    style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 1rem 0;"
+                >
+                    <div
+                        style="display: flex; align-items: center; justify-content: center; width: 88px; height: 88px; border-radius: 50%; margin-bottom: 1.25rem; background: linear-gradient(135deg, var(--primary-400), var(--primary-600));"
                     >
-                        Ganti user
-                    </x-filament::button>
-                </div>
+                        <x-filament::icon icon="heroicon-o-credit-card" style="width: 40px; height: 40px; color: #fff;" />
+                    </div>
 
-                @php
-                    $totalDipinjam = collect($riwayatScan)->where('aksi', 'dipinjamkan')->where('sukses', true)->count();
-                    $totalDikembalikan = collect($riwayatScan)->where('aksi', 'dikembalikan')->where('sukses', true)->count();
-                @endphp
-                @if (count($riwayatScan) > 0)
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 2.5rem; margin-bottom: 2rem;">
-                        <div style="text-align: center;">
-                            <p class="text-primary-600 dark:text-primary-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDipinjam }}</p>
-                            <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dipinjamkan</p>
+                    <h2 class="text-gray-950 dark:text-white" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem;">Tempelkan kartu atau ketik nama</h2>
+                    <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.875rem; margin-bottom: 1.5rem;">
+                        Scan kartu RFID, ketik NISN, atau ketik nama siswa/pegawai.
+                    </p>
+
+                    <div style="width: 100%; position: relative; text-align: left;">
+                        <input
+                            x-ref="kartu"
+                            type="text"
+                            wire:model.live.debounce.400ms="kartuInput"
+                            wire:keydown.enter="scanKartu($event.target.value)"
+                            autofocus
+                            class="fi-input"
+                            style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem;"
+                            placeholder="Scan kartu / NISN / nama..."
+                        />
+
+                        @if (mb_strlen(trim((string) $kartuInput)) >= 2 && $this->hasilCariUser->isNotEmpty())
+                            <div
+                                x-data="{ show: false }"
+                                x-init="requestAnimationFrame(() => show = true)"
+                                x-transition:enter="transition ease-out duration-200"
+                                x-transition:enter-start="opacity-0"
+                                x-transition:enter-end="opacity-100"
+                                style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.375rem; max-height: 280px; overflow-y: auto;"
+                            >
+                                @foreach ($this->hasilCariUser as $hasil)
+                                    <button
+                                        type="button"
+                                        wire:click="pilihUser('{{ $hasil->id }}')"
+                                        wire:key="hasil-user-{{ $hasil->id }}"
+                                        class="bg-gray-50 dark:bg-white/5 hover:bg-primary-50 dark:hover:bg-primary-500/10"
+                                        style="display: flex; align-items: center; gap: 0.625rem; padding: 0.6rem 0.75rem; border-radius: 12px; border: none; cursor: pointer; text-align: left; width: 100%;"
+                                    >
+                                        <div style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; font-weight: 600; font-size: 13px; color: #fff; background: var(--primary-500); flex-shrink: 0;">
+                                            {{ collect(explode(' ', $hasil->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
+                                        </div>
+                                        <div style="min-width: 0;">
+                                            <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $hasil->nama }}</p>
+                                            <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 0;">{{ $hasil->nisn ? "NISN {$hasil->nisn}" : ($hasil->nip ? "NIP {$hasil->nip}" : '-') }}</p>
+                                        </div>
+                                    </button>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @else
+                <div
+                    x-data="{ show: false }"
+                    x-init="requestAnimationFrame(() => show = true)"
+                    x-transition:enter="transition ease-out duration-300"
+                    x-transition:enter-start="opacity-0"
+                    x-transition:enter-end="opacity-100"
+                >
+                    {{-- Profil user --}}
+                    <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+                        <div style="position: relative; margin-bottom: 0.75rem;">
+                            @if ($user->avatar)
+                                <img
+                                    src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar) }}"
+                                    alt="{{ $user->nama }}"
+                                    width="80"
+                                    height="80"
+                                    style="display: block; width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};"
+                                />
+                            @else
+                                <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; font-weight: 600; font-size: 22px; color: #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};">
+                                    {{ collect(explode(' ', $user->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
+                                </div>
+                            @endif
+
+                            <span style="position: absolute; bottom: -2px; right: -2px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--success-500)' }};">
+                                <x-filament::icon
+                                    :icon="$user->status_suspend ? 'heroicon-s-lock-closed' : 'heroicon-s-check'"
+                                    style="width: 14px; height: 14px; color: #fff;"
+                                />
+                            </span>
                         </div>
-                        <div class="bg-gray-200 dark:bg-gray-700" style="height: 32px; width: 1px;"></div>
-                        <div style="text-align: center;">
-                            <p class="text-success-600 dark:text-success-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDikembalikan }}</p>
-                            <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dikembalikan</p>
+
+                        <h2 class="text-gray-950 dark:text-white" style="font-size: 1.125rem; font-weight: 600; line-height: 1.3; margin: 0;">{{ $user->nama }}</h2>
+                        @if ($user->nisn || $user->nip)
+                            <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">
+                                {{ $user->nisn ? "NISN {$user->nisn}" : "NIP {$user->nip}" }}
+                            </p>
+                        @endif
+
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; margin-bottom: 1.5rem;">
+                            <x-filament::badge :color="$user->status_suspend ? 'danger' : 'success'">
+                                {{ $user->status_suspend ? 'Suspend' : 'Aktif' }}
+                            </x-filament::badge>
+                            <x-filament::badge :color="$bisaMeminjam ? 'success' : 'gray'">
+                                {{ $bisaMeminjam ? 'Bisa meminjam' : 'Tidak bisa meminjam baru' }}
+                            </x-filament::badge>
+                        </div>
+
+                        @if ($user->status_suspend)
+                            <div class="bg-warning-50 dark:bg-warning-500/10 text-warning-600 dark:text-warning-400" style="display: flex; align-items: flex-start; gap: 0.5rem; border-radius: 12px; padding: 0.75rem; font-size: 0.875rem; margin-bottom: 1.5rem; text-align: left; width: 100%;">
+                                <x-filament::icon icon="heroicon-o-exclamation-triangle" style="width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;" />
+                                <span>User masih bisa mengembalikan buku, tapi tidak bisa meminjam baru sampai Denda lunas.</span>
+                            </div>
+                        @endif
+                    </div>
+
+                    {{-- Input buku: satu input, auto-deteksi barcode/ISBN vs judul --}}
+                    <div class="dark:border-white/10" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 0.5rem;">
+                        <div x-data x-init="$refs.kode.focus()" style="width: 100%; position: relative; text-align: left;">
+                            <label class="text-gray-950 dark:text-white" style="display: block; text-align: center; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem;">
+                                Scan Barcode / ISBN / Ketik Judul Buku
+                            </label>
+                            <input
+                                x-ref="kode"
+                                type="text"
+                                wire:model.live.debounce.400ms="kodeInput"
+                                wire:keydown.enter="scanKode($event.target.value)"
+                                autofocus
+                                class="fi-input"
+                                style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem; font-size: 1rem;"
+                                placeholder="Scan barcode/ISBN atau ketik judul buku..."
+                            />
+                            <p class="text-gray-400 dark:text-gray-500" style="text-align: center; font-size: 0.75rem; margin-top: 0.5rem;">
+                                Sistem otomatis mendeteksi pinjam / kembali per eksemplar.
+                            </p>
+
+                            @if (mb_strlen(trim((string) $kodeInput)) >= 2 && $this->hasilCariBuku->isNotEmpty())
+                                <div
+                                    x-data="{ show: false }"
+                                    x-init="requestAnimationFrame(() => show = true)"
+                                    x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0"
+                                    x-transition:enter-end="opacity-100"
+                                    style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.375rem; max-height: 240px; overflow-y: auto;"
+                                >
+                                    @foreach ($this->hasilCariBuku as $hasil)
+                                        <button
+                                            type="button"
+                                            wire:click="pilihBuku('{{ $hasil->id }}')"
+                                            wire:key="hasil-buku-{{ $hasil->id }}"
+                                            class="bg-gray-50 dark:bg-white/5 hover:bg-primary-50 dark:hover:bg-primary-500/10"
+                                            style="display: flex; align-items: center; gap: 0.625rem; padding: 0.6rem 0.75rem; border-radius: 12px; border: none; cursor: pointer; text-align: left; width: 100%;"
+                                        >
+                                            <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--primary-100); flex-shrink: 0;">
+                                                <x-filament::icon icon="heroicon-o-book-open" style="width: 16px; height: 16px; color: var(--primary-600);" />
+                                            </div>
+                                            <div style="min-width: 0;">
+                                                <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $hasil->judul }}</p>
+                                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 0;">{{ $hasil->penulis ?: '-' }} &middot; stok tersedia: {{ $hasil->stokTersedia() }}</p>
+                                            </div>
+                                        </button>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+
+                        <div style="display: flex; justify-content: center; margin-top: 1.25rem;">
+                            <x-filament::button
+                                wire:click="selesai"
+                                color="gray"
+                                icon="heroicon-o-arrow-path"
+                                size="sm"
+                            >
+                                Ganti user
+                            </x-filament::button>
                         </div>
                     </div>
-                @endif
 
-                <div style="width: 100%; text-align: left; display: flex; flex-direction: column; gap: 0.5rem;">
-                    @forelse ($riwayatScan as $item)
-                        <div
-                            x-data="{ show: false }"
-                            x-init="requestAnimationFrame(() => show = true)"
-                            x-transition:enter="transition ease-out duration-300"
-                            x-transition:enter-start="opacity-0"
-                            x-transition:enter-end="opacity-100"
-                            class="bg-gray-50 dark:bg-white/5"
-                            style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 12px;"
-                        >
-                            <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: {{ $item['sukses'] ? 'var(--success-100)' : 'var(--danger-100)' }}; color: {{ $item['sukses'] ? 'var(--success-700)' : 'var(--danger-700)' }};">
-                                @if (! $item['sukses'])
-                                    <x-filament::icon icon="heroicon-o-x-mark" style="width: 16px; height: 16px;" />
-                                @elseif ($item['aksi'] === 'dipinjamkan')
-                                    <x-filament::icon icon="heroicon-o-arrow-up-circle" style="width: 16px; height: 16px;" />
-                                @else
-                                    <x-filament::icon icon="heroicon-o-arrow-down-circle" style="width: 16px; height: 16px;" />
-                                @endif
+                    {{-- Statistik sesi --}}
+                    @php
+                        $totalDipinjam = collect($riwayatScan)->where('aksi', 'dipinjamkan')->where('sukses', true)->count();
+                        $totalDikembalikan = collect($riwayatScan)->where('aksi', 'dikembalikan')->where('sukses', true)->count();
+                        $totalGagal = collect($riwayatScan)->where('sukses', false)->count();
+                    @endphp
+                    @if (count($riwayatScan) > 0)
+                        <div class="dark:border-white/10" style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 1.5rem;">
+                            <div style="text-align: center;">
+                                <p class="text-primary-600 dark:text-primary-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDipinjam }}</p>
+                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dipinjamkan</p>
                             </div>
-                            <div style="flex: 1; min-width: 0;">
-                                <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['judul'] }}</p>
-                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['pesan'] }}</p>
+                            <div class="bg-gray-200 dark:bg-gray-700" style="height: 32px; width: 1px;"></div>
+                            <div style="text-align: center;">
+                                <p class="text-success-600 dark:text-success-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDikembalikan }}</p>
+                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dikembalikan</p>
+                            </div>
+                            <div class="bg-gray-200 dark:bg-gray-700" style="height: 32px; width: 1px;"></div>
+                            <div style="text-align: center;">
+                                <p class="text-danger-600 dark:text-danger-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalGagal }}</p>
+                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Gagal</p>
                             </div>
                         </div>
-                    @empty
-                        <div class="text-gray-400 dark:text-gray-500" style="text-align: center; padding: 2rem 0;">
-                            <x-filament::icon icon="heroicon-o-book-open" style="width: 32px; height: 32px; margin: 0 auto 0.5rem;" />
-                            <p style="font-size: 0.875rem; margin: 0;">Belum ada buku yang di-scan.</p>
+                    @endif
+
+                    {{-- Riwayat scan --}}
+                    <div class="dark:border-white/10" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 1.5rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                            <p class="text-gray-950 dark:text-white" style="font-size: 0.875rem; font-weight: 600; margin: 0;">Riwayat Scan</p>
+                            @if (count($riwayatScan) > 0)
+                                <x-filament::badge color="gray">{{ count($riwayatScan) }} item</x-filament::badge>
+                            @endif
                         </div>
-                    @endforelse
+
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 260px; overflow-y: auto;">
+                            @forelse ($riwayatScan as $item)
+                                <div
+                                    x-data="{ show: false }"
+                                    x-init="requestAnimationFrame(() => show = true)"
+                                    x-transition:enter="transition ease-out duration-300"
+                                    x-transition:enter-start="opacity-0"
+                                    x-transition:enter-end="opacity-100"
+                                    class="bg-gray-50 dark:bg-white/5"
+                                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 12px;"
+                                >
+                                    <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: {{ $item['sukses'] ? 'var(--success-100)' : 'var(--danger-100)' }}; color: {{ $item['sukses'] ? 'var(--success-700)' : 'var(--danger-700)' }};">
+                                        @if (! $item['sukses'])
+                                            <x-filament::icon icon="heroicon-o-x-mark" style="width: 16px; height: 16px;" />
+                                        @elseif ($item['aksi'] === 'dipinjamkan')
+                                            <x-filament::icon icon="heroicon-o-arrow-up-circle" style="width: 16px; height: 16px;" />
+                                        @else
+                                            <x-filament::icon icon="heroicon-o-arrow-down-circle" style="width: 16px; height: 16px;" />
+                                        @endif
+                                    </div>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                            <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['judul'] }}</p>
+                                            @if ($item['sukses'])
+                                                <x-filament::badge :color="$item['aksi'] === 'dipinjamkan' ? 'primary' : 'success'" size="sm">
+                                                    {{ ucfirst($item['aksi']) }}
+                                                </x-filament::badge>
+                                            @endif
+                                        </div>
+                                        <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['barcode'] }} &middot; {{ $item['pesan'] }}</p>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="text-gray-400 dark:text-gray-500" style="text-align: center; padding: 2rem 0;">
+                                    <x-filament::icon icon="heroicon-o-book-open" style="width: 32px; height: 32px; margin: 0 auto 0.5rem;" />
+                                    <p style="font-size: 0.875rem; margin: 0;">Belum ada buku yang di-scan.</p>
+                                </div>
+                            @endforelse
+                        </div>
+                    </div>
                 </div>
-            </div>
-        @endif
-
+            @endif
+        </div>
     </div>
 </x-filament-panels::page>
+
+```
+---
+
+## resources/views/filament/partials/app-footer.blade.php
+```blade
+<div class="app-footer{{ isset($authTop) && $authTop ? ' app-footer--auth-top' : '' }}">
+    &copy; {{ now()->year }} MTs Negeri 1 Pandeglang | built with &#9829;&#65039; by
+    <a href="https://github.com/zulfikriyahya" target="_blank" rel="noopener noreferrer">Yahya Zulfikri</a>
+</div>
+
+```
+---
+
+## resources/views/filament/partials/auth-footer.blade.php
+```blade
+<div class="auth-footer">
+    &copy; {{ now()->year }} MTs Negeri 1 Pandeglang | built with &#9829;&#65039; by
+    <a href="https://github.com/zulfikriyahya" target="_blank" rel="noopener noreferrer">Yahya Zulfikri</a>
+</div>
+
+```
+---
+
+## resources/views/filament/partials/auth-styles.blade.php
+```blade
+<style>
+    /* Background halaman auth - gradient tipis, sama di semua auth page */
+    .fi-simple-layout {
+        background: radial-gradient(circle at top, rgba(6, 182, 212, 0.08), transparent 60%);
+    }
+
+    html.dark .fi-simple-layout {
+        background: radial-gradient(circle at top, rgba(6, 182, 212, 0.12), transparent 60%);
+    }
+
+    /* Card utama - overlay putih transparan utk dark (teknik yg sama
+       dipakai di Transaksi Cepat, tidak bergantung variabel tema gray). */
+    .fi-simple-main {
+        border-radius: 20px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.06) !important;
+    }
+
+    html.dark .fi-simple-main {
+        background: rgba(255, 255, 255, 0.055) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.04),
+            0 20px 50px -12px rgba(0, 0, 0, 0.7) !important;
+        backdrop-filter: blur(6px);
+    }
+
+    /* Input OTP - dibuat lebih hidup: besar, berjarak, mudah dibaca */
+    .auth-otp-input {
+        text-align: center !important;
+        letter-spacing: 0.6em !important;
+        font-variant-numeric: tabular-nums;
+        font-size: 1.375rem !important;
+        font-weight: 600;
+    }
+
+    /* Logo brand di halaman auth - pastikan center & beri jarak bawah */
+    .fi-simple-layout .fi-logo,
+    .fi-simple-layout .fi-brand {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        margin: 0 auto 1rem !important;
+    }
+
+    .fi-simple-layout .fi-logo img,
+    .fi-simple-layout .fi-brand img {
+        height: 2.5rem;
+        width: auto;
+    }
+</style>
 
 ```
 ---
@@ -22771,6 +23970,76 @@ window.ChartExport = window.ChartExport || (function () {
 })();
 </script>
 @endonce
+
+```
+---
+
+## resources/views/filament/partials/global-footer-style.blade.php
+```blade
+<style>
+    /* Style footer - didaftarkan SEKALI via renderHook(HEAD_END), dipakai
+       bersama oleh markup footer di halaman auth (atas frame) maupun
+       Dashboard/halaman non-auth (bawah body) - lihat
+       filament.partials.app-footer untuk markup-nya saja. */
+    .app-footer {
+        display: block;
+        width: 100%;
+        margin: 1.5rem 0;
+        padding: 0;
+        text-align: center;
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+
+    html.dark .app-footer {
+        color: #9ca3af;
+    }
+
+    .app-footer a {
+        color: var(--primary-600);
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    html.dark .app-footer a {
+        color: var(--primary-400);
+    }
+
+    .app-footer a:hover {
+        text-decoration: underline;
+    }
+
+    /* Footer di ATAS frame form auth - beri jarak bawah lebih besar
+       supaya tidak menempel ke elemen berikutnya (mode switcher/form). */
+    .app-footer.app-footer--auth-top {
+        margin: 0 0 1.5rem;
+    }
+</style>
+
+```
+---
+
+## resources/views/filament/partials/global-logo-style.blade.php
+```blade
+<style>
+    /* Logo dark/light global - berlaku di SEMUA halaman panel (termasuk
+       Dashboard), bukan cuma auth. Didaftarkan via renderHook biasa
+       (bukan Vite/app.css - app.css TIDAK dimuat panel manapun di
+       proyek ini, dikonfirmasi lewat curl - lihat riwayat sesi), supaya
+       konsisten dengan pola chart-export-script yang sudah terbukti
+       jalan. */
+    .fi-logo-dark {
+        display: none;
+    }
+
+    html.dark .fi-logo-light {
+        display: none;
+    }
+
+    html.dark .fi-logo-dark {
+        display: inline-block;
+    }
+</style>
 
 ```
 ---

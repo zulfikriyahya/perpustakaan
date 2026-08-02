@@ -18,6 +18,8 @@ class GamifikasiBulananWidget extends ChartWidget
 {
     protected static ?int $sort = 6;
 
+    protected ?string $maxHeight = '500px';
+
     protected int|string|array $columnSpan = 1;
 
     public function getHeading(): ?string

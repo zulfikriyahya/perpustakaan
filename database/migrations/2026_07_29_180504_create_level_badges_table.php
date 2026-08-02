@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('level_badges', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('nama_badge');
+            $table->string('nama_badge')->unique();
             $table->integer('min_point');
             $table->integer('max_point')->nullable();
             $table->string('icon')->nullable();

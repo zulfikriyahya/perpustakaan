@@ -40,22 +40,22 @@ class Peminjaman extends Model
 
     public function transaksi(): BelongsTo
     {
-        return $this->belongsTo(Transaksi::class);
+        return $this->belongsTo(Transaksi::class)->withTrashed();
     }
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function eksemplar(): BelongsTo
     {
-        return $this->belongsTo(Eksemplar::class);
+        return $this->belongsTo(Eksemplar::class)->withTrashed();
     }
 
     public function diprosesOleh(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'diproses_oleh');
+        return $this->belongsTo(User::class, 'diproses_oleh')->withTrashed();
     }
 
     public function pengembalian(): HasOne

@@ -18,6 +18,8 @@ class TrenBulananWidget extends ChartWidget
 {
     protected static ?int $sort = 4;
 
+    protected ?string $maxHeight = '500px';
+
     protected int|string|array $columnSpan = 1;
 
     public function getHeading(): ?string

@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('punishments', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('nama');
+            $table->string('nama')->unique();
             $table->text('deskripsi')->nullable();
             $table->integer('threshold_point_minus');
             $table->integer('durasi_suspend_hari')->nullable();

@@ -35,6 +35,16 @@ class ResetPassword extends SimplePage
     public function mount(): void
     {
         if (! Session::has('reset_password_no_telepon')) {
+            // FITUR BARU - sebelumnya redirect diam-diam tanpa penjelasan,
+            // user yang buka URL ini langsung (mis. dari bookmark lama /
+            // signed URL kedaluwarsa) tidak tahu kenapa ditendang balik.
+            Notification::make()
+                ->title('Sesi reset password tidak ditemukan')
+                ->body('Silakan minta kode OTP baru terlebih dahulu.')
+                ->warning()
+                ->icon('heroicon-o-exclamation-triangle')
+                ->send();
+
             $this->redirect(route('filament.dashboard.auth.password-reset.request'));
 
             return;
@@ -50,15 +60,18 @@ class ResetPassword extends SimplePage
                 ->label('Kode OTP')
                 ->required()
                 ->minLength(6)
-                ->maxLength(6),
+                ->maxLength(6)
+                ->extraInputAttributes(['class' => 'auth-otp-input', 'inputmode' => 'numeric']),
             TextInput::make('password')
                 ->label('Password Baru')
                 ->password()
+                ->revealable()
                 ->required()
                 ->minLength(8),
             TextInput::make('password_confirmation')
                 ->label('Konfirmasi Password Baru')
                 ->password()
+                ->revealable()
                 ->required()
                 ->same('password'),
         ])->statePath('data');
@@ -72,14 +85,24 @@ class ResetPassword extends SimplePage
         try {
             $otpService->verifikasiDanReset($noTelepon, $data['otp'], $data['password']);
         } catch (\RuntimeException $e) {
-            Notification::make()->title($e->getMessage())->warning()->send();
+            Notification::make()
+                ->title('Gagal reset password')
+                ->body($e->getMessage())
+                ->danger()
+                ->icon('heroicon-o-x-circle')
+                ->send();
 
             return;
         }
 
         Session::forget('reset_password_no_telepon');
 
-        Notification::make()->title('Password berhasil direset, silakan login.')->success()->send();
+        Notification::make()
+            ->title('Password berhasil direset')
+            ->body('Silakan login menggunakan password baru Anda.')
+            ->success()
+            ->icon('heroicon-o-check-circle')
+            ->send();
 
         $this->redirect(route('filament.dashboard.auth.login'));
     }

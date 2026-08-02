@@ -6,14 +6,21 @@ use App\Filament\Exports\RakExporter;
 use App\Filament\Imports\RakImporter;
 use App\Filament\Resources\RakResource\Pages;
 use App\Filament\Resources\RakResource\RelationManagers\EksemplarsRelationManager;
+use App\Models\Eksemplar;
 use App\Models\Rak;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class RakResource extends Resource
@@ -47,48 +54,50 @@ class RakResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(RakImporter::class)
+                ImportAction::make()->importer(RakImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Rak::class) ?? false),
-                ExportAction::make()
-                    ->exporter(RakExporter::class)
+                ExportAction::make()->exporter(RakExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Rak::class) ?? false),
             ])
             ->columns([
-                TextColumn::make('nama')
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('lokasi')
-                    ->searchable(),
-                // dulu counts('bukus') - kolom bukus.rak_id sudah tidak
-                // ada, jadi dihitung dari eksemplars (lihat Rak::eksemplars()).
-                TextColumn::make('eksemplars_count')
-                    ->label('Jumlah Eksemplar')
-                    ->counts('eksemplars')
-                    ->sortable(),
-                // GAP-SPEC ditutup: stok tersedia per rak, lihat
-                // Rak::stokTersedia() - definisi sama dengan Buku::stokTersedia().
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('lokasi')->searchable(),
+                TextColumn::make('eksemplars_count')->label('Jumlah Eksemplar')->counts('eksemplars')->sortable(),
                 TextColumn::make('stok_tersedia')
                     ->label('Stok Tersedia')
                     ->state(fn (Rak $record) => $record->stokTersedia())
                     ->badge()
                     ->color(fn (Rak $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
-                // judul unik, lihat Rak::jumlahJudulUnik(). Bukan hasil
-                // counts() bawaan (butuh distinct buku_id), jadi dihitung
-                // manual per baris - toggleable & default hidden supaya
-                // tidak mengubah tampilan existing.
                 TextColumn::make('jumlah_judul_unik')
                     ->label('Jumlah Judul Unik')
                     ->state(fn (Rak $record) => $record->jumlahJudulUnik())
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('created_at')
-                    ->dateTime('d F Y H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                //
-            ]);
+            ->filters([TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // FK eksemplars.rak_id default RESTRICT - blokir jika masih
+                // dipakai (termasuk Eksemplar ter-soft-delete).
+                ForceDeleteAction::make()
+                    ->action(function (Rak $record) {
+                        $dipakai = Eksemplar::query()->withTrashed()
+                            ->where('rak_id', $record->id)->exists();
+
+                        if ($dipakai) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Rak ini masih dipakai Eksemplar - pindahkan dulu Eksemplar ke Rak lain.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
+            ->toolbarActions([DeleteBulkAction::make()]);
     }
 
     public static function getRelations(): array

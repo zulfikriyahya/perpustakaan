@@ -40,11 +40,11 @@ class PunishmentLog extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function punishment(): BelongsTo
     {
-        return $this->belongsTo(Punishment::class);
+        return $this->belongsTo(Punishment::class)->withTrashed();
     }
 }

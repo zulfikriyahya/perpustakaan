@@ -72,14 +72,11 @@ class RequestPasswordReset extends SimplePage
         $user = $this->resolveUser($data['login']);
 
         if (! $user) {
-            // TODO: GAP-SPEC - notifikasi eksplisit "tidak terdaftar" atas
-            // permintaan (trade-off: bisa dipakai enumerasi identifier
-            // terdaftar). Lihat catatan sebelumnya jika ingin direvert ke
-            // pesan generik.
             Notification::make()
                 ->title('Akun tidak ditemukan')
                 ->body('Pastikan NISN, NIP, atau No. Telepon yang dimasukkan sesuai dengan yang terdaftar di sistem perpustakaan.')
                 ->warning()
+                ->icon('heroicon-o-user-circle')
                 ->send();
 
             return;
@@ -88,18 +85,27 @@ class RequestPasswordReset extends SimplePage
         try {
             $otpService->kirimOtp($user);
         } catch (\RuntimeException $e) {
-            // rate limit OTP (lihat PasswordResetOtpService::kirimOtp) -
-            // ditangkap disini, bukan dibiarkan jadi fatal error.
             Notification::make()
                 ->title('Belum bisa mengirim OTP')
                 ->body($e->getMessage())
                 ->warning()
+                ->icon('heroicon-o-clock')
                 ->send();
 
             return;
         }
 
         Session::put('reset_password_no_telepon', $user->no_telepon);
+
+        // FITUR BARU - sebelumnya redirect diam-diam tanpa toast, user
+        // bisa bingung apakah OTP benar-benar terkirim sebelum landing
+        // di halaman berikutnya.
+        Notification::make()
+            ->title('Kode OTP terkirim')
+            ->body('Cek pesan WhatsApp di nomor terdaftar, lalu masukkan kodenya di halaman berikutnya.')
+            ->success()
+            ->icon('heroicon-o-chat-bubble-left-right')
+            ->send();
 
         $this->redirect(
             URL::signedRoute('filament.dashboard.auth.password-reset.reset')

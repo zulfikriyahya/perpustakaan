@@ -10,23 +10,20 @@ use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
 /**
- * Upsert berdasarkan 'nama' SAJA (dikonfirmasi: nama Kelas unik secara
- * global lintas Jurusan - lihat migration
- * 2026_08_02_000001_add_unique_nama_to_kelas_table). Sebelumnya upsert
- * key adalah kombinasi (nama, jurusan_id) - DIUBAH sesuai konfirmasi ini.
+ * Upsert berdasarkan (jurusan_id, nama) - DIUBAH (iterasi ini,
+ * dikonfirmasi user): nama Kelas sekarang unik PER JURUSAN, bukan
+ * global lagi (lihat migration
+ * 2026_08_03_000002_kelas_wajib_jurusan_unique_per_jurusan.php).
+ * 'jurusan_kode' SEKARANG WAJIB diisi - setiap Kelas harus punya
+ * Jurusan (dikonfirmasi user: "semua kelas memiliki jurusan").
  *
- * 'jurusan_kode' tetap direferensikan via kode unik Jurusan (bukan nama)
- * untuk menghindari ambiguitas nama Jurusan.
- *
- * BUG FIX (ditemukan iterasi ini): 'jurusan_kode' adalah kolom
- * lookup-only (bukan kolom asli tabel 'kelas' - lihat Schema kelas: id,
- * nama, tingkat, jurusan_id, timestamps). Tanpa ->fillRecordUsing(),
- * Filament otomatis meng-assign $record->jurusan_kode = state SEBELUM
- * save(), yang lolos dari validasi Eloquent (properti dinamis tetap
- * dianggap dirty attribute) dan menyebabkan SQLSTATE[42S22] "Unknown
- * column 'jurusan_kode'" saat INSERT/UPDATE - baris gagal total dengan
- * pesan generik "Terjadi kesalahan sistem". fillRecordUsing() no-op
- * memastikan resolusi HANYA lewat resolveRecord() (Aturan poin 3, DRY).
+ * BUG FIX (iterasi sebelumnya, tetap berlaku): 'jurusan_kode' adalah
+ * kolom lookup-only (bukan kolom asli tabel 'kelas'). Tanpa
+ * ->fillRecordUsing(), Filament otomatis meng-assign
+ * $record->jurusan_kode = state SEBELUM save(), yang menyebabkan
+ * SQLSTATE[42S22] "Unknown column 'jurusan_kode'". fillRecordUsing()
+ * no-op memastikan resolusi HANYA lewat resolveRecord() (Aturan
+ * poin 3, DRY).
  */
 class KelasImporter extends Importer
 {
@@ -37,7 +34,7 @@ class KelasImporter extends Importer
         return [
             ImportColumn::make('nama')
                 ->label('Nama kelas (mis. X IPA 1)')
-                ->helperText('Harus unik secara global - tidak boleh ada 2Kelas dengan nama sama meski beda Jurusan.')
+                ->helperText('Unik per Jurusan - boleh ada nama sama di Jurusan berbeda (mis. "X-1" di IPA dan "X-1" di IPS).')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
                 ->example('X IPA 1'),
@@ -48,9 +45,10 @@ class KelasImporter extends Importer
                 ->rules(['required', 'integer', 'min:1'])
                 ->example('10'),
             ImportColumn::make('jurusan_kode')
-                ->label('Kode Jurusan (opsional)')
-                ->helperText('Lihat daftar kode di menu Master Data > Jurusan. Kosongkan jika kelas ini tidak terikat jurusan tertentu.')
-                ->rules(['nullable', 'string', 'max:255'])
+                ->label('Kode Jurusan (wajib)')
+                ->helperText('Lihat daftar kode di menu Master Data > Jurusan. Setiap Kelas wajib punya Jurusan.')
+                ->requiredMapping()
+                ->rules(['required', 'string', 'max:255'])
                 ->example('IPA')
                 // BUG FIX - lihat docblock class. Kolom ini bukan kolom
                 // asli tabel 'kelas', jangan biarkan Filament auto-assign.
@@ -60,27 +58,16 @@ class KelasImporter extends Importer
 
     public function resolveRecord(): ?Kelas
     {
-        $record = Kelas::query()->firstOrNew(['nama' => trim($this->data['nama'])]);
+        $jurusan = Jurusan::query()->where('kode', $this->data['jurusan_kode'])->first();
 
-        if (! empty($this->data['jurusan_kode'])) {
-            $jurusan = Jurusan::query()->where('kode', $this->data['jurusan_kode'])->first();
-
-            if (! $jurusan) {
-                throw new RowImportFailedException("Jurusan dengan kode \"{$this->data['jurusan_kode']}\" tidak ditemukan.");
-            }
-
-            $record->jurusan_id = $jurusan->id;
-        } else {
-            // DIKONFIRMASI: kolom jurusan_kode dikosongkan (baik saat
-            // create maupun UPDATE Kelas existing) -> jurusan_id
-            // di-null-kan/dilepas, BUKAN dibiarkan tidak berubah. Admin
-            // yang re-import Kelas untuk update field lain (mis. hanya
-            // 'tingkat') WAJIB tetap mengisi jurusan_kode di file jika
-            // tidak ingin assignment Jurusan-nya ikut terhapus.
-            $record->jurusan_id = null;
+        if (! $jurusan) {
+            throw new RowImportFailedException("Jurusan dengan kode \"{$this->data['jurusan_kode']}\" tidak ditemukan.");
         }
 
-        return $record;
+        return Kelas::query()->firstOrNew([
+            'jurusan_id' => $jurusan->id,
+            'nama' => trim($this->data['nama']),
+        ]);
     }
 
     public static function getCompletedNotificationBody(Import $import): string

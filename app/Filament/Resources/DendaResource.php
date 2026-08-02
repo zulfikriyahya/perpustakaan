@@ -13,6 +13,8 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -22,6 +24,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 /**
@@ -115,11 +118,11 @@ class DendaResource extends Resource
             ->filters([
                 SelectFilter::make('tipe')
                     ->options(collect(TipeDenda::cases())->mapWithKeys(fn ($t) => [$t->value => ucfirst($t->value)])),
-                TernaryFilter::make('status_lunas')
-                    ->label('Status Lunas'),
+                TernaryFilter::make('status_lunas')->label('Status Lunas'),
                 SelectFilter::make('status_refund')
                     ->label('Status Refund')
                     ->options(collect(StatusRefund::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
+                TrashedFilter::make(),
             ])
             ->recordActions([
                 Action::make('tandai_lunas')
@@ -190,11 +193,24 @@ class DendaResource extends Resource
                             ->send();
                     }),
 
-                DeleteAction::make(), // digerbang DendaPolicy::delete() -hanya Admin, lihat ShieldSeeder
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // TODO: GAP-SPEC - blokir force-delete jika status_lunas masih
+                // false dan nominal > 0 (hutang belum selesai) - jejak
+                // keuangan yang belum tuntas tidak boleh dimusnahkan permanen.
+                ForceDeleteAction::make()
+                    ->action(function (Denda $record) {
+                        if (! $record->status_lunas && (float) $record->nominal > 0) {
+                            Notification::make()->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Denda ini belum lunas - selesaikan pembayaran/pembatalan dulu.')->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
             ])
-            ->toolbarActions([
-                DeleteBulkAction::make(), // digerbang DendaPolicy::deleteAny()
-            ]);
+            ->toolbarActions([DeleteBulkAction::make()]);
     }
 
     public static function canCreate(): bool

@@ -6,14 +6,19 @@ use App\Filament\Exports\KategoriExporter;
 use App\Filament\Imports\KategoriImporter;
 use App\Filament\Resources\KategoriResource\Pages;
 use App\Models\Kategori;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class KategoriResource extends Resource
@@ -60,41 +65,31 @@ class KategoriResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(KategoriImporter::class)
+                ImportAction::make()->importer(KategoriImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Kategori::class) ?? false),
-                ExportAction::make()
-                    ->exporter(KategoriExporter::class)
+                ExportAction::make()->exporter(KategoriExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Kategori::class) ?? false),
             ])
             ->columns([
-                TextColumn::make('nama')
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('deskripsi')
-                    ->limit(50)
-                    ->toggleable(),
-                TextColumn::make('bukus_count')
-                    ->label('Jumlah Buku')
-                    ->counts('bukus')
-                    ->sortable(),
-                TextColumn::make('eksemplars_count')
-                    ->label('Jumlah Eksemplar')
-                    ->counts('eksemplars')
-                    ->sortable(),
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('deskripsi')->limit(50)->toggleable(),
+                TextColumn::make('bukus_count')->label('Jumlah Buku')->counts('bukus')->sortable(),
+                TextColumn::make('eksemplars_count')->label('Jumlah Eksemplar')->counts('eksemplars')->sortable(),
                 TextColumn::make('stok_tersedia')
                     ->label('Stok Tersedia')
                     ->state(fn (Kategori $record) => $record->stokTersedia())
                     ->badge()
                     ->color(fn (Kategori $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
-                TextColumn::make('created_at')
-                    ->dateTime('d F Y H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                //
-            ]);
+            ->filters([TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                // Aman - pivot buku_kategori & kategori_rak cascadeOnDelete.
+                ForceDeleteAction::make(),
+            ])
+            ->toolbarActions([DeleteBulkAction::make()]);
     }
 
     public static function getPages(): array

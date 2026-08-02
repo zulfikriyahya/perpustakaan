@@ -13,7 +13,9 @@ use App\Services\PeminjamanService;
 use App\Services\RfidResolverService;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Computed;
 use RuntimeException;
 
 /**
@@ -24,15 +26,32 @@ use RuntimeException;
  * stok, Denda, Point, WA) tetap lewat PeminjamanService - halaman ini
  * murni orkestrasi UI (Aturan poin 3).
  *
- * FITUR BARU (iterasi ini): sebelumnya input hanya dicocokkan ke
- * Eksemplar.barcode. Sekarang jika tidak match barcode eksemplar manapun,
- * input dicoba resolve sebagai Buku.isbn (lihat resolveEksemplarDariIsbn())
- * - karena satu ISBN bisa punya banyak Eksemplar/copy fisik, sistem
- * otomatis memilih eksemplar yang relevan (lihat TODO: GAP-SPEC di
- * method tersebut untuk aturan pemilihannya). Property/method di-rename
- * dari $barcodeInput/scanBarcode() menjadi $kodeInput/scanKode() karena
- * sekarang menerima barcode ATAU ISBN, ditelusuri ke seluruh pemakaian
- * termasuk blade (Aturan poin 11).
+ * FITUR BARU (iterasi ini): TIDAK ADA toggle mode manual - satu input
+ * yang sama otomatis mendeteksi jenis pencarian:
+ *  - $kartuInput: dicoba sebagai kartu RFID/NISN persis (RfidResolverService)
+ *    dulu -> kalau gagal, FALLBACK ke pencarian User.nama (live, computed
+ *    property hasilCariUser()).
+ *  - $kodeInput: dicoba sebagai barcode Eksemplar persis, lalu ISBN Buku
+ *    persis -> kalau keduanya gagal, FALLBACK ke pencarian Buku.judul
+ *    (live, computed property hasilCariBuku()).
+ * Aturan auto-pick saat fallback nama/judul (lihat scanKartu()/scanKode()):
+ * tepat 1 hasil -> otomatis dipilih; >1 hasil -> operator WAJIB klik salah
+ * satu dari daftar yang muncul di bawah input (tidak ditebak); 0 hasil ->
+ * dianggap gagal seperti sebelumnya. Live-search tetap jalan di background
+ * selagi mengetik (termasuk saat scan kartu/barcode fisik) - untuk input
+ * digit murni hasil pencarian nama/judul biasanya kosong, jadi tidak
+ * mengganggu, hanya menambah 1 query ringan per keystroke (debounced
+ * 400ms dari sisi Alpine/Livewire).
+ *
+ * TODO: ASUMSI - pencarian by-nama/judul di halaman ini query langsung ke
+ * model User/Buku tanpa cek Policy viewAny:User / viewAny:Buku terpisah,
+ * KONSISTEN dengan perilaku scan (exact match) sebelumnya yang juga query
+ * tanpa policy tambahan - akses keseluruhan halaman tetap digerbang oleh
+ * canAccess() (Create:Peminjaman). Jika role yang boleh Create:Peminjaman
+ * TIDAK seharusnya bisa "menjelajahi" daftar nama siswa/buku secara bebas
+ * (berbeda dengan sekadar identifikasi via scan exact), ini perlu
+ * permission terpisah - konfirmasi ke tim sebelum production jika hal ini
+ * jadi concern.
  *
  * BUG FIX (iterasi sebelumnya): scan barcode sudah dipindah dari query
  * Buku.barcode/Peminjaman.buku_id (sudah tidak ada sejak migration
@@ -40,14 +59,19 @@ use RuntimeException;
  *
  * Reader RFID di komputer = USB keyboard-wedge (ketik ke input fokus,
  * seperti barcode scanner), BUKAN endpoint device Attendance Machine -
- * jangan disamakan dengan PerpustakaanDeviceController.
+ * jangan disamakan dengan PerpustakaanDeviceController. Fallback nama
+ * TIDAK mengubah/menyentuh jalur scan exact-match ini sama sekali - exact
+ * match SELALU dicoba lebih dulu sebelum fallback (Aturan poin 17 -
+ * kompatibilitas device fisik tidak berubah).
  *
  * Otorisasi: reuse Policy existing, tidak ada permission baru untuk
  * halaman ini sendiri - akses digerbang oleh Create:Peminjaman.
  *
  * Rate limit anti-scan-ganda: eksemplar yang sama (setelah diresolve dari
- * barcode ATAU ISBN) untuk user aktif yang sama tidak boleh diproses ulang
- * dalam window RATE_LIMIT_DETIK detik.
+ * barcode, ISBN, ATAU fallback judul) untuk user aktif yang sama tidak
+ * boleh diproses ulang dalam window RATE_LIMIT_DETIK detik - karena
+ * prosesEksemplar() dipakai bersama, rate limit otomatis berlaku ke
+ * jalur fallback juga tanpa kode tambahan.
  *
  * TODO: GAP-SPEC - window rate limit di-key per (user_id, eksemplar_id),
  * BUKAN global per eksemplar - asumsi: 2 user berbeda scan eksemplar yang
@@ -59,7 +83,11 @@ use RuntimeException;
  * TODO: verifikasi signature terhadap versi package yang terpasang
  * (filament/filament versi sesuai composer.json) - properti $view dan
  * $navigationIcon di bawah mengikuti API Filament v4/v5 (schema-based),
- * cek ulang jika versi terpasang berbeda.
+ * cek ulang jika versi terpasang berbeda. Termasuk atribut
+ * Livewire\Attributes\Computed - verifikasi tersedia di versi Livewire
+ * yang terpasang (composer.lock), jika tidak tersedia hapus atributnya -
+ * computed property Livewire tetap bekerja lewat pemanggilan langsung
+ * $this->hasilCariUser di Blade, hanya kehilangan caching per-request.
  */
 class TransaksiCepat extends Page
 {
@@ -75,6 +103,15 @@ class TransaksiCepat extends Page
      * Window rate limit anti-scan-ganda (detik). Lihat catatan class di atas.
      */
     protected const RATE_LIMIT_DETIK = 60;
+
+    /**
+     * Minimal karakter sebelum live-search fallback (nama/judul) dieksekusi
+     * ke DB - mencegah query "LIKE %%" yang menyapu seluruh tabel tiap kali
+     * input baru mulai diketik/dikosongkan.
+     */
+    protected const MIN_KARAKTER_CARI = 2;
+
+    protected const MAX_HASIL_CARI = 8;
 
     public ?string $kartuInput = '';
 
@@ -94,27 +131,145 @@ class TransaksiCepat extends Page
         return auth()->user()?->can('create', Peminjaman::class) ?? false;
     }
 
-    public function scanKartu(): void
+    /**
+     * Live-search fallback User by nama, berbasis isi $kartuInput saat ini.
+     * Livewire memanggil ulang otomatis tiap kali $kartuInput berubah
+     * karena dipakai langsung di Blade sbg $this->hasilCariUser.
+     *
+     * @return Collection<int, User>
+     */
+    #[Computed]
+    public function hasilCariUser(): Collection
     {
-        $input = trim((string) $this->kartuInput);
-        $this->kartuInput = '';
+        $kata = trim((string) $this->kartuInput);
+
+        if (mb_strlen($kata) < self::MIN_KARAKTER_CARI) {
+            return new Collection;
+        }
+
+        return User::query()
+            ->where('nama', 'like', "%{$kata}%")
+            ->orderBy('nama')
+            ->limit(self::MAX_HASIL_CARI)
+            ->get();
+    }
+
+    /**
+     * Live-search fallback Buku by judul, berbasis isi $kodeInput saat ini.
+     * Hanya buku yang punya minimal satu Eksemplar yang ditampilkan - buku
+     * tanpa eksemplar sama sekali tidak mungkin diproses pinjam/kembali.
+     *
+     * @return Collection<int, Buku>
+     */
+    #[Computed]
+    public function hasilCariBuku(): Collection
+    {
+        $kata = trim((string) $this->kodeInput);
+
+        if (mb_strlen($kata) < self::MIN_KARAKTER_CARI) {
+            return new Collection;
+        }
+
+        return Buku::query()
+            ->where('judul', 'like', "%{$kata}%")
+            ->whereHas('eksemplars')
+            ->orderBy('judul')
+            ->limit(self::MAX_HASIL_CARI)
+            ->get();
+    }
+
+    /**
+     * Enter ditekan pada input identifikasi user. $inputEksplisit dikirim
+     * langsung dari $event.target.value di Blade - hindari race condition
+     * debounce (lihat catatan sebelumnya).
+     *
+     * Input SELALU dikosongkan segera setelah nilai ditangkap, TERLEPAS
+     * dari hasil (sukses/gagal) - supaya operator bisa langsung scan/ketik
+     * ulang tanpa perlu menghapus manual sisa teks lama. PENGECUALIAN:
+     * saat hasil fallback nama >1 (ambigu), input SENGAJA tidak
+     * dikosongkan supaya daftar pilihan yang muncul di bawahnya tetap
+     * relevan dengan apa yang diketik (operator masih bisa
+     * mempersempit kata kunci alih-alih pilih dari daftar).
+     */
+    public function scanKartu(?string $inputEksplisit = null): void
+    {
+        $input = trim($inputEksplisit ?? (string) $this->kartuInput);
 
         if ($input === '') {
             return;
         }
 
         try {
-            $this->user = app(RfidResolverService::class)->resolveUser($input);
-        } catch (RuntimeException $e) {
-            Notification::make()->danger()->title('User tidak ditemukan')->body($e->getMessage())->send();
+            $user = app(RfidResolverService::class)->resolveUser($input);
+            $this->kartuInput = '';
+            $this->muatUser($user);
+
+            return;
+        } catch (RuntimeException) {
+            // Bukan kartu/NISN yang valid - lanjut ke fallback pencarian nama.
+        }
+
+        // Sinkronkan dulu supaya hasilCariUser() (baca dari $this->kartuInput)
+        // memakai nilai yang baru saja ditangkap, bukan nilai lama.
+        $this->kartuInput = $input;
+        $hasil = $this->hasilCariUser;
+
+        if ($hasil->count() === 1) {
+            $this->kartuInput = '';
+            $this->muatUser($hasil->first());
 
             return;
         }
 
-        $this->riwayatScan = [];
-        $this->bisaMeminjam = app(PeminjamanService::class)->bisaMeminjam($this->user);
+        if ($hasil->count() > 1) {
+            Notification::make()
+                ->info()
+                ->title('Ada beberapa user dengan nama serupa')
+                ->body('Pilih salah satu dari daftar di bawah input.')
+                ->send();
 
-        if ($this->user->status_suspend) {
+            return; // input & daftar hasil SENGAJA dibiarkan tampil untuk dipilih manual
+        }
+
+        $this->kartuInput = '';
+        Notification::make()
+            ->danger()
+            ->title('User tidak ditemukan')
+            ->body("Tidak ada kartu/NISN/nama yang cocok dengan '{$input}'.")
+            ->send();
+    }
+
+    /**
+     * Dipanggil saat operator klik salah satu hasil fallback pencarian
+     * nama. Menutup jalur yang SAMA dengan scanKartu() setelah user
+     * berhasil diresolve - lihat muatUser().
+     */
+    public function pilihUser(string $userId): void
+    {
+        $user = User::query()->find($userId);
+
+        if (! $user) {
+            Notification::make()->danger()->title('User tidak ditemukan')->body('Data mungkin sudah dihapus, coba cari ulang.')->send();
+
+            return;
+        }
+
+        $this->kartuInput = '';
+        $this->muatUser($user);
+    }
+
+    /**
+     * Satu sumber kebenaran untuk "apa yang terjadi setelah user berhasil
+     * diidentifikasi", dipakai baik oleh jalur exact-match maupun fallback
+     * nama (Aturan poin 3 - DRY).
+     */
+    protected function muatUser(User $user): void
+    {
+        $this->user = $user;
+        $this->riwayatScan = [];
+        $this->bisaMeminjam = app(PeminjamanService::class)->bisaMeminjam($user);
+
+        if ($user->status_suspend) {
             Notification::make()
                 ->warning()
                 ->title('User sedang suspend')
@@ -123,10 +278,18 @@ class TransaksiCepat extends Page
         }
     }
 
-    public function scanKode(): void
+    /**
+     * Enter ditekan pada input identifikasi buku. $inputEksplisit dikirim
+     * langsung dari $event.target.value di Blade - hindari race condition
+     * debounce (lihat catatan sebelumnya).
+     *
+     * Input SELALU dikosongkan segera setelah nilai ditangkap, TERLEPAS
+     * dari hasil, KECUALI saat hasil fallback judul >1 (ambigu) - sama
+     * seperti scanKartu() di atas.
+     */
+    public function scanKode(?string $inputEksplisit = null): void
     {
-        $kode = trim((string) $this->kodeInput);
-        $this->kodeInput = '';
+        $kode = trim($inputEksplisit ?? (string) $this->kodeInput);
 
         if ($kode === '' || ! $this->user) {
             return;
@@ -135,19 +298,89 @@ class TransaksiCepat extends Page
         $eksemplar = Eksemplar::query()->where('barcode', $kode)->with('buku')->first();
 
         if (! $eksemplar) {
-            $eksemplar = $this->resolveEksemplarDariIsbn($kode);
+            $buku = Buku::query()->where('isbn', $kode)->first();
+            $eksemplar = $buku ? $this->resolveEksemplarUntukBuku($buku) : null;
         }
 
-        if (! $eksemplar) {
-            $this->tambahRiwayat($kode, '-', 'error', 'Barcode/ISBN tidak ditemukan.', false);
+        if ($eksemplar) {
+            $this->kodeInput = '';
+            $this->prosesEksemplar($eksemplar);
 
             return;
         }
 
-        // Rate limit anti-scan-ganda - dicek SEBELUM logic pinjam/kembali,
-        // supaya eksemplar yang sama (baik diresolve dari barcode maupun
-        // ISBN) ter-scan 2x dalam window tidak memicu toggle
-        // pinjam->kembali->pinjam yang tidak diinginkan.
+        // Sinkronkan dulu supaya hasilCariBuku() (baca dari $this->kodeInput)
+        // memakai nilai yang baru saja ditangkap, bukan nilai lama.
+        $this->kodeInput = $kode;
+        $hasil = $this->hasilCariBuku;
+
+        if ($hasil->count() === 1) {
+            $this->pilihBuku($hasil->first()->id);
+
+            return;
+        }
+
+        if ($hasil->count() > 1) {
+            Notification::make()
+                ->info()
+                ->title('Ada beberapa buku dengan judul serupa')
+                ->body('Pilih salah satu dari daftar di bawah input.')
+                ->send();
+
+            return; // input & daftar hasil SENGAJA dibiarkan tampil untuk dipilih manual
+        }
+
+        $this->kodeInput = '';
+        $this->tambahRiwayat($kode, '-', 'error', 'Barcode/ISBN/judul tidak ditemukan.', false);
+    }
+
+    /**
+     * Dipanggil saat operator klik salah satu hasil fallback pencarian
+     * judul (atau otomatis dari scanKode() saat hasil fallback persis 1).
+     * Me-resolve ke SATU Eksemplar (aturan sama seperti jalur ISBN, lihat
+     * resolveEksemplarUntukBuku()) lalu diproses lewat jalur bersama
+     * prosesEksemplar() - tidak ada logic pinjam/kembali terduplikasi
+     * (Aturan poin 3 - DRY).
+     */
+    public function pilihBuku(string $bukuId): void
+    {
+        if (! $this->user) {
+            return;
+        }
+
+        $buku = Buku::query()->find($bukuId);
+
+        if (! $buku) {
+            Notification::make()->danger()->title('Buku tidak ditemukan')->body('Data mungkin sudah dihapus, coba cari ulang.')->send();
+
+            return;
+        }
+
+        $eksemplar = $this->resolveEksemplarUntukBuku($buku);
+
+        if (! $eksemplar) {
+            // Tidak ada Peminjaman aktif user ini utk buku ini, dan tidak
+            // ada Eksemplar berstatus Tersedia - beri pesan yang jelas
+            // (bukan silent no-op) supaya operator tahu kenapa tidak
+            // terjadi apa-apa setelah klik/Enter.
+            $this->kodeInput = '';
+            $this->tambahRiwayat('-', $buku->judul, 'error', 'Tidak ada eksemplar tersedia untuk buku ini, dan user tidak sedang meminjam eksemplar manapun dari buku ini.', false);
+
+            return;
+        }
+
+        $this->kodeInput = '';
+        $this->prosesEksemplar($eksemplar);
+    }
+
+    /**
+     * Logika inti pinjam/kembali per eksemplar (rate limit anti-scan-ganda
+     * + deteksi otomatis pinjam vs kembali + panggil PeminjamanService).
+     * Dipakai bersama oleh jalur exact-match (scanKode) dan fallback
+     * judul (pilihBuku) - tanpa duplikasi (Aturan poin 3 - DRY).
+     */
+    protected function prosesEksemplar(Eksemplar $eksemplar): void
+    {
         $rateLimitKey = "transaksi-cepat-scan:{$this->user->id}:{$eksemplar->id}";
 
         if (Cache::has($rateLimitKey)) {
@@ -189,7 +422,7 @@ class TransaksiCepat extends Page
                     // bukan berarti transaksi user saat ini bermasalah/bug.
                     throw new RuntimeException(
                         "Eksemplar barcode '{$eksemplar->barcode}' ({$eksemplar->buku->judul}) sedang tidak tersedia (status: {$eksemplar->status->value}). ".
-                            'Jika Anda mengira eksemplar ini seharusnya dikembalikan oleh user ini, periksa apakah barcode/ISBN yang di-scan sesuai dengan yang tadi dipinjam - satu judul buku bisa punya beberapa copy/eksemplar dengan barcode berbeda.'
+                            'Jika Anda mengira eksemplar ini seharusnya dikembalikan oleh user ini, periksa apakah barcode/ISBN/judul yang dipilih sesuai dengan yang tadi dipinjam - satu judul buku bisa punya beberapa copy/eksemplar dengan barcode berbeda.'
                     );
                 }
 
@@ -211,13 +444,14 @@ class TransaksiCepat extends Page
     }
 
     /**
-     * Resolve input sebagai ISBN Buku (dipanggil ketika input tidak match
-     * barcode Eksemplar manapun) -> pilih SATU Eksemplar yang relevan.
+     * Resolve SATU Buku (dari ISBN maupun dari fallback judul) -> pilih
+     * SATU Eksemplar yang relevan. Dipakai baik jalur ISBN maupun jalur
+     * fallback judul (Aturan poin 3 - DRY).
      *
-     * TODO: GAP-SPEC - aturan pemilihan eksemplar saat scan ISBN (bukan
-     * barcode eksemplar spesifik):
+     * TODO: GAP-SPEC - aturan pemilihan eksemplar saat scan ISBN atau
+     * fallback judul (bukan barcode eksemplar spesifik):
      *  1. PENGEMBALIAN: jika user ini punya Peminjaman aktif/terlambat atas
-     *     eksemplar manapun dari Buku ber-ISBN ini, ambil yang PALING LAMA
+     *     eksemplar manapun dari Buku ini, ambil yang PALING LAMA
      *     dipinjam (created_at terkecil). Asumsi: user jarang pinjam >1
      *     eksemplar dari judul yang sama secara bersamaan; kalau itu
      *     terjadi, operator TIDAK diminta memilih - sistem otomatis pilih
@@ -226,18 +460,10 @@ class TransaksiCepat extends Page
      *     ubah logic ini untuk melempar RuntimeException alih-alih memilih.
      *  2. PEMINJAMAN BARU: ambil 1 Eksemplar berstatus Tersedia dari Buku
      *     ini secara FIFO (created_at terkecil) - operator TIDAK memilih
-     *     eksemplar/copy fisik spesifik, sistem yang menentukan. Ini
-     *     konsisten dengan premis gap ("barcode identik dengan ISBN yang
-     *     dipinjam" - dianggap tidak ada preferensi copy tertentu).
+     *     eksemplar/copy fisik spesifik, sistem yang menentukan.
      */
-    protected function resolveEksemplarDariIsbn(string $isbn): ?Eksemplar
+    protected function resolveEksemplarUntukBuku(Buku $buku): ?Eksemplar
     {
-        $buku = Buku::query()->where('isbn', $isbn)->first();
-
-        if (! $buku) {
-            return null;
-        }
-
         $eksemplarDipinjamUser = Eksemplar::query()
             ->where('buku_id', $buku->id)
             ->whereHas('peminjamans', fn ($q) => $q

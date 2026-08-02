@@ -5,17 +5,22 @@ namespace App\Filament\Resources;
 use App\Enums\JenisKelamin;
 use App\Enums\RoleUser;
 use App\Enums\StatusAkademik;
+use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\UserExporter;
 use App\Filament\Imports\UserImporter;
 use App\Filament\Resources\UserResource\Pages;
+use App\Models\Denda;
 use App\Models\KelasTahunPelajaran;
+use App\Models\Peminjaman;
 use App\Models\User;
 use App\Services\KenaikanKelasService;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -57,15 +62,39 @@ class UserResource extends Resource
                 ->maxLength(255),
             Select::make('role')
                 ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
-                ->required(),
+                ->required()
+                ->live()
+                // BARU (iterasi ini) - saat role diganti, bersihkan field
+                // NISN/NIP yang jadi tidak relevan (dihitung PeminjamanService?
+                // tidak - murni UI form, lihat visible()/dehydrated() di
+                // nisn/nip di bawah). Mencegah nilai lama nyangkut diam-diam
+                // di $record sebelum sempat disembunyikan dari tampilan.
+                ->afterStateUpdated(function ($state, callable $set) {
+                    if ($state === RoleUser::Siswa->value) {
+                        $set('nip', null);
+                    } else {
+                        $set('nisn', null);
+                    }
+                }),
             TextInput::make('nisn')
                 ->label('NISN')
-                ->unique(ignoreRecord: true)
-                ->maxLength(255),
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                ->maxLength(255)
+                // BARU - NISN hanya relevan untuk Siswa, disembunyikan untuk
+                // role lain. dehydrated() disamakan dengan visible() supaya
+                // field yang disembunyikan tidak ikut ter-submit/tersimpan
+                // (Aturan poin 3 - satu sumber kebenaran "role menentukan
+                // identitas yang valid", bukan dua tempat berbeda).
+                ->visible(fn (callable $get) => $get('role') === RoleUser::Siswa->value)
+                ->dehydrated(fn (callable $get) => $get('role') === RoleUser::Siswa->value),
             TextInput::make('nip')
                 ->label('NIP')
-                ->unique(ignoreRecord: true)
-                ->maxLength(255),
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                ->maxLength(255)
+                // BARU - NIP hanya relevan untuk Pegawai/Pustakawan/Admin,
+                // disembunyikan untuk Siswa. Pola sama dengan 'nisn' di atas.
+                ->visible(fn (callable $get) => $get('role') !== RoleUser::Siswa->value)
+                ->dehydrated(fn (callable $get) => $get('role') !== RoleUser::Siswa->value),
             Select::make('jenis_kelamin')
                 ->label('Jenis Kelamin')
                 ->options(collect(JenisKelamin::cases())->mapWithKeys(fn ($j) => [$j->value => $j->label()]))
@@ -122,11 +151,11 @@ class UserResource extends Resource
             TextInput::make('no_telepon')
                 ->label('No. Telepon')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             TextInput::make('no_kartu_rfid')
                 ->label('No. Kartu RFID')
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             TextInput::make('password')
                 ->password()
@@ -154,12 +183,8 @@ class UserResource extends Resource
                     ->authorize(fn () => auth()->user()?->can('viewAny', User::class) ?? false),
             ])
             ->columns([
-                ImageColumn::make('avatar')
-                    ->disk('public')
-                    ->circular(),
-                TextColumn::make('nama')
-                    ->searchable()
-                    ->sortable(),
+                ImageColumn::make('avatar')->disk('public')->circular(),
+                TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('role')
                     ->badge()
                     ->color(fn (RoleUser $state) => match ($state) {
@@ -168,66 +193,69 @@ class UserResource extends Resource
                         RoleUser::Pegawai => 'info',
                         RoleUser::Siswa => 'gray',
                     }),
-                TextColumn::make('nisn')
-                    ->label('NISN')
-                    ->searchable()
-                    ->toggleable(),
-                TextColumn::make('nip')
-                    ->label('NIP')
-                    ->searchable()
-                    ->toggleable(),
-                TextColumn::make('kelasTahunPelajaran.kelas.nama')
-                    ->label('Kelas')
-                    ->toggleable()
-                    ->placeholder('-'),
+                TextColumn::make('nisn')->label('NISN')->searchable()->toggleable(),
+                TextColumn::make('nip')->label('NIP')->searchable()->toggleable(),
+                TextColumn::make('kelasTahunPelajaran.kelas.nama')->label('Kelas')->toggleable()->placeholder('-'),
                 TextColumn::make('status_akademik')
-                    ->badge()
-                    ->toggleable()
+                    ->badge()->toggleable()
                     ->color(fn (StatusAkademik $state) => match ($state) {
                         StatusAkademik::Aktif => 'success',
                         StatusAkademik::Lulus => 'info',
                         StatusAkademik::Keluar => 'gray',
                     }),
-                TextColumn::make('no_telepon')
-                    ->label('No. Telepon')
-                    ->searchable(),
-                TextColumn::make('no_kartu_rfid')
-                    ->label('Kartu RFID')
-                    ->searchable()
-                    ->toggleable(),
+                TextColumn::make('no_telepon')->label('No. Telepon')->searchable(),
+                TextColumn::make('no_kartu_rfid')->label('Kartu RFID')->searchable()->toggleable(),
                 IconColumn::make('status_suspend')
-                    ->label('Suspend')
-                    ->boolean()
-                    // Dibalik dari default Filament - true (suspend) = merah
-                    // (masalah), false (aman) = hijau. Default bawaan
-                    // mewarnai false sebagai merah, keliru untuk flag ini.
-                    ->trueIcon('heroicon-o-lock-closed')
-                    ->falseIcon('heroicon-o-lock-open')
-                    ->trueColor('danger')
-                    ->falseColor('success'),
-                TextColumn::make('akumulasi_point')
-                    ->label('Point')
-                    ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime('d F Y H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->label('Suspend')->boolean()
+                    ->trueIcon('heroicon-o-lock-closed')->falseIcon('heroicon-o-lock-open')
+                    ->trueColor('danger')->falseColor('success'),
+                TextColumn::make('akumulasi_point')->label('Point')->sortable(),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 TrashedFilter::make(),
                 SelectFilter::make('role')
                     ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
                 SelectFilter::make('status_akademik')
-                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))])),
-                TernaryFilter::make('status_suspend')
-                    ->label('Status Suspend'),
+                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', '', $s->value))])),
+                TernaryFilter::make('status_suspend')->label('Status Suspend'),
             ])
             ->recordActions([
                 DeleteAction::make()
-                    // super_admin tidak boleh dihapus, termasuk oleh
-                    // sesama super_admin - mencegah lock-out akun sistem.
                     ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
                         && (auth()->user()?->can('delete', $record) ?? false)),
+                RestoreAction::make(),
+                // TODO: GAP-SPEC - guard force-delete dipilih sepihak: blokir
+                // jika masih ada Peminjaman aktif/terlambat ATAU Denda belum
+                // lunas milik user ini (termasuk yang sudah di-soft-delete),
+                // supaya jejak keuangan/operasional tidak musnah diam-diam.
+                ForceDeleteAction::make()
+                    ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
+                        && (auth()->user()?->can('forceDelete', $record) ?? false))
+                    ->action(function (User $record) {
+                        $adaPeminjamanAktif = Peminjaman::query()
+                            ->withTrashed()
+                            ->where('user_id', $record->id)
+                            ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat])
+                            ->exists();
+                        $adaDendaBelumLunas = Denda::query()
+                            ->withTrashed()
+                            ->where('user_id', $record->id)
+                            ->where('status_lunas', false)
+                            ->exists();
+
+                        if ($adaPeminjamanAktif || $adaDendaBelumLunas) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Tidak bisa dihapus permanen')
+                                ->body('User ini masih punya Peminjaman aktif/terlambat atau Denda belum lunas.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
             ])
             ->toolbarActions([
                 BulkAction::make('assign_kelas')
@@ -244,45 +272,32 @@ class UserResource extends Resource
                                         $ktp->id => "{$ktp->kelas->nama} -{$ktp->tahunPelajaran->nama}",
                                     ])
                             )
-                            ->searchable()
-                            ->required(),
+                            ->searchable()->required(),
                     ])
                     ->action(function (Collection $records, array $data) {
                         $ktp = KelasTahunPelajaran::query()->findOrFail($data['kelas_tahun_pelajaran_id']);
                         $service = app(KenaikanKelasService::class);
-
                         $records->each(fn (User $user) => $service->assignKelas($user, $ktp));
 
-                        Notification::make()
-                            ->success()
-                            ->title($records->count().' user berhasil di-assign ke kelas.')
-                            ->send();
+                        Notification::make()->success()->title($records->count().' user berhasil di-assign ke kelas.')->send();
                     })
                     ->deselectRecordsAfterCompletion(),
                 DeleteBulkAction::make()
-                    // Filter record super_admin keluar dari proses bulk
-                    // delete - baris super_admin yang ikut ter-select akan
-                    // dilewati (tidak ikut terhapus), bukan meng-error-kan
-                    // seluruh aksi.
                     ->action(function (Collection $records) {
                         $dilindungi = $records->filter(fn (User $u) => $u->hasRole('super_admin'));
                         $bolehHapus = $records->reject(fn (User $u) => $u->hasRole('super_admin'));
-
                         $bolehHapus->each->delete();
 
                         if ($dilindungi->isNotEmpty()) {
                             Notification::make()
                                 ->warning()
                                 ->title('Sebagian user tidak dihapus')
-                                ->body($dilindungi->count().' user dengan role super_admin dilewati (tidak bisa dihapus lewat bulk delete).')
+                                ->body($dilindungi->count().' user dengan role super_admin dilewati.')
                                 ->send();
                         }
                     })
                     ->authorize(fn () => auth()->user()?->can('deleteAny', User::class) ?? false),
             ])
-            // Checkbox baris super_admin dinonaktifkan supaya tidak bisa
-            // ikut ter-select sama sekali (lapisan pencegahan pertama,
-            // sebelum sampai ke action() di atas).
             ->checkIfRecordIsSelectableUsing(fn (User $record) => ! $record->hasRole('super_admin'));
     }
 

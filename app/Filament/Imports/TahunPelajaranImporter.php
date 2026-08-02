@@ -16,10 +16,10 @@ class TahunPelajaranImporter extends Importer
     {
         return [
             ImportColumn::make('nama')
-                ->label('Nama (mis. 2025/2026)')
+                ->label('Nama (mis. 2026/2027)')
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
-                ->example('2025/2026'),
+                ->example('2026/2027'),
             ImportColumn::make('tanggal_mulai')
                 ->helperText('Gunakan format tanggal YYYY-MM-DD (mis. 2025-07-14) supaya tidak salah baca oleh Excel/Google Sheets di komputer dengan format regional berbeda.')
                 ->requiredMapping()

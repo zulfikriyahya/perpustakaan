@@ -108,10 +108,10 @@ class UserImporterTest extends TestCase
     public function test_import_dengan_kelas_valid_membuat_riwayat_kelas_siswa(): void
     {
         $this->actingAsSuperAdmin();
-        $ktp = $this->buatKtp('X IPA 1', '2025/2026', 'IPA');
+        $ktp = $this->buatKtp('X IPA 1', '2026/2027', 'IPA');
 
         $csv = "nama,nisn,nip,kelas_nama,jurusan_kode,tahun_pelajaran_nama,jabatan,no_telepon\n"
-            ."Budi Santoso,1001,,X IPA 1,IPA,2025/2026,,081234567890\n";
+            ."Budi Santoso,1001,,X IPA 1,IPA,2026/2027,,081234567890\n";
 
         $file = UploadedFile::fake()->createWithContent('users.csv', $csv);
 
@@ -139,7 +139,7 @@ class UserImporterTest extends TestCase
     public function test_import_dengan_kelas_tidak_ditemukan_baris_gagal_dan_user_tidak_dibuat(): void
     {
         $this->actingAsSuperAdmin();
-        $this->buatKtp('X IPA 1', '2025/2026', 'IPA');
+        $this->buatKtp('X IPA 1', '2026/2027', 'IPA');
 
         $csv = "nama,nisn,nip,kelas_nama,jurusan_kode,tahun_pelajaran_nama,jabatan,no_telepon\n"
             ."Ani Wijaya,1002,,Kelas Ngasal,IPA,Tahun Ngasal,,081234567891\n";
@@ -182,7 +182,7 @@ class UserImporterTest extends TestCase
         $this->actingAsSuperAdmin();
 
         $csv = "nama,nisn,nip,kelas_nama,jurusan_kode,tahun_pelajaran_nama,jabatan,no_telepon\n"
-            ."Doni Pratama,1004,,X IPA 1,,2025/2026,,081234567893\n";
+            ."Doni Pratama,1004,,X IPA 1,,2026/2027,,081234567893\n";
 
         $file = UploadedFile::fake()->createWithContent('users.csv', $csv);
 

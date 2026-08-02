@@ -6,18 +6,23 @@ use App\Filament\Exports\RewardExporter;
 use App\Filament\Imports\RewardImporter;
 use App\Filament\Resources\RewardResource\Pages;
 use App\Models\Reward;
+use App\Models\RewardLog;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
+use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class RewardResource extends Resource
@@ -35,7 +40,7 @@ class RewardResource extends Resource
         return $schema->components([
             TextInput::make('nama')
                 ->required()
-                ->unique(ignoreRecord: true)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                 ->maxLength(255),
             Textarea::make('deskripsi')
                 ->columnSpanFull(),
@@ -53,11 +58,9 @@ class RewardResource extends Resource
     {
         return $table
             ->headerActions([
-                ImportAction::make()
-                    ->importer(RewardImporter::class)
+                ImportAction::make()->importer(RewardImporter::class)
                     ->authorize(fn () => auth()->user()?->can('create', Reward::class) ?? false),
-                ExportAction::make()
-                    ->exporter(RewardExporter::class)
+                ExportAction::make()->exporter(RewardExporter::class)
                     ->authorize(fn () => auth()->user()?->can('viewAny', Reward::class) ?? false),
             ])
             ->columns([
@@ -66,8 +69,27 @@ class RewardResource extends Resource
                 IconColumn::make('aktif')->boolean(),
                 TextColumn::make('reward_logs_count')->label('Jumlah Diperoleh')->counts('rewardLogs'),
             ])
-            ->filters([TernaryFilter::make('aktif')])
-            ->recordActions([DeleteAction::make()])
+            ->filters([TernaryFilter::make('aktif'), TrashedFilter::make()])
+            ->recordActions([
+                DeleteAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make()
+                    ->action(function (Reward $record) {
+                        $dipakai = RewardLog::query()->withTrashed()
+                            ->where('reward_id', $record->id)->exists();
+
+                        if ($dipakai) {
+                            Notification::make()
+                                ->danger()->title('Tidak bisa dihapus permanen')
+                                ->body('Reward ini masih punya riwayat diperoleh.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->forceDelete();
+                    }),
+            ])
             ->toolbarActions([DeleteBulkAction::make()]);
     }
 

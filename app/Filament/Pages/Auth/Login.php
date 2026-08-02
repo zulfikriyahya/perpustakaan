@@ -18,6 +18,7 @@ use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
+use Illuminate\Validation\ValidationException;
 
 /**
  * TODO: verifikasi signature terhadap versi package yang terpasang
@@ -37,6 +38,19 @@ use Illuminate\Support\HtmlString;
  * pakai NISN/NIP. Diperbaiki dengan menyimpan no_telepon hasil resolve
  * di property $noTeleponOtp saat kirimOtpLogin() berhasil, dipakai ulang
  * di authenticate() - bukan raw input field lagi.
+ *
+ * BUG FIX (iterasi ini) - Filament\Auth\Pages\Login::throwFailureValidationException()
+ * bawaan hardcode menempelkan pesan gagal login ke key 'data.email'
+ * (lihat vendor/filament/filament/src/Auth/Pages/Login.php). Form kustom
+ * kita memakai field 'login' (bukan 'email'), jadi pesan tsb menempel ke
+ * field yang tidak pernah dirender di schema manapun - user tidak melihat
+ * apa pun saat kredensial password salah (parent::authenticate() dipanggil
+ * apa adanya untuk mode 'password', lihat method authenticate() di bawah).
+ * Diperbaiki dengan override method ini: target key diarahkan ke
+ * 'data.login' (field yang benar-benar ada), DAN ditambahkan toast
+ * eksplisit supaya konsisten dengan gaya notifikasi lain di halaman ini
+ * (poin toast informatif) - inline error saja dianggap terlalu mudah
+ * terlewat mengingat field password ada di bawahnya.
  */
 class Login extends BaseLogin
 {
@@ -74,6 +88,7 @@ class Login extends BaseLogin
                 ->minLength(6)
                 ->maxLength(6)
                 ->required()
+                ->extraInputAttributes(['class' => 'auth-otp-input', 'inputmode' => 'numeric'])
                 ->visible(fn () => $this->mode === 'otp' && $this->otpTerkirim)
                 ->dehydrated(fn () => $this->mode === 'otp'),
             Text::make('Kode OTP berlaku 5 menit. Tidak menerima? Klik "Password" lalu "OTP WhatsApp" lagi untuk kirim ulang.')
@@ -120,6 +135,7 @@ class Login extends BaseLogin
                 ->title('Akun tidak ditemukan')
                 ->body('Pastikan NISN, NIP, atau No. Telepon sesuai yang terdaftar.')
                 ->warning()
+                ->icon('heroicon-o-user-circle')
                 ->send();
 
             return;
@@ -128,18 +144,25 @@ class Login extends BaseLogin
         try {
             app(LoginOtpService::class)->kirimOtp($user);
         } catch (\RuntimeException $e) {
-            Notification::make()->title('Belum bisa mengirim OTP')->body($e->getMessage())->warning()->send();
+            Notification::make()
+                ->title('Belum bisa mengirim OTP')
+                ->body($e->getMessage())
+                ->warning()
+                ->icon('heroicon-o-clock')
+                ->send();
 
             return;
         }
 
-        // simpan no_telepon ASLI hasil resolve - bukan raw input 'login',
-        // supaya verifikasi OTP di authenticate() tetap benar walau user
-        // login pakai NISN/NIP.
         $this->noTeleponOtp = $user->no_telepon;
         $this->otpTerkirim = true;
 
-        Notification::make()->title('Kode OTP terkirim ke WhatsApp terdaftar.')->success()->send();
+        Notification::make()
+            ->title('Kode OTP terkirim')
+            ->body('Cek pesan WhatsApp di nomor terdaftar, kode berlaku 5 menit.')
+            ->success()
+            ->icon('heroicon-o-chat-bubble-left-right')
+            ->send();
     }
 
     protected function getCredentialsFromFormData(array $data): array
@@ -156,6 +179,24 @@ class Login extends BaseLogin
             $field => $login,
             'password' => $data['password'],
         ];
+    }
+
+    /**
+     * BUG FIX - lihat docblock class. parent::throwFailureValidationException()
+     * menempel ke 'data.email' yang tidak eksis di form kita.
+     */
+    protected function throwFailureValidationException(): never
+    {
+        Notification::make()
+            ->title('Gagal masuk')
+            ->body('NISN/NIP/No. Telepon atau password yang Anda masukkan salah.')
+            ->danger()
+            ->icon('heroicon-o-x-circle')
+            ->send();
+
+        throw ValidationException::withMessages([
+            'data.login' => __('filament-panels::auth/pages/login.messages.failed'),
+        ]);
     }
 
     /**
@@ -196,7 +237,12 @@ class Login extends BaseLogin
         try {
             $user = app(LoginOtpService::class)->verifikasiUntukLogin($this->noTeleponOtp, (string) $data['otp']);
         } catch (\RuntimeException $e) {
-            Notification::make()->title($e->getMessage())->danger()->send();
+            Notification::make()
+                ->title('Gagal memverifikasi OTP')
+                ->body($e->getMessage())
+                ->danger()
+                ->icon('heroicon-o-x-circle')
+                ->send();
 
             return null;
         }
@@ -207,20 +253,20 @@ class Login extends BaseLogin
         return app(LoginResponse::class);
     }
 
-    /**
-     * Override TOTAL dari content() bawaan - menyisipkan baris toggle mode
-     * (Actions link) SEBELUM form, memakai Schema Component API asli
-     * (bukan Blade custom) supaya konsisten dengan cara Filament merender
-     * halaman ini. Struktur RenderHook before/after dipertahankan sama
-     * seperti base class.
-     */
     public function content(Schema $schema): Schema
     {
         return $schema->components([
             RenderHook::make(PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE),
+            Text::make(new HtmlString(
+                view('filament.partials.auth-styles')->render()
+            )),
             $this->getModeSwitcherComponent(),
             $this->getFormContentComponent(),
             RenderHook::make(PanelsRenderHook::AUTH_LOGIN_FORM_AFTER),
+            Text::make(new HtmlString(
+                view('filament.partials.app-footer', ['authTop' => true])->render()
+            ))
+                ->extraAttributes(['class' => 'app-footer-wrapper']),
         ]);
     }
 

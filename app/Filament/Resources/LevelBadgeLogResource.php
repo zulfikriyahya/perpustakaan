@@ -44,7 +44,7 @@ class LevelBadgeLogResource extends Resource
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
                 TextColumn::make('levelBadge.nama_badge')->label('Badge')->searchable()->sortable(),
-                TextColumn::make('tanggal_didapat')->dateTime()->sortable(),
+                TextColumn::make('tanggal_didapat')->dateTime('d F Y H:i')->sortable(),
             ])
             ->filters([
                 SelectFilter::make('level_badge_id')->label('Badge')->relationship('levelBadge', 'nama_badge'),

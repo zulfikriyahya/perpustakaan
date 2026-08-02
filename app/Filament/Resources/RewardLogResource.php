@@ -47,7 +47,7 @@ class RewardLogResource extends Resource
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
                 TextColumn::make('reward.nama')->label('Reward')->searchable()->sortable(),
-                TextColumn::make('tanggal_didapat')->dateTime()->sortable(),
+                TextColumn::make('tanggal_didapat')->dateTime('d F Y H:i')->sortable(),
             ])
             ->filters([
                 SelectFilter::make('reward_id')->label('Reward')->relationship('reward', 'nama'),

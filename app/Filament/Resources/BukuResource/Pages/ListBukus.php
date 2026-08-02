@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\BukuResource\Pages;
 
 use App\Filament\Resources\BukuResource;
+use App\Filament\Resources\BukuResource\Widgets\BukuStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -15,5 +16,10 @@ class ListBukus extends ListRecords
         return [
             CreateAction::make(),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [BukuStatsWidget::class];
     }
 }

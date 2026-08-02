@@ -11,8 +11,6 @@ use App\Jobs\GenerateLabelBarcodePdfJob;
 use App\Models\Buku;
 use App\Models\Eksemplar;
 use App\Models\Rak;
-use App\Services\LabelBarcodeService;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ExportAction;
@@ -79,7 +77,7 @@ class BukuResource extends Resource
                 ->numeric()
                 ->prefix('Rp')
                 ->required()
-                ->helperText('Dipakai sebagai basis perhitungan Denda kerusakan/kehilangan untuk semua eksemplar judul ini.'),
+                ->helperText('Dipakai sebagai basis perhitunganDenda kerusakan/kehilangan untuk semua eksemplar judul ini.'),
             Textarea::make('deskripsi')
                 ->columnSpanFull(),
             // GAP-SPEC ditutup: field non-persisten, hanya dipakai saat
@@ -87,7 +85,7 @@ class BukuResource extends Resource
             // membuat N Eksemplar baru - tidak ada kolom 'jumlah_eksemplar'
             // di tabel bukus, jadi dehydrated(false) dan disembunyikan di
             // context edit (Aturan poin 3 - ubah stok setelah create tetap
-            // HANYA lewat tab Eksemplar/BukuImporter, bukan di sini).
+            // HANYA lewat tab Eksemplar/BukuImporter, bukan disini).
             TextInput::make('jumlah_eksemplar_awal')
                 ->label('Jumlah Eksemplar Awal')
                 ->numeric()
@@ -98,7 +96,7 @@ class BukuResource extends Resource
                 ->visibleOn('create'),
             Select::make('rak_id_eksemplar_awal')
                 ->label('Rak untuk Eksemplar Awal')
-                ->options(fn () => Rak::query()->pluck('nama', 'id'))
+                ->options(fn() => Rak::query()->pluck('nama', 'id'))
                 ->searchable()
                 ->helperText('Opsional - rak yang sama dipakaikan ke semuaeksemplar awal yang dibuat.')
                 ->dehydrated(false)
@@ -109,13 +107,24 @@ class BukuResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn(\Illuminate\Database\Eloquent\Builder $query) => $query->withCount([
+                // BARU (iterasi ini) - diganti dari 4x query N+1 per baris
+                // (method model dipanggil di ->state() closure) jadi 4
+                // sub-select dalam SATU query withCount, dieksekusi sekali
+                // untuk seluruh halaman (bukan per baris) - Aturan poin 3/9,
+                // penting untuk skala data besar.
+                'eksemplars as jumlah_eksemplar_aktif' => fn($q) => $q->where('status', '!=', \App\Enums\StatusEksemplar::Hilang),
+                'eksemplars as jumlah_stok_tersedia' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Tersedia),
+                'eksemplars as jumlah_eksemplar_rusak' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Rusak),
+                'eksemplars as jumlah_eksemplar_hilang' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Hilang),
+            ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(BukuImporter::class)
-                    ->authorize(fn () => auth()->user()?->can('create', Buku::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -130,21 +139,34 @@ class BukuResource extends Resource
                     ->label('Tahun')
                     ->sortable()
                     ->toggleable(),
-                TextColumn::make('eksemplars_count')
-                    ->label('Total Eksemplar')
-                    ->counts('eksemplars')
-                    ->sortable(),
-                TextColumn::make('stok_tersedia')
-                    ->label('Stok Tersedia')
-                    ->state(fn (Buku $record) => $record->stokTersedia())
+                // Sekarang membaca kolom hasil withCount di atas - TIDAK
+                // lagi memanggil $record->jumlahEksemplarAktif() (yang
+                // menjalankan query baru tiap baris).
+                TextColumn::make('jumlah_eksemplar_aktif')
+                    ->label('Jumlah Buku')
+                    ->description(fn(Buku $record) => $record->jumlah_eksemplar_hilang > 0
+                        ? "{$record->jumlah_eksemplar_hilang} hilang (tidak dihitung)"
+                        : null)
                     ->badge()
-                    ->color(fn (Buku $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
+                    ->color(fn(Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
+                    ->sortable(),
+                TextColumn::make('jumlah_stok_tersedia')
+                    ->label('Stok Tersedia')
+                    ->badge()
+                    ->color(fn(Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
+                    ->sortable(),
+                TextColumn::make('eksemplar_bermasalah')
+                    ->label('Rusak/Hilang')
+                    ->state(fn(Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
+                    ->badge()
+                    ->color(fn(Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
                     ->money('IDR')
                     ->sortable(),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -155,7 +177,7 @@ class BukuResource extends Resource
                         $adaPeminjamanBerjalan = Eksemplar::query()
                             ->withTrashed()
                             ->where('buku_id', $record->id)
-                            ->whereHas('peminjamans', fn ($q) => $q->whereIn('status', [
+                            ->whereHas('peminjamans', fn($q) => $q->whereIn('status', [
                                 StatusPeminjaman::Aktif,
                                 StatusPeminjaman::Terlambat,
                             ]))
@@ -182,64 +204,35 @@ class BukuResource extends Resource
                     ->relationship('kategoris', 'nama'),
             ])
             ->toolbarActions([
-                // BARU - cetak label barcode lintas Buku terpilih. Ambil
-                // SEMUA Eksemplar milik Buku-Buku yang dicentang (Aturan
-                // poin 3 - reuse LabelBarcodeService, jangan duplikasi
-                // logic generate barcode di sini).
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label Eksemplar')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
-                    ->action(function (Collection $records, LabelBarcodeService $service) {
-                        $eksemplars = Eksemplar::query()
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->action(function (Collection $records) {
+                        $eksemplarIds = Eksemplar::query()
                             ->whereIn('buku_id', $records->pluck('id'))
-                            ->with('buku')
-                            ->get();
+                            ->pluck('id')
+                            ->all();
 
-                        if ($eksemplars->isEmpty()) {
+                        if (empty($eksemplarIds)) {
                             Notification::make()
                                 ->warning()
                                 ->title('Tidak ada Eksemplar')
-                                ->body('Buku yang dipilih belum punya Eksemplar untuk dicetak labelnya.')
+                                ->body('Buku yang dipilih belumpunya Eksemplar untuk dicetak labelnya.')
                                 ->send();
 
                             return;
                         }
 
-                        $labels = $service->generateData($eksemplars);
+                        GenerateLabelBarcodePdfJob::dispatch($eksemplarIds, (string) auth()->id());
 
-                        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
-                            ->setPaper('a4', 'portrait');
-
-                        return response()->streamDownload(
-                            fn () => print ($pdf->output()),
-                            'label-barcode-buku-'.now()->format('Ymd-His').'.pdf',
-                            ['Content-Type' => 'application/pdf'],
-                        );
+                        Notification::make()
+                            ->info()
+                            ->title('Sedang memproses label barcode')
+                            ->body('Anda akan menerima notifikasi begitu PDF siap diunduh.')
+                            ->send();
                     })
                     ->deselectRecordsAfterCompletion(),
-
-                // // BARU - generate PDF di background (queue 'default') agar
-                // // tidak timeout HTTP saat Buku terpilih banyak. Hasil
-                // // dikirim via Filament database notification (bell icon)
-                // // dengan tombol Download - lihat GenerateLabelBarcodePdfJob.
-                // BulkAction::make('cetak_label_massal')
-                //     ->label('Cetak Label Eksemplar')
-                //     ->icon('heroicon-o-printer')
-                //     ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
-                //     ->action(function (Collection $records) {
-                //         GenerateLabelBarcodePdfJob::dispatch(
-                //             $records->pluck('id')->all(),
-                //             (string) auth()->id(),
-                //         );
-
-                //         \Filament\Notifications\Notification::make()
-                //             ->info()
-                //             ->title('Sedang memproses label barcode')
-                //             ->body('Anda akan menerima notifikasi begitu PDF siap diunduh.')
-                //             ->send();
-                //     })
-                //     ->deselectRecordsAfterCompletion(),
             ]);
     }
 

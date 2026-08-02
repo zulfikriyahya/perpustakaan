@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -45,6 +46,17 @@ class Eksemplar extends Model
     }
 
     /**
+     * BARU - Peminjaman terakhir (berdasarkan created_at) untuk eksemplar
+     * ini. Dipakai EksemplarsRelationManager untuk menampilkan siapa yang
+     * merusak/menghilangkan eksemplar berstatus Rusak/Hilang, tanpa query
+     * manual berulang (Aturan poin 3 - DRY).
+     */
+    public function peminjamanTerakhir(): HasOne
+    {
+        return $this->hasOne(Peminjaman::class)->latestOfMany();
+    }
+
+    /**
      * Satu sumber kebenaran format barcode auto-generate (Aturan poin 3
      * - DRY). SEBELUMNYA duplikat persis di BukuImporter::afterSave() dan
      * CreateBuku::afterCreate() - kedua caller sekarang memanggil ini.
@@ -54,10 +66,10 @@ class Eksemplar extends Model
      */
     public static function generateBarcodeUntuk(Buku $buku, int $urutan): string
     {
-        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)).'-'.$urutan);
+        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)) . '-' . $urutan);
 
         if (static::query()->where('barcode', $barcode)->exists()) {
-            $barcode .= '-'.strtoupper(Str::random(4));
+            $barcode .= '-' . strtoupper(Str::random(4));
         }
 
         return $barcode;

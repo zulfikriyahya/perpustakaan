@@ -41,8 +41,8 @@ class PunishmentLogResource extends Resource
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
                 TextColumn::make('punishment.nama')->label('Punishment')->searchable()->sortable(),
-                TextColumn::make('tanggal_diterapkan')->dateTime()->sortable(),
-                TextColumn::make('tanggal_berakhir')->dateTime()->placeholder('-'),
+                TextColumn::make('tanggal_diterapkan')->dateTime('d F Y H:i')->sortable(),
+                TextColumn::make('tanggal_berakhir')->dateTime('d F Y H:i')->placeholder('-'),
             ])
             ->filters([
                 SelectFilter::make('punishment_id')->label('Punishment')->relationship('punishment', 'nama'),

@@ -69,7 +69,7 @@ class KelasResource extends Resource
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('tingkat')->sortable(),
                 TextColumn::make('jurusan.nama')->label('Jurusan')->toggleable(),
-                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('jurusan_id')->label('Jurusan')->relationship('jurusan', 'nama'),

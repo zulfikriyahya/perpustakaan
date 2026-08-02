@@ -7,6 +7,7 @@ use App\Enums\JenisTransaksi;
 use App\Enums\KondisiBuku;
 use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
+use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
 use App\Models\Buku;
 use App\Models\Denda;
@@ -239,11 +240,21 @@ class PeminjamanService
             return $pengembalian->fresh();
         });
 
+        // reference_id HARUS unik per kejadian koreksi (bukan cuma per
+        // pengembalian) - kalau eksemplar yang sama dikoreksi lebih dari
+        // sekali (mis. baik->rusak lalu rusak->hilang), payload variables
+        // berbeda meski pengembalian_id sama. Reference_id lama yang hanya
+        // memakai pengembalian->id menyebabkan gateway menolak 409 karena
+        // reference_id sudah dipakai dengan payload berbeda (lihat log).
+        // Menyertakan pasangan kondisi_lama->kondisi_baru + timestamp
+        // presisi tinggi (dibuat SEKALI di sini, sebelum dispatch, jadi
+        // tetap stabil untuk retry job yang sama) menutup celah ini tanpa
+        // menambah kolom counter baru di tabel pengembalians (poin 16).
         $this->whatsappService->kirimEvent(
             eventCode: 'koreksi_kondisi_pengembalian',
             nomorTujuan: $peminjaman->user->no_telepon,
             variables: ['nama' => $peminjaman->user->nama, 'kondisi_lama' => $kondisiLama->value, 'kondisi_baru' => $kondisiBaru->value],
-            referenceId: "koreksi-pengembalian-{$pengembalian->id}",
+            referenceId: "koreksi-pengembalian-{$pengembalian->id}-{$kondisiLama->value}-{$kondisiBaru->value}-" . now()->format('YmdHisu'),
         );
 
         return $pengembalian;
@@ -255,6 +266,10 @@ class PeminjamanService
             throw new RuntimeException('Peminjaman ini sudah tidak aktif/terlambat, tidak bisa dilaporkan hilang.');
         }
 
+        // Notifikasi 'denda_dibuat' SUDAH dikirim oleh tandaiDenda() di
+        // bawah - jangan kirim ulang di sini (dulu menyebabkan reference_id
+        // sama dikirim 2x dengan payload nominal berbeda -> 409 dari
+        // gateway, lihat kirimEvent()/kirimPesan() §idempotency).
         $denda = DB::transaction(function () use ($peminjaman) {
             $denda = $this->tandaiDenda(
                 $peminjaman,
@@ -275,14 +290,56 @@ class PeminjamanService
             return $denda;
         });
 
+        return $denda;
+    }
+
+    /**
+     * BARU (iterasi ini) - kebalikan dari laporkanHilang(): dipakai KHUSUS
+     * untuk Peminjaman yang jadi Hilang lewat laporkanHilang() (belum
+     * pernah ada Pengembalian sama sekali). Untuk Peminjaman yang jadi
+     * Hilang lewat prosesPengembalian(kondisi: Hilang), gunakan
+     * koreksiKondisiPengembalian() sebagai gantinya (ada Pengembalian yang
+     * bisa dikoreksi ke KondisiBuku::Baik) - caller (Filament Action) WAJIB
+     * memilih method yang tepat berdasarkan ada/tidaknya $peminjaman->pengembalian.
+     *
+     * TODO: GAP-SPEC - Point dari event Kehilangan TIDAK direverse di sini,
+     * konsisten dengan koreksiKondisiPengembalian() (perilaku yang sama
+     * sudah dikonfirmasi sebelumnya untuk kasus itu).
+     */
+    public function bukuDitemukanKembali(Peminjaman $peminjaman): Peminjaman
+    {
+        if ($peminjaman->status !== StatusPeminjaman::Hilang) {
+            throw new RuntimeException('Peminjaman ini tidak berstatus Hilang.');
+        }
+
+        if ($peminjaman->pengembalian) {
+            throw new RuntimeException('Peminjaman ini sudah punya data Pengembalian - gunakan aksi Koreksi Kondisi di menu Pengembalian, bukan alur ini.');
+        }
+
+        $peminjaman = DB::transaction(function () use ($peminjaman) {
+            $peminjaman->eksemplar->update(['status' => StatusEksemplar::Tersedia]);
+            $peminjaman->update(['status' => StatusPeminjaman::Selesai]);
+
+            // dihitung PeminjamanService - reuse batalkanDenda() (Aturan
+            // poin 3), termasuk logika status_refund & notifikasi WA
+            // 'denda_dibatalkan_perlu_refund' jika denda sudah lunas.
+            $this->batalkanDenda($peminjaman, TipeDenda::Kehilangan);
+
+            return $peminjaman->fresh();
+        });
+
+        // TODO: ASUMSI - eventCode 'buku_ditemukan_kembali' BARU, belum ada
+        // di daftar template WhatsApp existing. Sebelum Setting
+        // 'wa_template_buku_ditemukan_kembali' diisi Admin, kirimEvent()
+        // akan skip otomatis (bukan error) - lihat WhatsappService::kirimEvent().
         $this->whatsappService->kirimEvent(
-            eventCode: 'denda_dibuat',
+            eventCode: 'buku_ditemukan_kembali',
             nomorTujuan: $peminjaman->user->no_telepon,
-            variables: ['nama' => $peminjaman->user->nama, 'tipe' => 'kehilangan', 'nominal' => (string) $denda->nominal],
-            referenceId: "denda-{$denda->id}",
+            variables: ['nama' => $peminjaman->user->nama],
+            referenceId: "buku-ditemukan-{$peminjaman->id}",
         );
 
-        return $denda;
+        return $peminjaman;
     }
 
     /**
@@ -384,6 +441,17 @@ class PeminjamanService
         return $denda;
     }
 
+    /**
+     * TODO: GAP-SPEC - sebelumnya method ini TIDAK PERNAH men-set
+     * status_refund maupun mengirim notifikasi 'denda_dibatalkan_perlu_refund'
+     * walau komentar keterangan Denda sudah menyebut "perlu refund manual".
+     * Diperbaiki (dikonfirmasi): notifikasi WA dikirim KE USER (bukan
+     * Admin/Pustakawan) hanya jika denda yang dibatalkan SUDAH TERBAYAR
+     * sebelum koreksi - kalau belum terbayar, tidak ada uang yang perlu
+     * direfund sehingga tidak perlu status_refund maupun notifikasi.
+     * Nominal ASLI ditangkap sebelum di-nol-kan supaya user tahu jumlah
+     * yang dibatalkan/perlu direfund.
+     */
     protected function batalkanDenda(Peminjaman $peminjaman, TipeDenda $tipe): void
     {
         $denda = Denda::query()
@@ -397,17 +465,33 @@ class PeminjamanService
         }
 
         $sudahTerbayar = $denda->status_lunas;
+        $nominalAsli = $denda->nominal; // ditangkap sebelum di-nol-kan, dipakai untuk notifikasi WA
 
         $denda->update([
             'nominal' => 0,
             'status_lunas' => true,
             'tanggal_lunas' => now(),
-            'keterangan' => trim(($denda->keterangan ? $denda->keterangan.' | ' : '')
-                .($sudahTerbayar
+            'status_refund' => $sudahTerbayar ? StatusRefund::PerluRefund : $denda->status_refund,
+            'keterangan' => trim(($denda->keterangan ? $denda->keterangan . ' | ' : '')
+                . ($sudahTerbayar
                     ? 'Dibatalkan otomatis (SUDAH TERBAYAR SEBELUM KOREKSI - perlu refund manual di luar sistem): koreksi kondisi Pengembalian.'
                     : 'Dibatalkan otomatis: koreksi kondisi Pengembalian.')),
         ]);
 
-        // TODO: GAP-SPEC - refund fisik di luar sistem, sama seperti sebelumnya.
+        if ($sudahTerbayar) {
+            // dikirim ke user (dikonfirmasi) - referenceId stabil per denda
+            // supaya tidak dobel kirim jika batalkanDenda() ter-trigger ulang
+            // untuk denda yang sama (idempotency window gateway §9).
+            $this->whatsappService->kirimEvent(
+                eventCode: 'denda_dibatalkan_perlu_refund',
+                nomorTujuan: $peminjaman->user->no_telepon,
+                variables: [
+                    'nama' => $peminjaman->user->nama,
+                    'tipe' => $tipe->value,
+                    'nominal' => (string) $nominalAsli,
+                ],
+                referenceId: "denda-dibatalkan-refund-{$denda->id}",
+            );
+        }
     }
 }

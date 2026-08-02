@@ -48,4 +48,26 @@ class Buku extends Model
     {
         return $this->eksemplars()->where('status', StatusEksemplar::Tersedia)->count();
     }
+
+    /**
+     * BARU - jumlah eksemplar yang masih dianggap bagian koleksi aktif
+     * (Tersedia + Dipinjam + Rusak). Eksemplar Hilang SENGAJA dikeluarkan
+     * dari hitungan ini (dikonfirmasi) - dipakai BukuResource kolom
+     * 'Jumlah Buku' supaya angka tidak menyesatkan (buku hilang bukan lagi
+     * bagian koleksi yang bisa dipinjam/ditemukan kembali fisiknya).
+     */
+    public function jumlahEksemplarAktif(): int
+    {
+        return $this->eksemplars()->where('status', '!=', StatusEksemplar::Hilang)->count();
+    }
+
+    public function jumlahEksemplarRusak(): int
+    {
+        return $this->eksemplars()->where('status', StatusEksemplar::Rusak)->count();
+    }
+
+    public function jumlahEksemplarHilang(): int
+    {
+        return $this->eksemplars()->where('status', StatusEksemplar::Hilang)->count();
+    }
 }

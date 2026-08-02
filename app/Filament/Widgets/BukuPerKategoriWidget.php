@@ -32,7 +32,6 @@ class BukuPerKategoriWidget extends ChartWidget
         $kategoris = Kategori::query()
             ->withCount('bukus')
             ->orderByDesc('bukus_count')
-            // ->limit(10)
             ->get();
 
         return [

@@ -201,6 +201,11 @@ class ShieldSeeder extends Seeder
 
                 'ViewAny:LaporanBulanan',
 
+                'ViewAny:Peminjaman',
+                'View:Peminjaman',
+                'Create:Peminjaman',
+                'Update:Peminjaman',
+                
                 // Catatan: 'ViewAny:PengaturanSistem' SENGAJA tidak
                 // ditambahkan di sini - lihat komentar di atas.
             ])->get()

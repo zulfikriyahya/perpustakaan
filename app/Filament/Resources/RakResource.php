@@ -82,7 +82,7 @@ class RakResource extends Resource
                     ->state(fn (Rak $record) => $record->jumlahJudulUnik())
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

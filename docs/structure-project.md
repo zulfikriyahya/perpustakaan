@@ -2,10 +2,12 @@
 ├── app
 │   ├── Console
 │   │   └── Commands
+│   │       ├── BackfillSnapshotHarian.php
 │   │       └── ProsesCronHarianPerpustakaan.php
 │   ├── Enums
 │   │   ├── EventTypePoint.php
 │   │   ├── GroupSetting.php
+│   │   ├── JenisKelamin.php
 │   │   ├── JenisTransaksi.php
 │   │   ├── KondisiBuku.php
 │   │   ├── RoleUser.php
@@ -59,6 +61,7 @@
 │   │   │   │   ├── Login.php
 │   │   │   │   ├── RequestPasswordReset.php
 │   │   │   │   └── ResetPassword.php
+│   │   │   ├── Dashboard.php
 │   │   │   ├── LaporanBulanan.php
 │   │   │   ├── PengaturanSistem.php
 │   │   │   ├── ProsesKenaikanKelas.php
@@ -183,14 +186,20 @@
 │   │   │   ├── TransaksiResource.php
 │   │   │   └── UserResource.php
 │   │   └── Widgets
+│   │       ├── BukuPerKategoriWidget.php
+│   │       ├── BukuRusakHilangWidget.php
 │   │       ├── DendaTerbaruWidget.php
+│   │       ├── GamifikasiBulananWidget.php
 │   │       ├── PeminjamanJatuhTempoWidget.php
 │   │       ├── PeminjamanStatsWidget.php
-│   │       └── TrenKunjunganChartWidget.php
+│   │       ├── PerJenisKelaminWidget.php
+│   │       ├── TrenBulananWidget.php
+│   │       └── WhatsappLogWidget.php
 │   ├── Http
 │   │   ├── Controllers
 │   │   │   ├── Api
 │   │   │   │   └── PerpustakaanDeviceController.php
+│   │   │   ├── ChartExportController.php
 │   │   │   └── Controller.php
 │   │   └── Middleware
 │   │       └── AuthenticateDeviceApiKey.php
@@ -211,6 +220,7 @@
 │   │   ├── Kunjungan.php
 │   │   ├── LevelBadgeLog.php
 │   │   ├── LevelBadge.php
+│   │   ├── LoginOtp.php
 │   │   ├── PasswordResetOtp.php
 │   │   ├── Peminjaman.php
 │   │   ├── Pengembalian.php
@@ -222,9 +232,11 @@
 │   │   ├── Reward.php
 │   │   ├── RiwayatKelasSiswa.php
 │   │   ├── Setting.php
+│   │   ├── SnapshotHarian.php
 │   │   ├── TahunPelajaran.php
 │   │   ├── Transaksi.php
-│   │   └── User.php
+│   │   ├── User.php
+│   │   └── WhatsappLog.php
 │   ├── Observers
 │   │   ├── DendaObserver.php
 │   │   ├── SettingObserver.php
@@ -263,13 +275,17 @@
 │       ├── KenaikanKelasService.php
 │       ├── LabelBarcodeService.php
 │       ├── LaporanBulananService.php
+│       ├── LoginOtpService.php
 │       ├── PasswordResetOtpService.php
 │       ├── PeminjamanService.php
 │       ├── PointService.php
 │       ├── RfidResolverService.php
+│       ├── SnapshotHarianService.php
 │       └── WhatsappService.php
 ├── bootstrap
 │   ├── cache
+│   │   ├── filament
+│   │   │   └── panels
 │   │   ├── .gitignore
 │   │   ├── packages.php
 │   │   └── services.php
@@ -280,6 +296,7 @@
 │   ├── auth.php
 │   ├── cache.php
 │   ├── database.php
+│   ├── filament.php
 │   ├── filament-shield.php
 │   ├── filesystems.php
 │   ├── logging.php
@@ -357,7 +374,11 @@
 │   │   ├── 2026_08_02_000005_add_tahun_terbit_to_bukus_table.php
 │   │   ├── 2026_08_02_000006_create_level_badge_logs_table.php
 │   │   ├── 2026_08_02_000007_make_eksemplar_id_nullable_in_peminjamans_table.php
-│   │   └── 2026_08_02_000008_add_ota_report_columns_to_device_logs_table.php
+│   │   ├── 2026_08_02_000008_add_ota_report_columns_to_device_logs_table.php
+│   │   ├── 2026_08_02_000009_create_login_otps_table.php
+│   │   ├── 2026_08_02_000010_add_jenis_kelamin_to_users_table.php
+│   │   ├── 2026_08_02_000011_create_whatsapp_logs_table.php
+│   │   └── 2026_08_02_000012_create_snapshot_harians_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
@@ -371,18 +392,22 @@
 │   ├── css
 │   │   └── app.css
 │   ├── js
-│   │   └── app.js
+│   │   ├── app.js
+│   │   └── chart-export.js
 │   └── views
 │       ├── filament
-│       │   └── pages
-│       │       ├── auth
-│       │       │   ├── request-password-reset.blade.php
-│       │       │   └── reset-password.blade.php
-│       │       ├── laporan-bulanan.blade.php
-│       │       ├── pengaturan-sistem.blade.php
-│       │       ├── proses-kenaikan-kelas.blade.php
-│       │       └── transaksi-cepat.blade.php
+│       │   ├── pages
+│       │   │   ├── auth
+│       │   │   │   ├── request-password-reset.blade.php
+│       │   │   │   └── reset-password.blade.php
+│       │   │   ├── laporan-bulanan.blade.php
+│       │   │   ├── pengaturan-sistem.blade.php
+│       │   │   ├── proses-kenaikan-kelas.blade.php
+│       │   │   └── transaksi-cepat.blade.php
+│       │   └── partials
+│       │       └── chart-export-script.blade.php
 │       ├── pdf
+│       │   ├── chart-export.blade.php
 │       │   ├── label-barcode.blade.php
 │       │   └── laporan-bulanan.blade.php
 │       └── welcome.blade.php
@@ -413,4 +438,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-92 directories, 322 files
+95 directories, 344 files

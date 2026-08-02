@@ -62,7 +62,7 @@ class WhatsappLogWidget extends TableWidget
                     ->toggleable()
                     ->placeholder('-')
                     ->visible(fn () => $this->isSuperAdmin()),
-                TextColumn::make('updated_at')->label('Terakhir Diperbarui')->dateTime('d M Y H:i'),
+                TextColumn::make('updated_at')->label('Terakhir Diperbarui')->dateTime('d F Y H:i'),
             ])
             ->filters([
                 SelectFilter::make('status')

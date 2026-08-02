@@ -6,6 +6,35 @@
 ---
 
 ## Fitur masa depan
+
+- fitur generate label ke queue
+
+- download grafik pada widget berupa gambar
+- download grafik pada widget berupa pdf
+- perhitungan tanggal dan sisa hari pada widget menggunakan format yang dapat dipahami manusia
+- gunakan firmat tanggal /datetime menggunakan format 'dd mmmm yyyy' yang dapat mudah dipahami manusia menggunakan format timezone Asia/Jakarta
+
+---
+
+- unggah .mp3 atau .wav di daftar audio-book
+- unggah .epub atau .pdf di daftar e-book
+- fitur baca buku pdf di landing page (kalau bisa menggunakan seperti fliphtml5)
+
+---
+
+- Logo Instansi/Logo Perpustakaan
+- fitur instansi dan multi instansi
+
+---
+
+- perbaikan UI Resource dan page
+
+---
+
+- ujicoba perangkat visitor counter
+
+---
+
 - membuat UI Landing Page
 - halaman FAQ
 - halaman daftar buku pdf / e-book / audio-book
@@ -14,20 +43,13 @@
 - Metadata LLMS.txt | robots.txt
 - Install PWA
 - SEO Google
-- unggah .mp3 atau .wav di daftar audio-book
-- unggah .epub atau .pdf di daftar e-book
-- fitur baca buku pdf di landing page (kalau bisa menggunakan seperti fliphtml5)
-- fitur generate label ke queue
+
+---
+
 - deploy dengan octane + frankenphp
-- fitur pesan whatsapp
-- Logo
-- fitur instansi dan multi instansi
-- perbaikan UI Resource dan page
-- ujicoba perangkat visitor counter
+
+---
 
 
-- tambahkan widget kunjungan, peminjaman, dan pengembalian perbulan.
-- tambahkan widget kunjungan, peminjaman, dan pengembalian per jenis kelamin.
-- tambahkan Bagde, Reward, dan punishment perbulan.
-- tambahkan widget buku perkategori.
-- upgrade widget yang sudah ada agar lebih baik dan indah juga informatif.
+- tambahkan widget stats overview untuk masing masing resource.
+

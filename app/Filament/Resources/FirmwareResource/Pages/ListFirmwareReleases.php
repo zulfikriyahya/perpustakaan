@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\FirmwareResource\Pages;
 
 use App\Filament\Resources\FirmwareResource;
+use App\Filament\Resources\FirmwareResource\Widgets\FirmwareStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -15,5 +16,10 @@ class ListFirmwareReleases extends ListRecords
         return [
             CreateAction::make(),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [FirmwareStatsWidget::class];
     }
 }

@@ -51,8 +51,8 @@ class RiwayatKelasSiswaResource extends Resource
                         StatusRiwayatKelas::Lulus => 'primary',
                         StatusRiwayatKelas::Keluar => 'gray',
                     }),
-                TextColumn::make('tanggal_mulai')->date()->sortable(),
-                TextColumn::make('tanggal_selesai')->date()->sortable()->placeholder('-'),
+                TextColumn::make('tanggal_mulai')->date('d F Y')->sortable(),
+                TextColumn::make('tanggal_selesai')->date('d F Y')->sortable()->placeholder('-'),
             ])
             ->filters([
                 SelectFilter::make('status')

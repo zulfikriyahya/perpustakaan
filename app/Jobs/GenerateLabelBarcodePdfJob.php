@@ -6,25 +6,31 @@ use App\Models\Eksemplar;
 use App\Models\User;
 use App\Services\LabelBarcodeService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Notifications\Action;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Job generate PDF label barcode untuk banyak Buku sekaligus (bulk action
- * BukuResource) - dijalankan di queue 'default' agar tidak timeout HTTP
- * request Livewire (Aturan poin 3 - reuse LabelBarcodeService, jangan
- * duplikasi logic generate barcode di sini).
+ * Job generate PDF label barcode di background (queue 'default') agar
+ * tidak timeout HTTP request Livewire (Aturan poin 3 - reuse
+ * LabelBarcodeService, jangan duplikasi logic generate barcodedi sini).
  *
  * PENTING (Aturan poin 17): $timeout di bawah WAJIB <= --timeout worker
- * queue 'default' di supervisor config - lihat catatan perubahan
- * supervisor yang mengikuti perubahan ini.
+ * queue 'default' di supervisor config.
+ *
+ * TODO: GAP-SPEC - constructor menerima $eksemplarIds LANGSUNG(bukan
+ * $bukuIds seperti versi sebelumnya) - job ini sebelumnya deadcode
+ * (di-comment di BukuResource, belum pernah didispatch di production),
+ * jadi perubahan signature aman. Resolusi dari Buku -> Eksemplar kini
+ * jadi tanggung jawab CALLER (BukuResource meresolve dulu sebelum
+ * dispatch), supaya job ini juga bisa dipakai caller yang sudah
+ * langsung memilih Eksemplar (EksemplarsRelationManager bulk action).
  */
 class GenerateLabelBarcodePdfJob implements ShouldQueue
 {
@@ -39,14 +45,14 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
     public int $timeout = 170;
 
     public function __construct(
-        protected array $bukuIds,
+        protected array $eksemplarIds,
         protected string $userId,
     ) {}
 
     public function handle(LabelBarcodeService $service): void
     {
         $eksemplars = Eksemplar::query()
-            ->whereIn('buku_id', $this->bukuIds)
+            ->whereIn('id', $this->eksemplarIds)
             ->with('buku')
             ->get();
 
@@ -62,7 +68,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
             Notification::make()
                 ->warning()
                 ->title('Tidak ada Eksemplar')
-                ->body('Buku yang dipilih belum punya Eksemplar untuk dicetak labelnya.')
+                ->body('Tidak ada Eksemplar yang ditemukan untuk dicetak labelnya.')
                 ->sendToDatabase($user);
 
             return;
@@ -73,7 +79,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
         $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
             ->setPaper('a4', 'portrait');
 
-        $filename = 'label-barcode-'.now()->format('Ymd-His').'-'.substr(md5(uniqid()), 0, 6).'.pdf';
+        $filename = 'label-barcode-' . now()->format('Ymd-His') . '-' . substr(md5(uniqid()), 0, 6) . '.pdf';
         $path = "labels/{$filename}";
 
         Storage::disk('public')->put($path, $pdf->output());
@@ -81,7 +87,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
         Notification::make()
             ->success()
             ->title('Label barcode siap diunduh')
-            ->body(count($labels).' label dari '.count($this->bukuIds).' buku berhasil dibuat.')
+            ->body(count($labels) . ' label berhasil dibuat.')
             ->actions([
                 Action::make('download')
                     ->label('Download PDF')
@@ -93,7 +99,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateLabelBarcodePdfJob: gagal generate label. Buku IDs: '.implode(',', $this->bukuIds).". Error: {$exception->getMessage()}");
+        Log::error('GenerateLabelBarcodePdfJob: gagal generate label. EksemplarIDs: ' . implode(',', $this->eksemplarIds) . ". Error: {$exception->getMessage()}");
 
         $user = User::query()->find($this->userId);
 

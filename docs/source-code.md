@@ -1,5 +1,62 @@
 # SOURCE CODE - perpustakaan
 
+## app/Console/Commands/BackfillSnapshotHarian.php
+```php
+<?php
+
+namespace App\Console\Commands;
+
+use App\Services\SnapshotHarianService;
+use Carbon\Carbon;
+use Illuminate\Console\Command;
+
+/**
+ * Command SEKALI-JALAN (manual, TIDAK didaftarkan di routes/console.php
+ * Schedule) - dijalankan sekali oleh Admin setelah migration
+ * snapshot_harians pertama kali di-deploy, untuk mengisi histori
+ * sebelum tabel ini ada. Idempotent - aman dijalankan ulang (SnapshotHarianService
+ * pakai updateOrCreate per tanggal).
+ *
+ * TODO: ASUMSI - default 30 hari ke belakang (--hari). Ganti sesuai
+ * kebutuhan retensi trend yang diinginkan.
+ */
+class BackfillSnapshotHarian extends Command
+{
+    protected $signature = 'perpustakaan:snapshot-harian-backfill {--hari=30 : Jumlah hari ke belakang dari hari ini}';
+
+    protected $description = 'Isi ulang SnapshotHarian untuk N hari ke belakang (dipakai sekali setelah deploy migration snapshot_harians).';
+
+    public function handle(SnapshotHarianService $snapshotHarianService): int
+    {
+        $jumlahHari = (int) $this->option('hari');
+
+        if ($jumlahHari < 1) {
+            $this->error('Opsi --hari harus >= 1.');
+
+            return self::FAILURE;
+        }
+
+        $this->info("Membackfill snapshot untuk {$jumlahHari} hari ke belakang...");
+
+        $bar = $this->output->createProgressBar($jumlahHari);
+
+        for ($i = $jumlahHari - 1; $i >= 0; $i--) {
+            $tanggal = Carbon::now()->subDays($i)->startOfDay();
+            $snapshotHarianService->catatUntukTanggal($tanggal);
+            $bar->advance();
+        }
+
+        $bar->finish();
+        $this->newLine();
+        $this->info('Backfill selesai.');
+
+        return self::SUCCESS;
+    }
+}
+
+```
+---
+
 ## app/Console/Commands/ProsesCronHarianPerpustakaan.php
 ```php
 <?php
@@ -7,6 +64,7 @@
 namespace App\Console\Commands;
 
 use App\Services\PeminjamanService;
+use App\Services\SnapshotHarianService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -14,26 +72,35 @@ use Illuminate\Support\Facades\Log;
  * Wrapper Artisan command untuk PeminjamanService::prosesCronHarian().
  * Logic perhitungan/transisi status TIDAK diduplikasi di sini - lihat
  * Aturan poin 3 (Prinsip DRY), seluruh logic tetap di PeminjamanService.
+ *
+ * BARU (iterasi ini): setelah reminder/transisi status selesai, catat
+ * SnapshotHarian untuk HARI INI - dijalankan SETELAH prosesCronHarian()
+ * supaya transisi status Terlambat hari ini ikut tercermin di snapshot
+ * (Aturan poin 3 - reuse SnapshotHarianService, jangan duplikasi
+ * perhitungan agregat di sini).
  */
 class ProsesCronHarianPerpustakaan extends Command
 {
     protected $signature = 'perpustakaan:cron-harian';
 
-    protected $description = 'Jalankan cron harian Peminjaman: reminder H-3/H-1 dan transisi status Terlambat.';
+    protected $description = 'Jalankan cron harian Peminjaman: reminder H-3/H-1, transisi status Terlambat, dan catat snapshot harian.';
 
-    public function handle(PeminjamanService $peminjamanService): int
+    public function handle(PeminjamanService $peminjamanService, SnapshotHarianService $snapshotHarianService): int
     {
         $mulai = now();
 
         $stat = $peminjamanService->prosesCronHarian();
 
+        $snapshot = $snapshotHarianService->catatUntukTanggal(now());
+
         $durasiMs = now()->diffInMilliseconds($mulai);
 
         $this->info(sprintf(
-            'Cron harian selesai: reminder_h3=%d, reminder_h1=%d, jadi_terlambat=%d (%d ms)',
+            'Cron harian selesai: reminder_h3=%d, reminder_h1=%d, jadi_terlambat=%d, snapshot_tanggal=%s (%d ms)',
             $stat['reminder_h3'],
             $stat['reminder_h1'],
             $stat['jadi_terlambat'],
+            $snapshot->tanggal->toDateString(),
             $durasiMs,
         ));
 
@@ -41,6 +108,7 @@ class ProsesCronHarianPerpustakaan extends Command
             'reminder_h3' => $stat['reminder_h3'],
             'reminder_h1' => $stat['reminder_h1'],
             'jadi_terlambat' => $stat['jadi_terlambat'],
+            'snapshot_tanggal' => $snapshot->tanggal->toDateString(),
             'durasi_ms' => $durasiMs,
         ]);
 
@@ -83,6 +151,29 @@ enum GroupSetting: string
     case Denda = 'denda';
     case Device = 'device';
     case Whatsapp = 'whatsapp';
+}
+
+```
+---
+
+## app/Enums/JenisKelamin.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum JenisKelamin: string
+{
+    case LakiLaki = 'L';
+    case Perempuan = 'P';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::LakiLaki => 'Laki-laki',
+            self::Perempuan => 'Perempuan',
+        };
+    }
 }
 
 ```
@@ -2682,21 +2773,83 @@ class UserImporter extends Importer
 namespace App\Filament\Pages\Auth;
 
 use App\Models\User;
+use App\Services\LoginOtpService;
+use Filament\Actions\Action;
+use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\RenderHook;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\HtmlString;
 
-// TODO: verifikasi signature terhadap versi package yang terpasang (filament/filament ^5.7).
-// Nama namespace parent (Filament\Auth\Pages\Login vs Filament\Pages\Auth\Login) dan
-// method getCredentialsFromFormData() perlu dicek ulang terhadap source filament/filament
-// versi 5.7 yang ter-install - saya tidak bisa memverifikasi langsung dari sini.
+/**
+ * TODO: verifikasi signature terhadap versi package yang terpasang
+ * (filament/filament ^5.7). Override content() dan getFormActions() di
+ * bawah didasarkan pada pembacaan langsung source
+ * vendor/filament/filament/src/Auth/Pages/Login.php yang diberikan
+ * pengguna - authenticate() override TOTAL (bukan extend logic
+ * rate-limit/timebox/multi-factor bawaan) tetap ASUMSI BESAR untuk cabang
+ * mode 'otp': rate-limit(5), Timebox, dan multi-factor challenge bawaan
+ * SEMUA di-skip untuk mode OTP. Risiko diterima sadar sesuai konfirmasi
+ * (setara reset password), tapi WAJIB diuji end-to-end (poin 12).
+ *
+ * TODO: GAP-SPEC/BUG FIX - sebelumnya authenticate() mode OTP memakai
+ * $data['login'] (raw input, bisa NISN/NIP/No. Telepon) langsung sebagai
+ * no_telepon ke LoginOtpService::verifikasiUntukLogin() yang mencari
+ * berdasarkan no_telepon murni - OTP selalu gagal untuk user yang login
+ * pakai NISN/NIP. Diperbaiki dengan menyimpan no_telepon hasil resolve
+ * di property $noTeleponOtp saat kirimOtpLogin() berhasil, dipakai ulang
+ * di authenticate() - bukan raw input field lagi.
+ */
 class Login extends BaseLogin
 {
+    public string $mode = 'password';
+
+    public bool $otpTerkirim = false;
+
+    /**
+     * no_telepon ASLI hasil resolve dari input login (NISN/NIP/No.
+     * Telepon) - disimpan terpisah dari raw field 'login' karena
+     * LoginOtpService bekerja murni berbasis no_telepon (sama seperti
+     * pola RequestPasswordReset menyimpan no_telepon di session, disini
+     * cukup property Livewire karena same-page cycle).
+     */
+    public ?string $noTeleponOtp = null;
+
     public function form(Schema $schema): Schema
     {
         return $schema->components([
             $this->getLoginFormComponent(),
-            $this->getPasswordFormComponent(),
+            TextInput::make('password')
+                ->label('Password')
+                ->hint(filament()->hasPasswordReset()
+                    ? new HtmlString(Blade::render(
+                        '<x-filament::link :href="filament()->getRequestPasswordResetUrl()" tabindex="-1">Lupa kata sandi?</x-filament::link>'
+                    ))
+                    : null)
+                ->password()
+                ->revealable()
+                ->required()
+                ->visible(fn () => $this->mode === 'password')
+                ->dehydrated(fn () => $this->mode === 'password'),
+            TextInput::make('otp')
+                ->label('Kode OTP')
+                ->minLength(6)
+                ->maxLength(6)
+                ->required()
+                ->visible(fn () => $this->mode === 'otp' && $this->otpTerkirim)
+                ->dehydrated(fn () => $this->mode === 'otp'),
+            Text::make('Kode OTP berlaku 5 menit. Tidak menerima? Klik "Password" lalu "OTP WhatsApp" lagi untuk kirim ulang.')
+                ->size('xs')
+                ->color('gray')
+                ->visible(fn () => $this->mode === 'otp' && $this->otpTerkirim),
             $this->getRememberFormComponent(),
         ]);
     }
@@ -2707,17 +2860,58 @@ class Login extends BaseLogin
             ->label('NISN / NIP / No. Telepon')
             ->required()
             ->autofocus()
+            ->disabled(fn () => $this->mode === 'otp' && $this->otpTerkirim)
             ->extraInputAttributes(['tabindex' => 1]);
     }
 
-    /**
-     * Resolusi identifier login ke kolom yang sesuai (Aturan: NISN untuk
-     * Siswa, NIP untuk Pegawai/Pustakawan/Admin, atau no_telepon sebagai
-     * fallback universal). TODO: GAP-SPEC - jika suatu saat NISN dan NIP
-     * bisa bentrok nilai (kemungkinan kecil, belum ada constraint silang),
-     * urutan pengecekan di bawah (nisn -> nip -> no_telepon) menentukan
-     * prioritas resolusi.
-     */
+    public function gantiMode(string $mode): void
+    {
+        $this->mode = $mode;
+        $this->otpTerkirim = false;
+        $this->noTeleponOtp = null;
+    }
+
+    protected function resolveUser(string $login): ?User
+    {
+        return User::query()
+            ->where('nisn', $login)
+            ->orWhere('nip', $login)
+            ->orWhere('no_telepon', $login)
+            ->first();
+    }
+
+    public function kirimOtpLogin(): void
+    {
+        $login = (string) ($this->form->getState()['login'] ?? '');
+        $user = $this->resolveUser($login);
+
+        if (! $user) {
+            Notification::make()
+                ->title('Akun tidak ditemukan')
+                ->body('Pastikan NISN, NIP, atau No. Telepon sesuai yang terdaftar.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        try {
+            app(LoginOtpService::class)->kirimOtp($user);
+        } catch (\RuntimeException $e) {
+            Notification::make()->title('Belum bisa mengirim OTP')->body($e->getMessage())->warning()->send();
+
+            return;
+        }
+
+        // simpan no_telepon ASLI hasil resolve - bukan raw input 'login',
+        // supaya verifikasi OTP di authenticate() tetap benar walau user
+        // login pakai NISN/NIP.
+        $this->noTeleponOtp = $user->no_telepon;
+        $this->otpTerkirim = true;
+
+        Notification::make()->title('Kode OTP terkirim ke WhatsApp terdaftar.')->success()->send();
+    }
+
     protected function getCredentialsFromFormData(array $data): array
     {
         $login = $data['login'];
@@ -2731,6 +2925,116 @@ class Login extends BaseLogin
         return [
             $field => $login,
             'password' => $data['password'],
+        ];
+    }
+
+    /**
+     * TODO: GAP-SPEC - livewireSubmitHandler pada <form> di-hardcode ke
+     * 'authenticate' oleh base class Filament\Auth\Pages\Login
+     * (getFormContentComponent(), tidak di-override disini) - artinya
+     * menekan Enter di field manapun dalam form SELALU memanggil
+     * authenticate(), terlepas tombol mana yang visible. Di mode 'otp'
+     * sebelum OTP terkirim, ini didelegasikan ke kirimOtpLogin() supaya
+     * Enter berperilaku sama seperti klik tombol "Kirim OTP" - BUKAN
+     * menampilkan galat "kirim OTP terlebih dahulu" (UX buruk, bukan bug
+     * keamanan, karena kirimOtpLogin() sendiri sudah divalidasi/rate-limited).
+     */
+    public function authenticate(): ?LoginResponse
+    {
+        if ($this->mode === 'password') {
+            return parent::authenticate();
+        }
+
+        if ($this->mode === 'otp' && ! $this->otpTerkirim) {
+            $this->kirimOtpLogin();
+
+            return null;
+        }
+
+        $data = $this->form->getState();
+
+        if (! $this->noTeleponOtp) {
+            // defensif: seharusnya tidak tercapai lagi via Enter (sudah
+            // ditangani cabang di atas), tapi dipertahankan untuk kasus
+            // race/edge lain (mis. otpTerkirim true tapi noTeleponOtp
+            // ter-reset oleh sebab tak terduga).
+            Notification::make()->title('Kirim OTP terlebih dahulu.')->warning()->send();
+
+            return null;
+        }
+
+        try {
+            $user = app(LoginOtpService::class)->verifikasiUntukLogin($this->noTeleponOtp, (string) $data['otp']);
+        } catch (\RuntimeException $e) {
+            Notification::make()->title($e->getMessage())->danger()->send();
+
+            return null;
+        }
+
+        Auth::login($user, $data['remember'] ?? false);
+        session()->regenerate();
+
+        return app(LoginResponse::class);
+    }
+
+    /**
+     * Override TOTAL dari content() bawaan - menyisipkan baris toggle mode
+     * (Actions link) SEBELUM form, memakai Schema Component API asli
+     * (bukan Blade custom) supaya konsisten dengan cara Filament merender
+     * halaman ini. Struktur RenderHook before/after dipertahankan sama
+     * seperti base class.
+     */
+    public function content(Schema $schema): Schema
+    {
+        return $schema->components([
+            RenderHook::make(PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE),
+            $this->getModeSwitcherComponent(),
+            $this->getFormContentComponent(),
+            RenderHook::make(PanelsRenderHook::AUTH_LOGIN_FORM_AFTER),
+        ]);
+    }
+
+    protected function getModeSwitcherComponent(): Component
+    {
+        return Actions::make([
+            Action::make('mode_password')
+                ->label('Password')
+                ->action(fn () => $this->gantiMode('password'))
+                ->extraAttributes([
+                    'class' => 'flex-1 !justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors '
+                        .($this->mode === 'password'
+                            ? 'bg-white text-gray-950 dark:bg-gray-700 dark:text-white'
+                            : 'bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'),
+                ])
+                ->color('gray'),
+            Action::make('mode_otp')
+                ->label('OTP WhatsApp')
+                ->action(fn () => $this->gantiMode('otp'))
+                ->extraAttributes([
+                    'class' => 'flex-1 !justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors '
+                        .($this->mode === 'otp'
+                            ? 'bg-white text-gray-950 dark:bg-gray-700 dark:text-white'
+                            : 'bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'),
+                ])
+                ->color('gray'),
+        ])
+            ->fullWidth()
+            ->extraAttributes([
+                'class' => 'mb-6 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800/60',
+            ]);
+    }
+
+    protected function getFormActions(): array
+    {
+        return [
+            Action::make('kirim_otp')
+                ->label('Kirim OTP')
+                ->action('kirimOtpLogin')
+                ->visible(fn () => $this->mode === 'otp' && ! $this->otpTerkirim),
+            Action::make('authenticate')
+                ->label(fn () => $this->mode === 'otp' ? 'Verifikasi & Masuk' : 'Masuk')
+                ->submit('authenticate')
+                ->visible(fn () => $this->mode === 'password' || $this->otpTerkirim),
         ];
     }
 }
@@ -2944,6 +3248,25 @@ class ResetPassword extends SimplePage
 ```
 ---
 
+## app/Filament/Pages/Dashboard.php
+```php
+<?php
+
+namespace App\Filament\Pages;
+
+use Filament\Pages\Dashboard as BaseDashboard;
+
+class Dashboard extends BaseDashboard
+{
+    public function getColumns(): int|array
+    {
+        return 3;
+    }
+}
+
+```
+---
+
 ## app/Filament/Pages/LaporanBulanan.php
 ```php
 <?php
@@ -3066,6 +3389,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -3085,9 +3409,17 @@ use Illuminate\Support\HtmlString;
  * untuk kasus non-Resource page ini.
  *
  * TODO: verifikasi signature terhadap versi package yang terpasang -
- * komponen Tabs/Tab diasumsikan berada di Filament\Schemas\Components
+ * komponen Tabs/Tab/Grid diasumsikan berada di Filament\Schemas\Components
  * (mengikuti pola Schema/Select yang sudah dipakai LaporanBulanan),
  * cek ulang jika filament/filament ^5.7 punya lokasi berbeda.
+ *
+ * TODO: GAP-SPEC/UI - setiap Tab dibungkus Grid responsif (default 1
+ * kolom mobile, 2 kolom tablet, 3 kolom desktop, 4 kolom layar lebar)
+ * agar field pendek (angka jam, point, tarif) tidak memanjang penuh
+ * satu baris - proporsional terhadap panjang label/nilai. Tab
+ * "WhatsApp Template" tetap dibatasi maksimal 3 kolom (bukan 4) karena
+ * label & helperText lebih panjang, 4 kolom akan membuat teks terpotong/
+ * wrap berlebihan.
  */
 class PengaturanSistem extends Page
 {
@@ -3120,6 +3452,27 @@ class PengaturanSistem extends Page
         'device_ota_check_interval_ms',
     ];
 
+    /**
+     * Kolom grid responsif standar untuk tab dengan field pendek
+     * (Peminjaman/Denda, Point, Device) - proporsional di layar lebar.
+     */
+    protected const GRID_KOLOM_STANDAR = [
+        'default' => 1,
+        'sm' => 2,
+        'lg' => 3,
+        'xl' => 4,
+    ];
+
+    /**
+     * Kolom grid untuk tab dengan label/helperText panjang (WhatsApp
+     * Template) - dibatasi 3 kolom maksimal supaya tidak wrap berlebihan.
+     */
+    protected const GRID_KOLOM_PADAT = [
+        'default' => 1,
+        'sm' => 2,
+        'lg' => 3,
+    ];
+
     public static function canAccess(): bool
     {
         return auth()->user()?->can('ViewAny:PengaturanSistem') ?? false;
@@ -3144,77 +3497,91 @@ class PengaturanSistem extends Page
                 ->tabs([
                     Tab::make('Peminjaman & Denda')
                         ->schema([
-                            TextInput::make('max_peminjaman_aktif')
-                                ->label('Maks. Peminjaman Aktif per User')
-                                ->numeric()->integer()->minValue(1)->required(),
-                            TextInput::make('lama_peminjaman_hari')
-                                ->label('Lama Masa Pinjam (hari)')
-                                ->numeric()->integer()->minValue(1)->required(),
-                            TextInput::make('tarif_denda_per_hari')
-                                ->label('Tarif Denda Keterlambatan / Hari (Rp)')
-                                ->numeric()->minValue(0)->required(),
-                            TextInput::make('persentase_denda_kerusakan')
-                                ->label('Persentase Denda Kerusakan (%)')
-                                ->numeric()->minValue(0)->maxValue(100)->required(),
+                            Grid::make(self::GRID_KOLOM_STANDAR)
+                                ->schema([
+                                    TextInput::make('max_peminjaman_aktif')
+                                        ->label('Maks. Peminjaman Aktif per User')
+                                        ->numeric()->integer()->minValue(1)->required(),
+                                    TextInput::make('lama_peminjaman_hari')
+                                        ->label('Lama Masa Pinjam (hari)')
+                                        ->numeric()->integer()->minValue(1)->required(),
+                                    TextInput::make('tarif_denda_per_hari')
+                                        ->label('Tarif Denda Keterlambatan / Hari (Rp)')
+                                        ->numeric()->minValue(0)->required(),
+                                    TextInput::make('persentase_denda_kerusakan')
+                                        ->label('Persentase Denda Kerusakan (%)')
+                                        ->numeric()->minValue(0)->maxValue(100)->required(),
+                                ]),
                         ]),
 
                     Tab::make('Point')
                         ->schema([
-                            TextInput::make('point_kunjungan')->label('Point Kunjungan')->numeric()->integer()->required(),
-                            TextInput::make('point_peminjaman')->label('Point Peminjaman')->numeric()->integer()->required(),
-                            TextInput::make('point_pengembalian')->label('Point Pengembalian')->numeric()->integer()->required(),
-                            TextInput::make('point_kerusakan')->label('Point Kerusakan (negatif)')->numeric()->integer()->maxValue(0)->required(),
-                            TextInput::make('point_kehilangan')->label('Point Kehilangan (negatif)')->numeric()->integer()->maxValue(0)->required(),
+                            Grid::make(self::GRID_KOLOM_STANDAR)
+                                ->schema([
+                                    TextInput::make('point_kunjungan')->label('Point Kunjungan')->numeric()->integer()->required(),
+                                    TextInput::make('point_peminjaman')->label('Point Peminjaman')->numeric()->integer()->required(),
+                                    TextInput::make('point_pengembalian')->label('Point Pengembalian')->numeric()->integer()->required(),
+                                    TextInput::make('point_kerusakan')->label('Point Kerusakan (negatif)')->numeric()->integer()->maxValue(0)->required(),
+                                    TextInput::make('point_kehilangan')->label('Point Kehilangan (negatif)')->numeric()->integer()->maxValue(0)->required(),
+                                ]),
                         ]),
 
                     Tab::make('WhatsApp Template')
-                        ->schema(
-                            collect([
-                                'wa_template_peminjaman_aktif' => 'Peminjaman Aktif',
-                                'wa_template_reminder_h3' => 'Reminder H-3',
-                                'wa_template_reminder_h1' => 'Reminder H-1',
-                                'wa_template_jadi_terlambat' => 'Jadi Terlambat',
-                                'wa_template_pengembalian_diproses' => 'Pengembalian Diproses',
-                                'wa_template_denda_dibuat' => 'Denda Dibuat',
-                                'wa_template_denda_lunas' => 'Denda Lunas',
-                                'wa_template_badge_naik' => 'Badge Naik',
-                                'wa_template_reward_didapat' => 'Reward Didapat',
-                                'wa_template_punishment_diterapkan' => 'Punishment Diterapkan',
-                                'wa_template_reset_password_otp' => 'Reset Password OTP',
-                                'wa_template_koreksi_kondisi_pengembalian' => 'Koreksi Kondisi Pengembalian',
-                                'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
-                            ])->map(
-                                fn (string $label, string $key) => TextInput::make($key)
-                                    ->label($label)
-                                    ->required()
-                                    ->helperText('Wajib sama persis dengan template_code di panel gateway.')
-                            )->values()->all()
-                        ),
+                        ->schema([
+                            Grid::make(self::GRID_KOLOM_PADAT)
+                                ->schema(
+                                    collect([
+                                        'wa_template_peminjaman_aktif' => 'Peminjaman Aktif',
+                                        'wa_template_reminder_h3' => 'Reminder H-3',
+                                        'wa_template_reminder_h1' => 'Reminder H-1',
+                                        'wa_template_jadi_terlambat' => 'Jadi Terlambat',
+                                        'wa_template_pengembalian_diproses' => 'Pengembalian Diproses',
+                                        'wa_template_denda_dibuat' => 'Denda Dibuat',
+                                        'wa_template_denda_lunas' => 'Denda Lunas',
+                                        'wa_template_badge_naik' => 'Badge Naik',
+                                        'wa_template_reward_didapat' => 'Reward Didapat',
+                                        'wa_template_punishment_diterapkan' => 'Punishment Diterapkan',
+                                        'wa_template_reset_password_otp' => 'Reset Password OTP',
+                                        'wa_template_login_otp' => 'Login OTP',
+                                        'wa_template_koreksi_kondisi_pengembalian' => 'Koreksi Kondisi Pengembalian',
+                                        'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
+                                    ])->map(
+                                        fn (string $label, string $key) => TextInput::make($key)
+                                            ->label($label)
+                                            ->required()
+                                            ->helperText('Wajib sama persis dengan template_code di panel gateway.')
+                                    )->values()->all()
+                                ),
+                        ]),
 
                     Tab::make('Device')
                         ->schema([
                             Placeholder::make('rfid_db_ver')
                                 ->label('Versi Daftar Kartu RFID (otomatis)')
-                                ->content(fn () => (string) Setting::get('rfid_db_ver', 0)),
-                            TextInput::make('device_sleep_start_hour')
-                                ->label('Jam Mulai Sleep (0-23)')
-                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
-                            TextInput::make('device_sleep_end_hour')
-                                ->label('Jam Bangun dari Sleep (0-23)')
-                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
-                            TextInput::make('device_oled_dim_start_hour')
-                                ->label('Jam OLED Dimatikan Sementara (0-23)')
-                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
-                            TextInput::make('device_oled_dim_end_hour')
-                                ->label('Jam OLED Menyala Kembali (0-23)')
-                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
-                            TextInput::make('device_sync_interval_ms')
-                                ->label('Interval Sinkronisasi (ms)')
-                                ->numeric()->integer()->minValue(1000)->required()
-                                ->helperText('Minimum 1000ms - nilai terlalu kecil membebani device & jaringan.'),
-                            TextInput::make('device_ota_check_interval_ms')
-                                ->label('Interval Cek Firmware OTA (ms)')
-                                ->numeric()->integer()->minValue(1000)->required(),
+                                ->content(fn () => (string) Setting::get('rfid_db_ver', 0))
+                                ->columnSpanFull(),
+                            Grid::make(self::GRID_KOLOM_STANDAR)
+                                ->schema([
+                                    TextInput::make('device_sleep_start_hour')
+                                        ->label('Jam Mulai Sleep (0-23)')
+                                        ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                                    TextInput::make('device_sleep_end_hour')
+                                        ->label('Jam Bangun dari Sleep (0-23)')
+                                        ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                                    TextInput::make('device_oled_dim_start_hour')
+                                        ->label('Jam OLED Dimatikan Sementara (0-23)')
+                                        ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                                    TextInput::make('device_oled_dim_end_hour')
+                                        ->label('Jam OLED Menyala Kembali (0-23)')
+                                        ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                                    TextInput::make('device_sync_interval_ms')
+                                        ->label('Interval Sinkronisasi (ms)')
+                                        ->numeric()->integer()->minValue(1000)->required()
+                                        ->helperText('Minimum 1000ms - nilai terlalu kecil membebani device & jaringan.'),
+                                    TextInput::make('device_ota_check_interval_ms')
+                                        ->label('Interval Cek Firmware OTA (ms)')
+                                        ->numeric()->integer()->minValue(1000)->required(),
+                                ]),
                         ]),
                 ]),
         ])->statePath('data');
@@ -3822,8 +4189,6 @@ use App\Jobs\GenerateLabelBarcodePdfJob;
 use App\Models\Buku;
 use App\Models\Eksemplar;
 use App\Models\Rak;
-use App\Services\LabelBarcodeService;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ExportAction;
@@ -3890,7 +4255,7 @@ class BukuResource extends Resource
                 ->numeric()
                 ->prefix('Rp')
                 ->required()
-                ->helperText('Dipakai sebagai basis perhitungan Denda kerusakan/kehilangan untuk semua eksemplar judul ini.'),
+                ->helperText('Dipakai sebagai basis perhitunganDenda kerusakan/kehilangan untuk semua eksemplar judul ini.'),
             Textarea::make('deskripsi')
                 ->columnSpanFull(),
             // GAP-SPEC ditutup: field non-persisten, hanya dipakai saat
@@ -3898,7 +4263,7 @@ class BukuResource extends Resource
             // membuat N Eksemplar baru - tidak ada kolom 'jumlah_eksemplar'
             // di tabel bukus, jadi dehydrated(false) dan disembunyikan di
             // context edit (Aturan poin 3 - ubah stok setelah create tetap
-            // HANYA lewat tab Eksemplar/BukuImporter, bukan di sini).
+            // HANYA lewat tab Eksemplar/BukuImporter, bukan disini).
             TextInput::make('jumlah_eksemplar_awal')
                 ->label('Jumlah Eksemplar Awal')
                 ->numeric()
@@ -3909,7 +4274,7 @@ class BukuResource extends Resource
                 ->visibleOn('create'),
             Select::make('rak_id_eksemplar_awal')
                 ->label('Rak untuk Eksemplar Awal')
-                ->options(fn () => Rak::query()->pluck('nama', 'id'))
+                ->options(fn() => Rak::query()->pluck('nama', 'id'))
                 ->searchable()
                 ->helperText('Opsional - rak yang sama dipakaikan ke semuaeksemplar awal yang dibuat.')
                 ->dehydrated(false)
@@ -3920,13 +4285,24 @@ class BukuResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn(\Illuminate\Database\Eloquent\Builder $query) => $query->withCount([
+                // BARU (iterasi ini) - diganti dari 4x query N+1 per baris
+                // (method model dipanggil di ->state() closure) jadi 4
+                // sub-select dalam SATU query withCount, dieksekusi sekali
+                // untuk seluruh halaman (bukan per baris) - Aturan poin 3/9,
+                // penting untuk skala data besar.
+                'eksemplars as jumlah_eksemplar_aktif' => fn($q) => $q->where('status', '!=', \App\Enums\StatusEksemplar::Hilang),
+                'eksemplars as jumlah_stok_tersedia' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Tersedia),
+                'eksemplars as jumlah_eksemplar_rusak' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Rusak),
+                'eksemplars as jumlah_eksemplar_hilang' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Hilang),
+            ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(BukuImporter::class)
-                    ->authorize(fn () => auth()->user()?->can('create', Buku::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -3941,21 +4317,34 @@ class BukuResource extends Resource
                     ->label('Tahun')
                     ->sortable()
                     ->toggleable(),
-                TextColumn::make('eksemplars_count')
-                    ->label('Total Eksemplar')
-                    ->counts('eksemplars')
-                    ->sortable(),
-                TextColumn::make('stok_tersedia')
-                    ->label('Stok Tersedia')
-                    ->state(fn (Buku $record) => $record->stokTersedia())
+                // Sekarang membaca kolom hasil withCount di atas - TIDAK
+                // lagi memanggil $record->jumlahEksemplarAktif() (yang
+                // menjalankan query baru tiap baris).
+                TextColumn::make('jumlah_eksemplar_aktif')
+                    ->label('Jumlah Buku')
+                    ->description(fn(Buku $record) => $record->jumlah_eksemplar_hilang > 0
+                        ? "{$record->jumlah_eksemplar_hilang} hilang (tidak dihitung)"
+                        : null)
                     ->badge()
-                    ->color(fn (Buku $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
+                    ->color(fn(Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
+                    ->sortable(),
+                TextColumn::make('jumlah_stok_tersedia')
+                    ->label('Stok Tersedia')
+                    ->badge()
+                    ->color(fn(Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
+                    ->sortable(),
+                TextColumn::make('eksemplar_bermasalah')
+                    ->label('Rusak/Hilang')
+                    ->state(fn(Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
+                    ->badge()
+                    ->color(fn(Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
                     ->money('IDR')
                     ->sortable(),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -3966,7 +4355,7 @@ class BukuResource extends Resource
                         $adaPeminjamanBerjalan = Eksemplar::query()
                             ->withTrashed()
                             ->where('buku_id', $record->id)
-                            ->whereHas('peminjamans', fn ($q) => $q->whereIn('status', [
+                            ->whereHas('peminjamans', fn($q) => $q->whereIn('status', [
                                 StatusPeminjaman::Aktif,
                                 StatusPeminjaman::Terlambat,
                             ]))
@@ -3993,64 +4382,35 @@ class BukuResource extends Resource
                     ->relationship('kategoris', 'nama'),
             ])
             ->toolbarActions([
-                // BARU - cetak label barcode lintas Buku terpilih. Ambil
-                // SEMUA Eksemplar milik Buku-Buku yang dicentang (Aturan
-                // poin 3 - reuse LabelBarcodeService, jangan duplikasi
-                // logic generate barcode di sini).
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label Eksemplar')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
-                    ->action(function (Collection $records, LabelBarcodeService $service) {
-                        $eksemplars = Eksemplar::query()
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->action(function (Collection $records) {
+                        $eksemplarIds = Eksemplar::query()
                             ->whereIn('buku_id', $records->pluck('id'))
-                            ->with('buku')
-                            ->get();
+                            ->pluck('id')
+                            ->all();
 
-                        if ($eksemplars->isEmpty()) {
+                        if (empty($eksemplarIds)) {
                             Notification::make()
                                 ->warning()
                                 ->title('Tidak ada Eksemplar')
-                                ->body('Buku yang dipilih belum punya Eksemplar untuk dicetak labelnya.')
+                                ->body('Buku yang dipilih belumpunya Eksemplar untuk dicetak labelnya.')
                                 ->send();
 
                             return;
                         }
 
-                        $labels = $service->generateData($eksemplars);
+                        GenerateLabelBarcodePdfJob::dispatch($eksemplarIds, (string) auth()->id());
 
-                        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
-                            ->setPaper('a4', 'portrait');
-
-                        return response()->streamDownload(
-                            fn () => print ($pdf->output()),
-                            'label-barcode-buku-'.now()->format('Ymd-His').'.pdf',
-                            ['Content-Type' => 'application/pdf'],
-                        );
+                        Notification::make()
+                            ->info()
+                            ->title('Sedang memproses label barcode')
+                            ->body('Anda akan menerima notifikasi begitu PDF siap diunduh.')
+                            ->send();
                     })
                     ->deselectRecordsAfterCompletion(),
-
-                // // BARU - generate PDF di background (queue 'default') agar
-                // // tidak timeout HTTP saat Buku terpilih banyak. Hasil
-                // // dikirim via Filament database notification (bell icon)
-                // // dengan tombol Download - lihat GenerateLabelBarcodePdfJob.
-                // BulkAction::make('cetak_label_massal')
-                //     ->label('Cetak Label Eksemplar')
-                //     ->icon('heroicon-o-printer')
-                //     ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
-                //     ->action(function (Collection $records) {
-                //         GenerateLabelBarcodePdfJob::dispatch(
-                //             $records->pluck('id')->all(),
-                //             (string) auth()->id(),
-                //         );
-
-                //         \Filament\Notifications\Notification::make()
-                //             ->info()
-                //             ->title('Sedang memproses label barcode')
-                //             ->body('Anda akan menerima notifikasi begitu PDF siap diunduh.')
-                //             ->send();
-                //     })
-                //     ->deselectRecordsAfterCompletion(),
             ]);
     }
 
@@ -4080,12 +4440,16 @@ class BukuResource extends Resource
 
 namespace App\Filament\Resources\BukuResource\RelationManagers;
 
+use App\Enums\KondisiBuku;
 use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
+use App\Enums\TipeDenda;
 use App\Filament\Exports\EksemplarExporter;
 use App\Filament\Imports\EksemplarImporter;
+use App\Jobs\GenerateLabelBarcodePdfJob;
 use App\Models\Eksemplar;
 use App\Services\LabelBarcodeService;
+use App\Services\PeminjamanService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -4104,7 +4468,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use RuntimeException;
 
 class EksemplarsRelationManager extends RelationManager
 {
@@ -4123,7 +4489,7 @@ class EksemplarsRelationManager extends RelationManager
                 ->searchable()
                 ->preload(),
             Select::make('status')
-                ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)]))
+                ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)]))
                 ->required()
                 ->default(StatusEksemplar::Tersedia->value)
                 ->helperText('Ubah manual hanya untuk koreksi data - alur normal status diubah otomatis oleh PeminjamanService.'),
@@ -4134,39 +4500,77 @@ class EksemplarsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('barcode')
+            // BARU (iterasi ini) - eager load relasi yang dipakai kolom
+            // Peminjam/Denda/Refund di bawah, supaya tidak N+1 query per
+            // baris (Aturan poin 3/9 - performa).
+            ->modifyQueryUsing(fn(Builder $query) => $query->with([
+                'peminjamanTerakhir.user',
+                'peminjamanTerakhir.dendas',
+            ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(EksemplarImporter::class)
-                    ->authorize(fn () => auth()->user()?->can('create', Eksemplar::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('create', Eksemplar::class) ?? false),
                 ExportAction::make()
                     ->exporter(EksemplarExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('barcode')->searchable(),
                 TextColumn::make('rak.nama')->label('Rak'),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn (StatusEksemplar $state) => match ($state) {
+                    ->color(fn(StatusEksemplar $state) => match ($state) {
                         StatusEksemplar::Tersedia => 'success',
                         StatusEksemplar::Dipinjam => 'warning',
                         StatusEksemplar::Rusak, StatusEksemplar::Hilang => 'danger',
                     }),
+                // BARU (iterasi ini) - hanya relevan untuk eksemplar
+                // Rusak/Hilang, tapi ditampilkan apa adanya (placeholder '-'
+                // untuk status lain) supaya tidak perlu logic visible/hidden
+                // per kolom yang rumit di Filament table.
+                TextColumn::make('peminjamanTerakhir.user.nama')
+                    ->label('Dipinjam/Dirusak/Dihilangkan Oleh')
+                    ->placeholder('-')
+                    ->toggleable(),
+                TextColumn::make('status_denda')
+                    ->label('Status Denda')
+                    ->state(fn(Eksemplar $record) => static::labelStatusDenda($record))
+                    ->badge()
+                    ->color(fn(Eksemplar $record) => match (static::labelStatusDenda($record)) {
+                        'Lunas' => 'success',
+                        'Belum Lunas' => 'danger',
+                        default => 'gray',
+                    })
+                    ->placeholder('-')
+                    ->toggleable(),
+                TextColumn::make('status_refund_denda')
+                    ->label('Status Refund')
+                    ->state(fn(Eksemplar $record) => static::dendaTerkait($record)?->status_refund?->value)
+                    ->formatStateUsing(fn(?string $state) => $state ? ucfirst(str_replace('_', ' ', $state)) : null)
+                    ->badge()
+                    ->color(fn(?string $state) => match ($state) {
+                        'perlu_refund' => 'warning',
+                        'sudah_direfund' => 'success',
+                        default => 'gray',
+                    })
+                    ->placeholder('-')
+                    ->toggleable(),
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+                    ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
                 TrashedFilter::make(),
             ])
             ->recordActions([
                 EditAction::make()
-                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
-                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                    ->disabled(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
                         ? 'Eksemplar sedang dipinjam - tidak bisa diedit manual di sini.'
                         : null),
                 DeleteAction::make()
-                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
-                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                    ->disabled(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
                         ? 'Eksemplar sedang dipinjam - tidak bisa dihapus.'
                         : null),
                 RestoreAction::make(),
@@ -4188,13 +4592,65 @@ class EksemplarsRelationManager extends RelationManager
 
                         $record->forceDelete();
                     }),
+                // BARU (iterasi ini) - satu tombol menangani DUA jalur data
+                // "Hilang" (lihat penjelasan di respons, TODO: ASUMSI
+                // otorisasi memakai 'Update:Pengembalian' - lihat catatan di
+                // PeminjamanService::bukuDitemukanKembali()):
+                // 1. Ada Pengembalian (hilang dilaporkan via proses
+                //    pengembalian normal) -> koreksiKondisiPengembalian().
+                // 2. Tidak ada Pengembalian (hilang via laporkanHilang() saat
+                //    masih dipinjam) -> bukuDitemukanKembali().
+                Action::make('buku_ditemukan_kembali')
+                    ->label('Buku Ditemukan Kembali')
+                    ->icon('heroicon-o-check-badge')
+                    ->color('success')
+                    ->visible(fn(Eksemplar $record) => $record->status === StatusEksemplar::Hilang)
+                    ->requiresConfirmation()
+                    ->modalDescription('Eksemplar akan dikembalikan ke status Tersedia dan Denda kehilangan terkait dibatalkan. Jika Denda sudah lunas, refund manual tetap perlu diproses pustakawan.')
+                    ->authorize(fn() => auth()->user()?->can('Update:Pengembalian') ?? false)
+                    ->action(function (Eksemplar $record) {
+                        $peminjaman = $record->peminjamanTerakhir;
+
+                        if (! $peminjaman || $peminjaman->status !== StatusPeminjaman::Hilang) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Data Peminjaman tidak konsisten')
+                                ->body('Eksemplar berstatus Hilang tapi Peminjaman terkait tidak ditemukan/tidak berstatus Hilang. Periksa data secara manual.')
+                                ->send();
+
+                            return;
+                        }
+
+                        try {
+                            if ($peminjaman->pengembalian) {
+                                app(PeminjamanService::class)->koreksiKondisiPengembalian(
+                                    pengembalian: $peminjaman->pengembalian,
+                                    kondisiBaru: KondisiBuku::Baik,
+                                    diprosesOleh: auth()->user(),
+                                );
+                            } else {
+                                app(PeminjamanService::class)->bukuDitemukanKembali($peminjaman);
+                            }
+
+                            Notification::make()
+                                ->success()
+                                ->title('Eksemplar ditandai ditemukan kembali')
+                                ->send();
+                        } catch (RuntimeException $e) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Gagal memproses')
+                                ->body($e->getMessage())
+                                ->send();
+                        }
+                    }),
                 // BARU - cetak 1 label barcode langsung dari baris tabel.
                 // Reuse ability 'view' Eksemplar (tidak ada permission baru,
                 // Aturan poin 15 - tidak mengubah skema/otorisasi).
                 Action::make('cetak_label')
                     ->label('Cetak Label')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn (Eksemplar $record) => auth()->user()?->can('view', $record) ?? false)
+                    ->authorize(fn(Eksemplar $record) => auth()->user()?->can('view', $record) ?? false)
                     ->action(function (Eksemplar $record, LabelBarcodeService $service) {
                         $record->loadMissing('buku');
                         $labels = $service->generateData(collect([$record]));
@@ -4203,35 +4659,68 @@ class EksemplarsRelationManager extends RelationManager
                             ->setPaper('a4', 'portrait');
 
                         return response()->streamDownload(
-                            fn () => print ($pdf->output()),
+                            fn() => print($pdf->output()),
                             "label-{$record->barcode}.pdf",
                             ['Content-Type' => 'application/pdf'],
                         );
                     }),
             ])
             ->toolbarActions([
-                // BARU - cetak label massal dari eksemplar terpilih, satu
-                // PDF sticker sheet A4 (3 kolom per baris, lihat
-                // pdf.label-barcode). Reuse ability 'viewAny' Eksemplar.
+                // Cetak label massal dari eksemplar terpilih -DIPINDAH ke
+                // queue 'default' (dikonfirmasi, konsisten dengan
+                // BukuResource::cetak_label_massal). Reuse ability
+                // 'viewAny' Eksemplar, tidak ada permission baru.
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label (Massal)')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
-                    ->action(function (Collection $records, LabelBarcodeService $service) {
-                        $records->loadMissing('buku');
-                        $labels = $service->generateData($records);
-
-                        $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
-                            ->setPaper('a4', 'portrait');
-
-                        return response()->streamDownload(
-                            fn () => print ($pdf->output()),
-                            'label-barcode-massal-'.now()->format('Ymd-His').'.pdf',
-                            ['Content-Type' => 'application/pdf'],
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->action(function (Collection $records) {
+                        GenerateLabelBarcodePdfJob::dispatch(
+                            $records->pluck('id')->all(),
+                            (string) auth()->id(),
                         );
+
+                        Notification::make()
+                            ->info()
+                            ->title('Sedang memproses label barcode')
+                            ->body('Anda akan menerima notifikasi begitu PDF siap diunduh.')
+                            ->send();
                     })
                     ->deselectRecordsAfterCompletion(),
             ]);
+    }
+
+    /**
+     * dihitung sekali, dipakai kolom Status Denda & Status Refund supaya
+     * tidak duplikasi logic pencarian Denda terkait (Aturan poin 3).
+     */
+    protected static function dendaTerkait(Eksemplar $record): ?\App\Models\Denda
+    {
+        $tipe = match ($record->status) {
+            StatusEksemplar::Rusak => TipeDenda::Kerusakan,
+            StatusEksemplar::Hilang => TipeDenda::Kehilangan,
+            default => null,
+        };
+
+        if (! $tipe || ! $record->peminjamanTerakhir) {
+            return null;
+        }
+
+        return $record->peminjamanTerakhir->dendas
+            ->where('tipe', $tipe)
+            ->sortByDesc('created_at')
+            ->first();
+    }
+
+    protected static function labelStatusDenda(Eksemplar $record): ?string
+    {
+        $denda = static::dendaTerkait($record);
+
+        if (! $denda) {
+            return null;
+        }
+
+        return $denda->status_lunas ? 'Lunas' : 'Belum Lunas';
     }
 }
 
@@ -4352,7 +4841,7 @@ class DendaResource extends Resource
                     ->formatStateUsing(fn (bool $state) => $state ? 'Lunas' : 'Belum Lunas')
                     ->color(fn (bool $state) => $state ? 'success' : 'danger'),
                 TextColumn::make('tanggal_lunas')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->toggleable(),
                 TextColumn::make('status_refund')
                     ->label('Refund')
@@ -4367,7 +4856,7 @@ class DendaResource extends Resource
                     ->limit(50)
                     ->toggleable(),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -4605,7 +5094,7 @@ class FirmwareResource extends Resource
 
     protected static ?string $navigationLabel = 'Firmware OTA';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Perangkat';
+    protected static string|\UnitEnum|null $navigationGroup = 'Sistem';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cpu-chip';
 
@@ -4651,7 +5140,7 @@ class FirmwareResource extends Resource
                 IconColumn::make('aktif')
                     ->boolean(),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -4799,7 +5288,7 @@ class JurusanResource extends Resource
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('kode')->searchable(),
                 TextColumn::make('kelas_count')->label('Jumlah Kelas')->counts('kelas'),
-                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->recordActions([DeleteAction::make()])
             ->toolbarActions([DeleteBulkAction::make()]);
@@ -4987,7 +5476,7 @@ class KategoriResource extends Resource
                     ->badge()
                     ->color(fn (Kategori $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -5155,7 +5644,7 @@ class KelasResource extends Resource
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('tingkat')->sortable(),
                 TextColumn::make('jurusan.nama')->label('Jurusan')->toggleable(),
-                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('jurusan_id')->label('Jurusan')->relationship('jurusan', 'nama'),
@@ -5538,7 +6027,7 @@ class KunjunganResource extends Resource
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('tanggal')
-                    ->date()
+                    ->date('d F Y')
                     ->sortable(),
                 TextColumn::make('jam_tap')
                     ->time()
@@ -5551,7 +6040,7 @@ class KunjunganResource extends Resource
                         SourceKunjungan::Manual => 'warning',
                     }),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -5649,7 +6138,7 @@ class LevelBadgeLogResource extends Resource
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
                 TextColumn::make('levelBadge.nama_badge')->label('Badge')->searchable()->sortable(),
-                TextColumn::make('tanggal_didapat')->dateTime()->sortable(),
+                TextColumn::make('tanggal_didapat')->dateTime('d F Y H:i')->sortable(),
             ])
             ->filters([
                 SelectFilter::make('level_badge_id')->label('Badge')->relationship('levelBadge', 'nama_badge'),
@@ -5984,11 +6473,11 @@ class PeminjamanResource extends Resource
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->options(fn () => Eksemplar::query()
+                ->options(fn() => Eksemplar::query()
                     ->where('status', StatusEksemplar::Tersedia)
                     ->with('buku')
                     ->get()
-                    ->mapWithKeys(fn ($e) => [$e->id => "{$e->buku->judul} — {$e->barcode}"]))
+                    ->mapWithKeys(fn($e) => [$e->id => "{$e->buku->judul} — {$e->barcode}"]))
                 ->helperText('Hanya menampilkan eksemplar berstatus tersedia. Validasi limit peminjaman aktif & status suspend dicek otomatis saat submit.')
                 ->required(),
         ]);
@@ -6000,7 +6489,7 @@ class PeminjamanResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(PeminjamanExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Peminjaman::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Peminjaman::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')
@@ -6013,37 +6502,39 @@ class PeminjamanResource extends Resource
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('tanggal_pinjam')
-                    ->date()
+                    ->date('d F Y')
                     ->sortable(),
                 TextColumn::make('tanggal_jatuh_tempo')
-                    ->date()
+                    ->date('d F Y')
                     ->sortable(),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn (StatusPeminjaman $state) => match ($state) {
+                    ->color(fn(StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Aktif => 'success',
                         StatusPeminjaman::Terlambat => 'danger',
                         StatusPeminjaman::Selesai => 'gray',
                         StatusPeminjaman::Hilang => 'warning',
                     }),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options(collect(StatusPeminjaman::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+                    ->options(collect(StatusPeminjaman::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
             ])
             ->recordActions([
                 Action::make('proses_pengembalian')
                     ->label('Proses Pengembalian')
                     ->icon('heroicon-o-arrow-uturn-left')
-                    ->visible(fn (Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->authorize(fn(Peminjaman $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
                     ->schema([
                         Select::make('kondisi')
                             ->label('Kondisi Buku')
-                            ->options(collect(KondisiBuku::cases())->mapWithKeys(fn ($k) => [$k->value => ucfirst($k->value)]))
+                            ->options(collect(KondisiBuku::cases())->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)]))
                             ->required(),
                         Textarea::make('catatan')
                             ->label('Catatan'),
@@ -6074,9 +6565,11 @@ class PeminjamanResource extends Resource
                     ->label('Laporkan Hilang')
                     ->icon('heroicon-o-exclamation-triangle')
                     ->color('danger')
+                    ->authorize(fn(Peminjaman $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->requiresConfirmation()
                     ->requiresConfirmation()
                     ->modalDescription('Buku belum dikembalikan secara fisik. Denda kehilangan penuh (Buku.harga_ganti) akan langsung dicatat.')
-                    ->visible(fn (Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
                     ->action(function (Peminjaman $record) {
                         try {
                             app(PeminjamanService::class)->laporkanHilang($record);
@@ -6207,7 +6700,7 @@ class PengembalianResource extends Resource
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('tanggal_kembali')
-                    ->date()
+                    ->date('d F Y')
                     ->sortable(),
                 TextColumn::make('kondisi')
                     ->badge()
@@ -6356,8 +6849,8 @@ class PunishmentLogResource extends Resource
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
                 TextColumn::make('punishment.nama')->label('Punishment')->searchable()->sortable(),
-                TextColumn::make('tanggal_diterapkan')->dateTime()->sortable(),
-                TextColumn::make('tanggal_berakhir')->dateTime()->placeholder('-'),
+                TextColumn::make('tanggal_diterapkan')->dateTime('d F Y H:i')->sortable(),
+                TextColumn::make('tanggal_berakhir')->dateTime('d F Y H:i')->placeholder('-'),
             ])
             ->filters([
                 SelectFilter::make('punishment_id')->label('Punishment')->relationship('punishment', 'nama'),
@@ -6710,7 +7203,7 @@ class RakResource extends Resource
                     ->state(fn (Rak $record) => $record->jumlahJudulUnik())
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -6868,7 +7361,7 @@ class RewardLogResource extends Resource
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
                 TextColumn::make('reward.nama')->label('Reward')->searchable()->sortable(),
-                TextColumn::make('tanggal_didapat')->dateTime()->sortable(),
+                TextColumn::make('tanggal_didapat')->dateTime('d F Y H:i')->sortable(),
             ])
             ->filters([
                 SelectFilter::make('reward_id')->label('Reward')->relationship('reward', 'nama'),
@@ -7127,8 +7620,8 @@ class RiwayatKelasSiswaResource extends Resource
                         StatusRiwayatKelas::Lulus => 'primary',
                         StatusRiwayatKelas::Keluar => 'gray',
                     }),
-                TextColumn::make('tanggal_mulai')->date()->sortable(),
-                TextColumn::make('tanggal_selesai')->date()->sortable()->placeholder('-'),
+                TextColumn::make('tanggal_mulai')->date('d F Y')->sortable(),
+                TextColumn::make('tanggal_selesai')->date('d F Y')->sortable()->placeholder('-'),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -7282,8 +7775,8 @@ class TahunPelajaranResource extends Resource
             ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),
-                TextColumn::make('tanggal_mulai')->date(),
-                TextColumn::make('tanggal_selesai')->date(),
+                TextColumn::make('tanggal_mulai')->date('d F Y'),
+                TextColumn::make('tanggal_selesai')->date('d F Y'),
                 IconColumn::make('aktif')->boolean()->label('Aktif'),
             ])
             ->recordActions([
@@ -7423,7 +7916,7 @@ class TransaksiResource extends Resource
                     ->label('Diproses Oleh')
                     ->toggleable(),
                 TextColumn::make('tanggal')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable(),
                 TextColumn::make('keterangan')
                     ->limit(50)
@@ -7497,7 +7990,7 @@ class PeminjamansRelationManager extends RelationManager
                     ->placeholder('(eksemplar sudah dihapus permanen)')
                     ->searchable(),
                 TextColumn::make('tanggal_jatuh_tempo')
-                    ->date(),
+                    ->date('d F Y'),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (StatusPeminjaman $state) => match ($state) {
@@ -7633,6 +8126,7 @@ class ListUsers extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Enums\JenisKelamin;
 use App\Enums\RoleUser;
 use App\Enums\StatusAkademik;
 use App\Filament\Exports\UserExporter;
@@ -7696,6 +8190,10 @@ class UserResource extends Resource
                 ->label('NIP')
                 ->unique(ignoreRecord: true)
                 ->maxLength(255),
+            Select::make('jenis_kelamin')
+                ->label('Jenis Kelamin')
+                ->options(collect(JenisKelamin::cases())->mapWithKeys(fn ($j) => [$j->value => $j->label()]))
+                ->native(false),
             // Kolom 'kelas' (string bebas) sudah di-drop dari tabel users
             // (migration 2026_08_01_000006), diganti relasi
             // kelas_tahun_pelajaran_id. Ditampilkan read-only di sini -
@@ -7763,6 +8261,7 @@ class UserResource extends Resource
                 ->helperText('Kosongkan jika tidak ingin mengubah password.'),
             FileUpload::make('avatar')
                 ->image()
+                ->disk('public')
                 ->directory('user-avatar'),
         ]);
     }
@@ -7780,6 +8279,7 @@ class UserResource extends Resource
             ])
             ->columns([
                 ImageColumn::make('avatar')
+                    ->disk('public')
                     ->circular(),
                 TextColumn::make('nama')
                     ->searchable()
@@ -7833,7 +8333,7 @@ class UserResource extends Resource
                     ->label('Point')
                     ->sortable(),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -7923,13 +8423,158 @@ class UserResource extends Resource
 ```
 ---
 
+## app/Filament/Widgets/BukuPerKategoriWidget.php
+```php
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Models\Kategori;
+use Filament\Widgets\ChartWidget;
+
+/**
+ * Jumlah judul Buku per Kategori - pakai withCount('bukus') (relasi
+ * BelongsToMany langsung Kategori::bukus(), bukan hasManyThrough
+ * eksemplars() yang menghitung EKSEMPLAR, bukan judul - beda makna,
+ * jangan tertukar).
+ */
+class BukuPerKategoriWidget extends ChartWidget
+{
+    protected static ?int $sort = 8;
+
+    protected int|string|array $columnSpan = 1;
+
+    public function getHeading(): ?string
+    {
+        return 'Jumlah Judul Buku per Kategori';
+    }
+
+    public static function canView(): bool
+    {
+        return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
+    }
+
+    protected function getData(): array
+    {
+        $kategoris = Kategori::query()
+            ->withCount('bukus')
+            ->orderByDesc('bukus_count')
+            ->get();
+
+        return [
+            'datasets' => [
+                [
+                    'label' => 'Jumlah Judul Buku',
+                    'data' => $kategoris->pluck('bukus_count')->all(),
+                    'backgroundColor' => '#06b6d4',
+                ],
+            ],
+            'labels' => $kategoris->pluck('nama')->all(),
+        ];
+    }
+
+    protected function getType(): string
+    {
+        return 'bar';
+    }
+
+    protected function getOptions(): array
+    {
+        return [
+            'indexAxis' => 'y',
+            'plugins' => [
+                'legend' => ['display' => false],
+            ],
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Widgets/BukuRusakHilangWidget.php
+```php
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Enums\StatusEksemplar;
+use App\Models\Eksemplar;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Filament\Widgets\TableWidget;
+
+/**
+ * Daftar Eksemplar dengan status Rusak/Hilang SAAT INI - sumber
+ * kebenaran Eksemplar.status (Aturan poin 3, konsisten dengan
+ * Buku::stokTersedia()), BUKAN histori Pengembalian.kondisi/Denda.tipe -
+ * eksemplar yang sudah diperbaiki/dihapus setelah kejadian rusak/hilang
+ * TIDAK akan muncul di sini, karena statusnya sudah berubah.
+ */
+class BukuRusakHilangWidget extends TableWidget
+{
+    protected static ?int $sort = 8;
+
+    protected int|string|array $columnSpan = 2;
+
+    public static function canView(): bool
+    {
+        return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
+    }
+
+    protected function getTableHeading(): string
+    {
+        return 'Eksemplar Rusak & Hilang';
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query(
+                Eksemplar::query()
+                    ->with('buku', 'rak')
+                    ->whereIn('status', [StatusEksemplar::Rusak, StatusEksemplar::Hilang])
+                    ->latest('updated_at')
+            )
+            ->columns([
+                TextColumn::make('buku.judul')->label('Judul Buku')->searchable(),
+                TextColumn::make('barcode')->label('Barcode')->searchable(),
+                TextColumn::make('rak.nama')->label('Rak')->placeholder('-'),
+                TextColumn::make('status')
+                    ->label('Status')
+                    ->badge()
+                    ->color(fn (StatusEksemplar $state) => match ($state) {
+                        StatusEksemplar::Rusak => 'warning',
+                        StatusEksemplar::Hilang => 'danger',
+                        default => 'gray',
+                    }),
+                TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d F Y H:i'),
+            ])
+            ->filters([
+                SelectFilter::make('status')
+                    ->options([
+                        StatusEksemplar::Rusak->value => 'Rusak',
+                        StatusEksemplar::Hilang->value => 'Hilang',
+                    ]),
+            ])
+            ->paginated([5, 10])
+            ->defaultPaginationPageOption(5);
+    }
+}
+
+```
+---
+
 ## app/Filament/Widgets/DendaTerbaruWidget.php
 ```php
 <?php
 
 namespace App\Filament\Widgets;
 
+use App\Enums\TipeDenda;
 use App\Models\Denda;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
@@ -7939,7 +8584,9 @@ use Filament\Widgets\TableWidget;
  */
 class DendaTerbaruWidget extends TableWidget
 {
-    protected static ?int $sort = 4;
+    protected static ?int $sort = 2;
+
+    protected int|string|array $columnSpan = 2;
 
     public static function canView(): bool
     {
@@ -7956,18 +8603,151 @@ class DendaTerbaruWidget extends TableWidget
         return $table
             ->query(
                 Denda::query()
+                    // BARU (iterasi ini) - eager load 'user' (dipakai kolom
+                    // 'user.nama' di bawah), sebelumnya N+1: tiap baris di
+                    // halaman widget ini (5-10 baris/page) memicu query
+                    // terpisah ke tabel users (Aturan poin 3/9 - performa).
+                    ->with('user')
                     ->where('status_lunas', false)
                     ->latest('created_at')
             )
             ->columns([
                 TextColumn::make('user.nama')->label('User'),
-                TextColumn::make('tipe')->label('Tipe')->badge(),
+                TextColumn::make('tipe')
+                    ->label('Tipe')
+                    ->badge()
+                    ->color(fn(TipeDenda $state) => match ($state) {
+                        TipeDenda::Keterlambatan => 'warning',
+                        TipeDenda::Kerusakan => 'danger',
+                        TipeDenda::Kehilangan => 'gray',
+                    }),
                 TextColumn::make('nominal')->label('Nominal')
-                    ->formatStateUsing(fn ($state) => 'Rp '.number_format((float) $state, 0, ',', '.')),
-                TextColumn::make('created_at')->label('Tanggal')->dateTime('d M Y H:i'),
+                    ->formatStateUsing(fn($state) => 'Rp ' . number_format((float) $state, 0, ',', '.')),
+                IconColumn::make('status_refund')
+                    ->label('Refund')
+                    ->boolean()
+                    ->toggleable(),
+                TextColumn::make('created_at')->label('Tanggal')->dateTime('d F Y H:i'),
             ])
             ->paginated([5, 10])
             ->defaultPaginationPageOption(5);
+    }
+}
+
+```
+---
+
+## app/Filament/Widgets/GamifikasiBulananWidget.php
+```php
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Models\LevelBadgeLog;
+use App\Models\PunishmentLog;
+use App\Models\RewardLog;
+use Carbon\Carbon;
+use Filament\Widgets\ChartWidget;
+
+/**
+ * Tren perolehan Badge, Reward, dan penerapan Punishment per bulan tahun
+ * berjalan. Badge/Reward dari kolom tanggal_didapat, Punishment dari
+ * tanggal_diterapkan (bukan tanggal_berakhir - poin start peristiwa yang
+ * relevan untuk tren "terjadi kapan").
+ */
+class GamifikasiBulananWidget extends ChartWidget
+{
+    protected static ?int $sort = 6;
+
+    protected int|string|array $columnSpan = 1;
+
+    public function getHeading(): ?string
+    {
+        return 'Badge, Reward & Punishment per Bulan ('.now()->year.')';
+    }
+
+    public static function canView(): bool
+    {
+        return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
+    }
+
+    protected function getData(): array
+    {
+        $tahun = now()->year;
+
+        $badge = LevelBadgeLog::query()
+            ->selectRaw('MONTH(tanggal_didapat) as bulan, COUNT(*) as total')
+            ->whereYear('tanggal_didapat', $tahun)
+            ->groupBy('bulan')
+            ->pluck('total', 'bulan');
+
+        $reward = RewardLog::query()
+            ->selectRaw('MONTH(tanggal_didapat) as bulan, COUNT(*) as total')
+            ->whereYear('tanggal_didapat', $tahun)
+            ->groupBy('bulan')
+            ->pluck('total', 'bulan');
+
+        $punishment = PunishmentLog::query()
+            ->selectRaw('MONTH(tanggal_diterapkan) as bulan, COUNT(*) as total')
+            ->whereYear('tanggal_diterapkan', $tahun)
+            ->groupBy('bulan')
+            ->pluck('total', 'bulan');
+
+        $labels = [];
+        $dataBadge = [];
+        $dataReward = [];
+        $dataPunishment = [];
+
+        for ($bulan = 1; $bulan <= 12; $bulan++) {
+            $labels[] = Carbon::create($tahun, $bulan, 1)->translatedFormat('M');
+            $dataBadge[] = (int) ($badge[$bulan] ?? 0);
+            $dataReward[] = (int) ($reward[$bulan] ?? 0);
+            $dataPunishment[] = (int) ($punishment[$bulan] ?? 0);
+        }
+
+        return [
+            'datasets' => [
+                [
+                    'label' => 'Badge',
+                    'data' => $dataBadge,
+                    'borderColor' => '#a855f7',
+                    'backgroundColor' => 'rgba(168, 85, 247, 0.12)',
+                    'tension' => 0.35,
+                ],
+                [
+                    'label' => 'Reward',
+                    'data' => $dataReward,
+                    'borderColor' => '#22c55e',
+                    'backgroundColor' => 'rgba(34, 197, 94, 0.12)',
+                    'tension' => 0.35,
+                ],
+                [
+                    'label' => 'Punishment',
+                    'data' => $dataPunishment,
+                    'borderColor' => '#ef4444',
+                    'backgroundColor' => 'rgba(239, 68, 68, 0.12)',
+                    'tension' => 0.35,
+                ],
+            ],
+            'labels' => $labels,
+        ];
+    }
+
+    protected function getType(): string
+    {
+        return 'line';
+    }
+
+    protected function getOptions(): array
+    {
+        return [
+            'scales' => [
+                'y' => ['beginAtZero' => true, 'ticks' => ['precision' => 0]],
+            ],
+            'elements' => [
+                'point' => ['radius' => 2, 'hoverRadius' => 5],
+            ],
+        ];
     }
 }
 
@@ -7982,6 +8762,7 @@ namespace App\Filament\Widgets;
 
 use App\Enums\StatusPeminjaman;
 use App\Models\Peminjaman;
+use Carbon\Carbon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
@@ -7991,16 +8772,24 @@ use Filament\Widgets\TableWidget;
  * TODO: verifikasi signature terhadap versi filament/filament ^5.7 -
  * TableWidget/table() API diasumsikan sama seperti pola Resource table().
  *
- * BUG FIX (iterasi ini, pola sama dengan PengembalianResource/RakResource/
- * TransaksiCepat/DendaResource): kolom 'buku.judul' DIHAPUS - Peminjaman
+ * BUG FIX (iterasi sebelumnya): kolom 'buku.judul' DIHAPUS - Peminjaman
  * tidak lagi punya relasi langsung ke Buku sejak migration
  * 2026_08_02_000002-000004 (relasi kini lewat Eksemplar). Diganti jadi
  * 'eksemplar.buku.judul', dan query diberi eager load 'eksemplar.buku'
  * supaya tidak N+1 di tabel widget ini.
+ *
+ * UI (iterasi ini): kolom 'Sisa Hari' diubah dari angka mentah menjadi
+ * teks manusiawi ("3 hari lagi", "Terlambat 2 hari", "Jatuh tempo hari
+ * ini") - warna badge tetap dipertahankan dari logika sebelumnya
+ * (negatif/<=1/lainnya), hanya label teksnya yang diubah. Perhitungan
+ * pakai startOfDay() pada kedua tanggal agar "hari ini" akurat tanpa
+ * terpengaruh jam saat request dibuat.
  */
 class PeminjamanJatuhTempoWidget extends TableWidget
 {
     protected static ?int $sort = 3;
+
+    protected int|string|array $columnSpan = 1;
 
     public static function canView(): bool
     {
@@ -8010,6 +8799,29 @@ class PeminjamanJatuhTempoWidget extends TableWidget
     protected function getTableHeading(): string
     {
         return 'Peminjaman Perlu Perhatian (Jatuh Tempo Terdekat)';
+    }
+
+    /**
+     * Selisih hari (positif = belum jatuh tempo, 0 = hari ini, negatif =
+     * sudah terlambat sekian hari) - dipisah dari format teksnya supaya
+     * warna badge tetap konsisten dengan angka asli, bukan hasil parsing
+     * teks.
+     */
+    protected function hitungSelisihHari(Peminjaman $record): int
+    {
+        return (int) Carbon::now()->startOfDay()
+            ->diffInDays($record->tanggal_jatuh_tempo->copy()->startOfDay(), false);
+    }
+
+    protected function formatSisaHari(int $selisih): string
+    {
+        return match (true) {
+            $selisih === 0 => 'Jatuh tempo hari ini',
+            $selisih === 1 => 'Besok jatuh tempo',
+            $selisih > 1 => "{$selisih} hari lagi",
+            $selisih === -1 => 'Terlambat 1 hari',
+            default => 'Terlambat '.abs($selisih).' hari',
+        };
     }
 
     public function table(Table $table): Table
@@ -8024,7 +8836,16 @@ class PeminjamanJatuhTempoWidget extends TableWidget
             ->columns([
                 TextColumn::make('user.nama')->label('Peminjam'),
                 TextColumn::make('eksemplar.buku.judul')->label('Buku'),
-                TextColumn::make('tanggal_jatuh_tempo')->label('Jatuh Tempo')->date('d M Y'),
+                TextColumn::make('tanggal_jatuh_tempo')->label('Jatuh Tempo')->date('d F Y'),
+                TextColumn::make('sisa_hari')
+                    ->label('Sisa Hari')
+                    ->state(fn (Peminjaman $record) => $this->formatSisaHari($this->hitungSelisihHari($record)))
+                    ->badge()
+                    ->color(function (Peminjaman $record) {
+                        $selisih = $this->hitungSelisihHari($record);
+
+                        return $selisih < 0 ? 'danger' : ($selisih <= 1 ? 'warning' : 'success');
+                    }),
                 TextColumn::make('status')->label('Status')->badge()
                     ->color(fn (StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Terlambat => 'danger',
@@ -8046,30 +8867,77 @@ class PeminjamanJatuhTempoWidget extends TableWidget
 
 namespace App\Filament\Widgets;
 
+use App\Enums\RoleUser;
 use App\Enums\StatusPeminjaman;
+use App\Models\Buku;
 use App\Models\Denda;
 use App\Models\Kunjungan;
 use App\Models\Peminjaman;
+use App\Models\SnapshotHarian;
+use App\Models\User;
+use Carbon\Carbon;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Support\Collection;
 
 /**
- * Ringkasan operasional harian - untuk Admin & Pustakawan.
- * TODO: verifikasi signature terhadap versi package yang terpasang
- * (filament/filament ^5.7) - namespace Filament\Widgets\StatsOverviewWidget
- * diasumsikan stabil sejak v3, belum dicek ulang untuk v5.
+ * BARU (iterasi ini): 6 chart trend sebelumnya menghitung ulang query
+ * agregat 7x per metrik SETIAP dashboard dibuka (~35-42 query total).
+ * Sekarang trend dibaca dari SnapshotHarian - 1 query untuk 7 hari
+ * sekaligus, diisi harian oleh ProsesCronHarianPerpustakaan (Aturan
+ * poin 3/9 - performa). Nilai "sekarang" (angka besar di tiap Stat,
+ * BUKAN chart-nya) tetap dihitung live seperti sebelumnya - itu memang
+ * harus real-time, bukan snapshot kemarin.
  */
 class PeminjamanStatsWidget extends StatsOverviewWidget
 {
     protected static ?int $sort = 1;
+
+    protected int|string|array $columnSpan = 'full';
 
     public static function canView(): bool
     {
         return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
     }
 
+    /**
+     * Snapshot 7 hari terakhir (termasuk hari ini), di-key per format
+     * tanggal singkat (d/m) - dimuat SEKALI dan dipakai ulang oleh semua
+     * Stat di getStats(), bukan query per Stat (Aturan poin 3).
+     *
+     * @return Collection<string, SnapshotHarian>
+     */
+    private function muatSnapshot7Hari(): Collection
+    {
+        $mulai = Carbon::now()->subDays(6)->startOfDay();
+        $akhir = Carbon::now()->startOfDay();
+
+        return SnapshotHarian::query()
+            ->whereBetween('tanggal', [$mulai->toDateString(), $akhir->toDateString()])
+            ->get()
+            ->keyBy(fn(SnapshotHarian $s) => $s->tanggal->format('d/m'));
+    }
+
+    /**
+     * @return array<string, float>
+     */
+    private function trendDariSnapshot(Collection $snapshots, string $kolom): array
+    {
+        $hasil = [];
+
+        for ($i = 6; $i >= 0; $i--) {
+            $tanggal = Carbon::now()->subDays($i)->startOfDay();
+            $label = $tanggal->format('d/m');
+            $hasil[$label] = (float) ($snapshots[$label]?->{$kolom} ?? 0);
+        }
+
+        return $hasil;
+    }
+
     protected function getStats(): array
     {
+        $snapshots = $this->muatSnapshot7Hari();
+
         $aktif = Peminjaman::query()->where('status', StatusPeminjaman::Aktif)->count();
         $terlambat = Peminjaman::query()->where('status', StatusPeminjaman::Terlambat)->count();
 
@@ -8079,19 +8947,44 @@ class PeminjamanStatsWidget extends StatsOverviewWidget
 
         $kunjunganHariIni = Kunjungan::query()->whereDate('tanggal', now()->toDateString())->count();
 
+        $totalJudulBuku = Buku::query()->count();
+        $totalAnggotaAktif = User::query()
+            ->where('status_suspend', false)
+            ->whereNotIn('role', [RoleUser::Admin, RoleUser::Pustakawan])
+            ->count();
+
         return [
             Stat::make('Peminjaman Aktif', (string) $aktif)
-                ->color('success'),
+                ->icon('heroicon-o-book-open')
+                ->color('success')
+                ->chart(array_values($this->trendDariSnapshot($snapshots, 'peminjaman_baru'))),
 
             Stat::make('Peminjaman Terlambat', (string) $terlambat)
-                ->color($terlambat > 0 ? 'danger' : 'gray'),
+                ->icon('heroicon-o-clock')
+                ->color($terlambat > 0 ? 'danger' : 'gray')
+                ->chart(array_values($this->trendDariSnapshot($snapshots, 'peminjaman_terlambat'))),
 
-            Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas.' transaksi')
-                ->description('Rp '.number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
-                ->color($jumlahDendaBelumLunas > 0 ? 'warning' : 'gray'),
+            Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas . ' transaksi')
+                ->icon('heroicon-o-banknotes')
+                ->description('Rp ' . number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
+                ->descriptionIcon('heroicon-m-exclamation-triangle')
+                ->color($jumlahDendaBelumLunas > 0 ? 'warning' : 'gray')
+                ->chart(array_values($this->trendDariSnapshot($snapshots, 'denda_baru'))),
 
             Stat::make('Kunjungan Hari Ini', (string) $kunjunganHariIni)
-                ->color('info'),
+                ->icon('heroicon-o-arrow-right-end-on-rectangle')
+                ->color('info')
+                ->chart(array_values($this->trendDariSnapshot($snapshots, 'kunjungan'))),
+
+            Stat::make('Total Judul Buku', (string) $totalJudulBuku)
+                ->icon('heroicon-o-book-open')
+                ->color('gray')
+                ->chart(array_values($this->trendDariSnapshot($snapshots, 'total_judul_buku'))),
+
+            Stat::make('Total Anggota Aktif', (string) $totalAnggotaAktif)
+                ->icon('heroicon-o-users')
+                ->color('gray')
+                ->chart(array_values($this->trendDariSnapshot($snapshots, 'total_anggota_aktif'))),
         ];
     }
 }
@@ -8099,27 +8992,39 @@ class PeminjamanStatsWidget extends StatsOverviewWidget
 ```
 ---
 
-## app/Filament/Widgets/TrenKunjunganChartWidget.php
+## app/Filament/Widgets/PerJenisKelaminWidget.php
 ```php
 <?php
 
 namespace App\Filament\Widgets;
 
+use App\Enums\JenisKelamin;
 use App\Models\Kunjungan;
+use App\Models\Peminjaman;
+use App\Models\Pengembalian;
 use Filament\Widgets\ChartWidget;
 
 /**
- * Tren kunjungan 14 hari terakhir - untuk Admin & Pustakawan.
- * TODO: verifikasi signature getData()/getType() terhadap versi
- * filament/filament ^5.7 yang terpasang.
+ * Perbandingan Laki-laki vs Perempuan untuk Kunjungan, Peminjaman,
+ * Pengembalian - tahun berjalan. Pengembalian tidak punya user_id
+ * langsung, resolusi lewat relasi peminjaman.user (Aturan poin 3 - tetap
+ * pakai relasi Model yang sudah ada, tidak duplikasi join manual di raw
+ * SQL).
+ *
+ * TODO: GAP-SPEC - user dengan jenis_kelamin masih null (data lama,
+ * belum diisi) TIDAK ikut dihitung di kedua batang L/P - jumlah total
+ * chart ini bisa lebih kecil dari total kunjungan/peminjaman
+ * sebenarnya selama data belum lengkap.
  */
-class TrenKunjunganChartWidget extends ChartWidget
+class PerJenisKelaminWidget extends ChartWidget
 {
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 5;
+
+    protected int|string|array $columnSpan = 1;
 
     public function getHeading(): ?string
     {
-        return 'Tren Kunjungan (14 Hari Terakhir)';
+        return 'Kunjungan, Peminjaman & Pengembalian per Jenis Kelamin ('.now()->year.')';
     }
 
     public static function canView(): bool
@@ -8129,33 +9034,149 @@ class TrenKunjunganChartWidget extends ChartWidget
 
     protected function getData(): array
     {
-        $mulai = now()->subDays(13)->startOfDay();
+        $tahun = now()->year;
 
-        $data = Kunjungan::query()
-            ->selectRaw('DATE(tanggal) as tgl, COUNT(*) as total')
-            ->where('tanggal', '>=', $mulai->toDateString())
-            ->groupBy('tgl')
-            ->orderBy('tgl')
-            ->pluck('total', 'tgl');
+        $hitungKunjungan = fn (JenisKelamin $jk) => Kunjungan::query()
+            ->whereYear('tanggal', $tahun)
+            ->whereHas('user', fn ($q) => $q->where('jenis_kelamin', $jk))
+            ->count();
+
+        $hitungPeminjaman = fn (JenisKelamin $jk) => Peminjaman::query()
+            ->whereYear('tanggal_pinjam', $tahun)
+            ->whereHas('user', fn ($q) => $q->where('jenis_kelamin', $jk))
+            ->count();
+
+        $hitungPengembalian = fn (JenisKelamin $jk) => Pengembalian::query()
+            ->whereYear('tanggal_kembali', $tahun)
+            ->whereHas('peminjaman.user', fn ($q) => $q->where('jenis_kelamin', $jk))
+            ->count();
+
+        return [
+            'datasets' => [
+                [
+                    'label' => 'Laki-laki',
+                    'data' => [
+                        $hitungKunjungan(JenisKelamin::LakiLaki),
+                        $hitungPeminjaman(JenisKelamin::LakiLaki),
+                        $hitungPengembalian(JenisKelamin::LakiLaki),
+                    ],
+                    'backgroundColor' => '#3b82f6',
+                ],
+                [
+                    'label' => 'Perempuan',
+                    'data' => [
+                        $hitungKunjungan(JenisKelamin::Perempuan),
+                        $hitungPeminjaman(JenisKelamin::Perempuan),
+                        $hitungPengembalian(JenisKelamin::Perempuan),
+                    ],
+                    'backgroundColor' => '#ec4899',
+                ],
+            ],
+            'labels' => ['Kunjungan', 'Peminjaman', 'Pengembalian'],
+        ];
+    }
+
+    protected function getType(): string
+    {
+        return 'bar';
+    }
+}
+
+```
+---
+
+## app/Filament/Widgets/TrenBulananWidget.php
+```php
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Models\Kunjungan;
+use App\Models\Peminjaman;
+use App\Models\Pengembalian;
+use Carbon\Carbon;
+use Filament\Widgets\ChartWidget;
+
+/**
+ * Tren bulanan tahun berjalan - Kunjungan, Peminjaman, Pengembalian
+ * dalam satu chart supaya mudah dibandingkan (Aturan poin 3, data
+ * dihitung langsung dari tabel masing-masing, tidak ada tabel agregat
+ * baru).
+ */
+class TrenBulananWidget extends ChartWidget
+{
+    protected static ?int $sort = 4;
+
+    protected int|string|array $columnSpan = 1;
+
+    public function getHeading(): ?string
+    {
+        return 'Tren Bulanan ('.now()->year.')';
+    }
+
+    public static function canView(): bool
+    {
+        return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
+    }
+
+    protected function getData(): array
+    {
+        $tahun = now()->year;
+
+        $kunjungan = Kunjungan::query()
+            ->selectRaw('MONTH(tanggal) as bulan, COUNT(*) as total')
+            ->whereYear('tanggal', $tahun)
+            ->groupBy('bulan')
+            ->pluck('total', 'bulan');
+
+        $peminjaman = Peminjaman::query()
+            ->selectRaw('MONTH(tanggal_pinjam) as bulan, COUNT(*) as total')
+            ->whereYear('tanggal_pinjam', $tahun)
+            ->groupBy('bulan')
+            ->pluck('total', 'bulan');
+
+        $pengembalian = Pengembalian::query()
+            ->selectRaw('MONTH(tanggal_kembali) as bulan, COUNT(*) as total')
+            ->whereYear('tanggal_kembali', $tahun)
+            ->groupBy('bulan')
+            ->pluck('total', 'bulan');
 
         $labels = [];
-        $values = [];
+        $dataKunjungan = [];
+        $dataPeminjaman = [];
+        $dataPengembalian = [];
 
-        for ($i = 0; $i < 14; $i++) {
-            $tanggal = $mulai->copy()->addDays($i);
-            $key = $tanggal->toDateString();
-
-            $labels[] = $tanggal->translatedFormat('d M');
-            $values[] = (int) ($data[$key] ?? 0);
+        for ($bulan = 1; $bulan <= 12; $bulan++) {
+            $labels[] = Carbon::create($tahun, $bulan, 1)->translatedFormat('M');
+            $dataKunjungan[] = (int) ($kunjungan[$bulan] ?? 0);
+            $dataPeminjaman[] = (int) ($peminjaman[$bulan] ?? 0);
+            $dataPengembalian[] = (int) ($pengembalian[$bulan] ?? 0);
         }
 
         return [
             'datasets' => [
                 [
                     'label' => 'Kunjungan',
-                    'data' => $values,
+                    'data' => $dataKunjungan,
                     'borderColor' => '#06b6d4',
-                    'backgroundColor' => 'rgba(6, 182, 212, 0.15)',
+                    'backgroundColor' => 'rgba(6, 182, 212, 0.12)',
+                    'tension' => 0.35,
+                    'fill' => true,
+                ],
+                [
+                    'label' => 'Peminjaman',
+                    'data' => $dataPeminjaman,
+                    'borderColor' => '#22c55e',
+                    'backgroundColor' => 'rgba(34, 197, 94, 0.12)',
+                    'tension' => 0.35,
+                    'fill' => true,
+                ],
+                [
+                    'label' => 'Pengembalian',
+                    'data' => $dataPengembalian,
+                    'borderColor' => '#f59e0b',
+                    'backgroundColor' => 'rgba(245, 158, 11, 0.12)',
+                    'tension' => 0.35,
                     'fill' => true,
                 ],
             ],
@@ -8166,6 +9187,102 @@ class TrenKunjunganChartWidget extends ChartWidget
     protected function getType(): string
     {
         return 'line';
+    }
+
+    protected function getOptions(): array
+    {
+        return [
+            'scales' => [
+                'y' => ['beginAtZero' => true, 'ticks' => ['precision' => 0]],
+            ],
+            'elements' => [
+                'point' => ['radius' => 2, 'hoverRadius' => 5],
+            ],
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Widgets/WhatsappLogWidget.php
+```php
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Models\WhatsappLog;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Filament\Widgets\TableWidget;
+
+/**
+ * Log Pengiriman WhatsApp - super_admin & pustakawan bisa lihat widget
+ * ini (dikonfirmasi), tapi kolom yang memuat data pribadi (No. Tujuan)
+ * atau detail teknis mentah (Keterangan - bisa memuat pesan error
+ * gateway apa adanya) DIBATASI hanya untuk super_admin lewat ->visible()
+ * per kolom - bukan menyembunyikan widget secara keseluruhan.
+ */
+class WhatsappLogWidget extends TableWidget
+{
+    protected static ?int $sort = 9;
+
+    protected int|string|array $columnSpan = 'full';
+
+    public static function canView(): bool
+    {
+        return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
+    }
+
+    protected function getTableHeading(): string
+    {
+        return 'Log Pengiriman WhatsApp Terbaru';
+    }
+
+    protected function isSuperAdmin(): bool
+    {
+        return auth()->user()?->hasRole('super_admin') ?? false;
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query(WhatsappLog::query()->latest('updated_at'))
+            ->columns([
+                TextColumn::make('template_code')->label('Template')->searchable(),
+                TextColumn::make('nomor_tujuan')
+                    ->label('No. Tujuan')
+                    ->searchable()
+                    ->visible(fn () => $this->isSuperAdmin()),
+                TextColumn::make('status')
+                    ->label('Status')
+                    ->badge()
+                    ->color(fn (string $state) => match ($state) {
+                        'terkirim' => 'success',
+                        'gagal_transient' => 'warning',
+                        'gagal_permanen' => 'danger',
+                        default => 'gray',
+                    }),
+                TextColumn::make('percobaan_ke')->label('Percobaan'),
+                TextColumn::make('keterangan')
+                    ->label('Keterangan')
+                    ->limit(50)
+                    ->toggleable()
+                    ->placeholder('-')
+                    ->visible(fn () => $this->isSuperAdmin()),
+                TextColumn::make('updated_at')->label('Terakhir Diperbarui')->dateTime('d F Y H:i'),
+            ])
+            ->filters([
+                SelectFilter::make('status')
+                    ->options([
+                        'terkirim' => 'Terkirim',
+                        'gagal_transient' => 'Gagal (Transient)',
+                        'gagal_permanen' => 'Gagal (Permanen)',
+                    ]),
+            ])
+            ->paginated([10, 25, 50])
+            ->defaultPaginationPageOption(10);
     }
 }
 
@@ -8538,6 +9655,149 @@ class PerpustakaanDeviceController extends Controller
 ```
 ---
 
+## app/Http/Controllers/ChartExportController.php
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Filament\Widgets\BukuPerKategoriWidget;
+use App\Filament\Widgets\GamifikasiBulananWidget;
+use App\Filament\Widgets\PeminjamanStatsWidget;
+use App\Filament\Widgets\PerJenisKelaminWidget;
+use App\Filament\Widgets\TrenBulananWidget;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use ReflectionMethod;
+
+/**
+ * Generate PDF grafik berisi gambar + tabel data + ringkasan, diambil
+ * ULANG dari database lewat widget terkait (bukan dari angka yang
+ * dikirim client) - satu sumber kebenaran tetap di getData()/getStats()
+ * masing-masing widget (Aturan poin 3), di sini hanya dipanggil ulang
+ * lewat reflection karena method-nya protected.
+ *
+ * TODO: verifikasi signature terhadap versi barryvdh/laravel-dompdf
+ * yang benar-benar terpasang (composer.json ^3.1) - method
+ * Pdf::loadView()->download() diasumsikan stabil, belum diverifikasi
+ * langsung terhadap composer.lock.
+ */
+class ChartExportController extends Controller
+{
+    // Whitelist ketat - JANGAN pernah instantiate class dari input client
+    // tanpa validasi ini, mencegah instansiasi class sembarangan.
+    private const ALLOWED_CHART_WIDGETS = [
+        TrenBulananWidget::class,
+        GamifikasiBulananWidget::class,
+        PerJenisKelaminWidget::class,
+        BukuPerKategoriWidget::class,
+    ];
+
+    private const ALLOWED_STAT_WIDGETS = [
+        PeminjamanStatsWidget::class,
+    ];
+
+    public function pdf(Request $request)
+    {
+        $validated = $request->validate([
+            'image' => ['required', 'string', 'starts_with:data:image/png;base64,'],
+            'filename' => ['nullable', 'string', 'max:100'],
+            'widget' => ['required', 'string'],
+            'type' => ['required', 'in:chart,stat'],
+            'stat_label' => ['nullable', 'string', 'max:150'],
+        ]);
+
+        $filename = Str::slug($validated['filename'] ?? 'grafik').'.pdf';
+
+        $data = $validated['type'] === 'chart'
+            ? $this->buildChartExportData($validated['widget'])
+            : $this->buildStatExportData($validated['widget'], $validated['stat_label'] ?? '');
+
+        $pdf = Pdf::loadView('pdf.chart-export', [
+            'image' => $validated['image'],
+            'heading' => $data['heading'],
+            'rows' => $data['rows'],
+            'summary' => $data['summary'],
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download($filename);
+    }
+
+    private function buildChartExportData(string $widgetClass): array
+    {
+        abort_unless(in_array($widgetClass, self::ALLOWED_CHART_WIDGETS, true), 403);
+
+        $widget = app($widgetClass);
+
+        $heading = (new ReflectionMethod($widget, 'getHeading'))->invoke($widget);
+        $heading = $heading instanceof Htmlable ? strip_tags($heading->toHtml()) : (string) $heading;
+
+        $chartData = (new ReflectionMethod($widget, 'getData'))->invoke($widget);
+        $labels = $chartData['labels'] ?? [];
+        $datasets = $chartData['datasets'] ?? [];
+
+        $rows = [];
+        foreach ($labels as $i => $label) {
+            $row = ['label' => $label];
+            foreach ($datasets as $dataset) {
+                $row[$dataset['label'] ?? '-'] = $dataset['data'][$i] ?? 0;
+            }
+            $rows[] = $row;
+        }
+
+        $summary = [];
+        foreach ($datasets as $dataset) {
+            $values = array_map('floatval', $dataset['data'] ?? []);
+            $summary[] = [
+                'label' => $dataset['label'] ?? '-',
+                'total' => array_sum($values),
+                'rata_rata' => count($values) ? round(array_sum($values) / count($values), 2) : 0,
+            ];
+        }
+
+        return ['heading' => $heading, 'rows' => $rows, 'summary' => $summary];
+    }
+
+    private function buildStatExportData(string $widgetClass, string $statLabel): array
+    {
+        abort_unless(in_array($widgetClass, self::ALLOWED_STAT_WIDGETS, true), 403);
+
+        $widget = app($widgetClass);
+
+        $stats = (new ReflectionMethod($widget, 'getStats'))->invoke($widget);
+
+        $stat = collect($stats)->first(
+            fn ($s) => $s->getLabel() === $statLabel
+        );
+
+        abort_if($stat === null, 404, 'Stat tidak ditemukan.');
+
+        $chart = $stat->getChart() ?? [];
+
+        $rows = [];
+        foreach ($chart as $label => $value) {
+            $rows[] = ['label' => $label, $statLabel => $value];
+        }
+
+        $values = array_map('floatval', array_values($chart));
+
+        return [
+            'heading' => $statLabel,
+            'rows' => $rows,
+            'summary' => [[
+                'label' => $statLabel,
+                'total' => array_sum($values),
+                'rata_rata' => count($values) ? round(array_sum($values) / count($values), 2) : 0,
+            ]],
+        ];
+    }
+}
+
+```
+---
+
 ## app/Http/Controllers/Controller.php
 ```php
 <?php
@@ -8598,25 +9858,31 @@ use App\Models\Eksemplar;
 use App\Models\User;
 use App\Services\LabelBarcodeService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Notifications\Action;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Job generate PDF label barcode untuk banyak Buku sekaligus (bulk action
- * BukuResource) - dijalankan di queue 'default' agar tidak timeout HTTP
- * request Livewire (Aturan poin 3 - reuse LabelBarcodeService, jangan
- * duplikasi logic generate barcode di sini).
+ * Job generate PDF label barcode di background (queue 'default') agar
+ * tidak timeout HTTP request Livewire (Aturan poin 3 - reuse
+ * LabelBarcodeService, jangan duplikasi logic generate barcodedi sini).
  *
  * PENTING (Aturan poin 17): $timeout di bawah WAJIB <= --timeout worker
- * queue 'default' di supervisor config - lihat catatan perubahan
- * supervisor yang mengikuti perubahan ini.
+ * queue 'default' di supervisor config.
+ *
+ * TODO: GAP-SPEC - constructor menerima $eksemplarIds LANGSUNG(bukan
+ * $bukuIds seperti versi sebelumnya) - job ini sebelumnya deadcode
+ * (di-comment di BukuResource, belum pernah didispatch di production),
+ * jadi perubahan signature aman. Resolusi dari Buku -> Eksemplar kini
+ * jadi tanggung jawab CALLER (BukuResource meresolve dulu sebelum
+ * dispatch), supaya job ini juga bisa dipakai caller yang sudah
+ * langsung memilih Eksemplar (EksemplarsRelationManager bulk action).
  */
 class GenerateLabelBarcodePdfJob implements ShouldQueue
 {
@@ -8631,14 +9897,14 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
     public int $timeout = 170;
 
     public function __construct(
-        protected array $bukuIds,
+        protected array $eksemplarIds,
         protected string $userId,
     ) {}
 
     public function handle(LabelBarcodeService $service): void
     {
         $eksemplars = Eksemplar::query()
-            ->whereIn('buku_id', $this->bukuIds)
+            ->whereIn('id', $this->eksemplarIds)
             ->with('buku')
             ->get();
 
@@ -8654,7 +9920,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
             Notification::make()
                 ->warning()
                 ->title('Tidak ada Eksemplar')
-                ->body('Buku yang dipilih belum punya Eksemplar untuk dicetak labelnya.')
+                ->body('Tidak ada Eksemplar yang ditemukan untuk dicetak labelnya.')
                 ->sendToDatabase($user);
 
             return;
@@ -8665,7 +9931,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
         $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
             ->setPaper('a4', 'portrait');
 
-        $filename = 'label-barcode-'.now()->format('Ymd-His').'-'.substr(md5(uniqid()), 0, 6).'.pdf';
+        $filename = 'label-barcode-' . now()->format('Ymd-His') . '-' . substr(md5(uniqid()), 0, 6) . '.pdf';
         $path = "labels/{$filename}";
 
         Storage::disk('public')->put($path, $pdf->output());
@@ -8673,7 +9939,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
         Notification::make()
             ->success()
             ->title('Label barcode siap diunduh')
-            ->body(count($labels).' label dari '.count($this->bukuIds).' buku berhasil dibuat.')
+            ->body(count($labels) . ' label berhasil dibuat.')
             ->actions([
                 Action::make('download')
                     ->label('Download PDF')
@@ -8685,7 +9951,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateLabelBarcodePdfJob: gagal generate label. Buku IDs: '.implode(',', $this->bukuIds).". Error: {$exception->getMessage()}");
+        Log::error('GenerateLabelBarcodePdfJob: gagal generate label. EksemplarIDs: ' . implode(',', $this->eksemplarIds) . ". Error: {$exception->getMessage()}");
 
         $user = User::query()->find($this->userId);
 
@@ -8709,6 +9975,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
 namespace App\Jobs;
 
 use App\Exceptions\WhatsappGatewayException;
+use App\Models\WhatsappLog;
 use App\Services\WhatsappService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -8735,42 +10002,28 @@ use Illuminate\Support\Facades\Log;
  * sama dan mengembalikan 200 (bukan mengirim ulang WA), sesuai kontrak API
  * §2.2 & §9 (idempotency window 24 jam). Retry di sini hanya menghitung
  * ulang signature/timestamp, TIDAK pernah mengirim signature lama.
+ *
+ * LOGGING (baru, iterasi ini): setiap eksekusi handle() (termasuk retry)
+ * melakukan UPSERT ke whatsapp_logs berdasarkan reference_id - BUKAN
+ * insert baru per percobaan, supaya satu event tetap satu baris log
+ * dengan status/keterangan TERBARU dan counter percobaan_ke bertambah.
+ * TODO: GAP-SPEC - reference_id null (constructor mengizinkan ?string,
+ * meski kirimEvent() di WhatsappService selalu mengisi fallback UUID)
+ * akan selalu INSERT baris baru (tidak bisa di-upsert tanpa key unik) -
+ * skenario ini seharusnya tidak pernah terjadi lewat kirimEvent(), tapi
+ * dijaga agar job tidak fatal error jika suatu saat dipanggil manual
+ * dengan referenceId null.
  */
 class KirimNotifikasiWhatsapp implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * Konsisten dengan --tries=3 pada supervisor worker queue 'whatsapp'
-     * (lihat conf.d/*.conf, program *-whatsapp).
-     */
     public int $tries = 3;
 
-    /**
-     * Konsisten dengan --timeout=30 pada supervisor worker queue 'whatsapp'.
-     * Job tidak boleh berjalan lebih lama dari timeout worker.
-     */
     public int $timeout = 25;
 
-    /**
-     * Backoff singkat karena kegagalan WA umumnya transient (rate limit,
-     * sesi belum ready) - lihat dok kontrak API §9 Guard Rail.
-     */
     public array $backoff = [5, 15, 30];
 
-    /**
-     * Status code gateway yang bersifat PERMANEN (retry tidak akan mengubah
-     * hasil, sesuai kontrak API §2.2):
-     * - 400: body/media/variabel tidak valid - kesalahan payload yang kita
-     *   kirim sendiri, tidak berubah walau di-retry.
-     * - 403: template_code tidak ditemukan/tidak terkait ke API key -
-     *   kesalahan konfigurasi Admin di panel gateway, bukan transient.
-     * - 409: reference_id sudah dipakai dengan payload BERBEDA - retry
-     *   dengan payload sama akan 409 lagi terus (lihat kontrak API §2.2).
-     *
-     * Di luar daftar ini (401 HMAC, 429 guard rail, 500 internal) dianggap
-     * transient dan tetap mengikuti siklus retry/backoff normal.
-     */
     private const STATUS_PERMANEN = [400, 403, 409];
 
     public function __construct(
@@ -8782,6 +10035,8 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
 
     public function handle(WhatsappService $whatsappService): void
     {
+        $percobaanKe = $this->attempts();
+
         try {
             $whatsappService->kirimPesan(
                 templateCode: $this->templateCode,
@@ -8789,13 +10044,14 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
                 variables: $this->variables,
                 referenceId: $this->referenceId,
             );
+
+            $this->catatLog('terkirim', null, $percobaanKe);
         } catch (WhatsappGatewayException $e) {
             if (in_array($e->statusCode, self::STATUS_PERMANEN, true)) {
                 Log::error("KirimNotifikasiWhatsapp: kegagalan permanen (status {$e->statusCode}), tidak di-retry. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$e->getMessage()}");
 
-                // fail() langsung memindahkan job ke failed_jobs tanpa
-                // menghabiskan sisa percobaan $tries - retry dipastikan
-                // sia-sia untuk status di STATUS_PERMANEN.
+                $this->catatLog('gagal_permanen', $e->getMessage(), $percobaanKe);
+
                 $this->fail($e);
 
                 return;
@@ -8803,16 +10059,60 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
 
             Log::error("KirimNotifikasiWhatsapp: gagal mengirim template '{$this->templateCode}' ke {$this->nomorTujuan}: {$e->getMessage()}");
 
-            // Transient (401/429/500 dsb.) - lempar ulang supaya queue
-            // worker retry sesuai $tries/$backoff.
+            $this->catatLog('gagal_transient', $e->getMessage(), $percobaanKe);
+
             throw $e;
         }
     }
 
     /**
-     * Dipanggil otomatis oleh queue setelah seluruh percobaan ($tries) habis
-     * ATAU setelah $this->fail() dipanggil eksplisit di handle().
+     * Daftar nama variable yang dianggap sensitif dan WAJIB di-redact
+     * sebelum disimpan ke whatsapp_logs (dikonfirmasi eksplisit - OTP
+     * tidak boleh tersimpan plaintext permanen di log, beda dengan
+     * login_otps/password_reset_otps yang sudah hashed by design).
+     * TODO: GAP-SPEC - daftar ini match case-insensitive terhadap NAMA
+     * key variable, bukan terhadap eventCode - kalau suatu saat ada
+     * variable baru yang juga sensitif (mis. 'password_sementara'),
+     * WAJIB ditambahkan di sini, satu tempat, bukan di tiap pemanggil.
      */
+    private const VARIABLE_SENSITIF = ['otp', 'password', 'password_baru', 'password_sementara'];
+
+    protected function catatLog(string $status, ?string $keterangan, int $percobaanKe): void
+    {
+        $atribut = [
+            'template_code' => $this->templateCode,
+            'nomor_tujuan' => $this->nomorTujuan,
+            'variables' => $this->redactVariabelSensitif($this->variables),
+            'status' => $status,
+            'keterangan' => $keterangan,
+            'percobaan_ke' => $percobaanKe,
+        ];
+
+        if ($this->referenceId === null) {
+            WhatsappLog::create(['reference_id' => null, ...$atribut]);
+
+            return;
+        }
+
+        WhatsappLog::updateOrCreate(
+            ['reference_id' => $this->referenceId],
+            $atribut,
+        );
+    }
+
+    protected function redactVariabelSensitif(array $variables): array
+    {
+        $hasil = [];
+
+        foreach ($variables as $key => $value) {
+            $hasil[$key] = in_array(strtolower((string) $key), self::VARIABLE_SENSITIF, true)
+                ? '***'
+                : $value;
+        }
+
+        return $hasil;
+    }
+
     public function failed(\Throwable $exception): void
     {
         Log::error("KirimNotifikasiWhatsapp: job gagal permanen. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$exception->getMessage()}");
@@ -8899,6 +10199,28 @@ class Buku extends Model
     public function stokTersedia(): int
     {
         return $this->eksemplars()->where('status', StatusEksemplar::Tersedia)->count();
+    }
+
+    /**
+     * BARU - jumlah eksemplar yang masih dianggap bagian koleksi aktif
+     * (Tersedia + Dipinjam + Rusak). Eksemplar Hilang SENGAJA dikeluarkan
+     * dari hitungan ini (dikonfirmasi) - dipakai BukuResource kolom
+     * 'Jumlah Buku' supaya angka tidak menyesatkan (buku hilang bukan lagi
+     * bagian koleksi yang bisa dipinjam/ditemukan kembali fisiknya).
+     */
+    public function jumlahEksemplarAktif(): int
+    {
+        return $this->eksemplars()->where('status', '!=', StatusEksemplar::Hilang)->count();
+    }
+
+    public function jumlahEksemplarRusak(): int
+    {
+        return $this->eksemplars()->where('status', StatusEksemplar::Rusak)->count();
+    }
+
+    public function jumlahEksemplarHilang(): int
+    {
+        return $this->eksemplars()->where('status', StatusEksemplar::Hilang)->count();
     }
 }
 
@@ -9019,6 +10341,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -9056,6 +10379,17 @@ class Eksemplar extends Model
     }
 
     /**
+     * BARU - Peminjaman terakhir (berdasarkan created_at) untuk eksemplar
+     * ini. Dipakai EksemplarsRelationManager untuk menampilkan siapa yang
+     * merusak/menghilangkan eksemplar berstatus Rusak/Hilang, tanpa query
+     * manual berulang (Aturan poin 3 - DRY).
+     */
+    public function peminjamanTerakhir(): HasOne
+    {
+        return $this->hasOne(Peminjaman::class)->latestOfMany();
+    }
+
+    /**
      * Satu sumber kebenaran format barcode auto-generate (Aturan poin 3
      * - DRY). SEBELUMNYA duplikat persis di BukuImporter::afterSave() dan
      * CreateBuku::afterCreate() - kedua caller sekarang memanggil ini.
@@ -9065,10 +10399,10 @@ class Eksemplar extends Model
      */
     public static function generateBarcodeUntuk(Buku $buku, int $urutan): string
     {
-        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)).'-'.$urutan);
+        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)) . '-' . $urutan);
 
         if (static::query()->where('barcode', $barcode)->exists()) {
-            $barcode .= '-'.strtoupper(Str::random(4));
+            $barcode .= '-' . strtoupper(Str::random(4));
         }
 
         return $barcode;
@@ -9411,6 +10745,29 @@ class LevelBadge extends Model
     public function levelBadgeLogs(): HasMany
     {
         return $this->hasMany(LevelBadgeLog::class);
+    }
+}
+
+```
+---
+
+## app/Models/LoginOtp.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class LoginOtp extends Model
+{
+    protected $fillable = ['no_telepon', 'otp', 'expires_at'];
+
+    protected function casts(): array
+    {
+        return [
+            'expires_at' => 'datetime',
+        ];
     }
 }
 
@@ -9952,6 +11309,43 @@ class Setting extends Model
 ```
 ---
 
+## app/Models/SnapshotHarian.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class SnapshotHarian extends Model
+{
+    protected $fillable = [
+        'tanggal',
+        'peminjaman_baru',
+        'peminjaman_terlambat',
+        'denda_baru',
+        'kunjungan',
+        'total_judul_buku',
+        'total_anggota_aktif',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'tanggal' => 'date',
+            'peminjaman_baru' => 'integer',
+            'peminjaman_terlambat' => 'integer',
+            'denda_baru' => 'integer',
+            'kunjungan' => 'integer',
+            'total_judul_buku' => 'integer',
+            'total_anggota_aktif' => 'integer',
+        ];
+    }
+}
+
+```
+---
+
 ## app/Models/TahunPelajaran.php
 ```php
 <?php
@@ -10054,6 +11448,7 @@ class Transaksi extends Model
 
 namespace App\Models;
 
+use App\Enums\JenisKelamin;
 use App\Enums\RoleUser;
 use App\Enums\StatusAkademik;
 use Filament\Models\Contracts\FilamentUser;
@@ -10075,6 +11470,7 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
     protected $fillable = [
         'avatar',
         'nama',
+        'jenis_kelamin',
         'role',
         'nisn',
         'nip',
@@ -10098,6 +11494,7 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
         return [
             'id' => 'integer',
             'role' => RoleUser::class,
+            'jenis_kelamin' => JenisKelamin::class,
             'status_akademik' => StatusAkademik::class,
             'status_suspend' => 'boolean',
             'password' => 'hashed',
@@ -10109,18 +11506,6 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
         return $this->nama;
     }
 
-    /**
-     * Konfirmasi Aturan: SATU panel untuk semua role, pembatasan akses
-     * dilakukan lewat Policy per Resource (bukan di sini). Semua role yang
-     * berhasil login (termasuk yang status_suspend = true, karena mereka
-     * tetap perlu melihat Denda/Punishment miliknya sendiri untuk tahu
-     * alasan suspend) lolos ke panel. Guard sesungguhnya (Siswa tidak bisa
-     * CRUD Buku, Pustakawan tidak bisa ubah Setting, dst.) ditulis di
-     * masing-masing app/Policies/*Policy.php, di-enforce via Shield.
-     *
-     * status_akademik = Lulus TETAP bisa akses panel (dikonfirmasi Aturan
-     * - akun tidak dinonaktifkan saat lulus).
-     */
     public function canAccessPanel(Panel $panel): bool
     {
         return true;
@@ -10139,6 +11524,37 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
     public function riwayatKelas(): HasMany
     {
         return $this->hasMany(RiwayatKelasSiswa::class);
+    }
+}
+
+```
+---
+
+## app/Models/WhatsappLog.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class WhatsappLog extends Model
+{
+    protected $fillable = [
+        'reference_id',
+        'template_code',
+        'nomor_tujuan',
+        'variables',
+        'status',
+        'keterangan',
+        'percobaan_ke',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'variables' => 'array',
+        ];
     }
 }
 
@@ -12235,16 +13651,17 @@ namespace App\Providers\Filament;
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Pages\Auth\RequestPasswordReset;
 use App\Filament\Pages\Auth\ResetPassword;
+use App\Filament\Pages\Dashboard;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -12266,7 +13683,13 @@ class DashboardPanelProvider extends PanelProvider
             ->path('dashboard')
             ->login(Login::class)
             ->spa()
-
+            ->pages([
+                Dashboard::class,
+            ])
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => view('filament.partials.chart-export-script')->render(),
+            )
             ->passwordReset(
                 RequestPasswordReset::class,
                 ResetPassword::class,
@@ -12802,6 +14225,100 @@ class LaporanBulananService
 ```
 ---
 
+## app/Services/LoginOtpService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\LoginOtp;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+
+/**
+ * Satu sumber kebenaran untuk alur login via OTP WhatsApp (Aturan poin 3).
+ * BEDA dengan PasswordResetOtpService: verifikasi di sini TIDAK mengubah
+ * password sama sekali - hanya mengonfirmasi identitas untuk Auth::login().
+ * Risiko diterima sadar (dikonfirmasi): OTP verified = login penuh tanpa
+ * user perlu tahu/ganti password, setara alur reset password.
+ *
+ * TODO: ASUMSI - panjang OTP 6 digit, masa berlaku 5 menit, rate limit 1
+ * permintaan per menit per no_telepon - sama seperti PasswordResetOtpService,
+ * belum ada Setting terkonfigurasi untuk ini.
+ */
+class LoginOtpService
+{
+    public function __construct(
+        protected WhatsappService $whatsappService,
+    ) {}
+
+    public function kirimOtp(User $user): void
+    {
+        $rateLimitKey = "otp-login:{$user->no_telepon}";
+
+        if (RateLimiter::tooManyAttempts($rateLimitKey, 1)) {
+            $detik = RateLimiter::availableIn($rateLimitKey);
+            throw new \RuntimeException("Tunggu {$detik} detik sebelum meminta OTP baru.");
+        }
+        RateLimiter::hit($rateLimitKey, 60);
+
+        $otp = (string) random_int(100000, 999999);
+
+        LoginOtp::query()->where('no_telepon', $user->no_telepon)->delete();
+        LoginOtp::create([
+            'no_telepon' => $user->no_telepon,
+            'otp' => Hash::make($otp),
+            'expires_at' => now()->addMinutes(5),
+        ]);
+
+        // eventCode 'login_otp' - TODO: ASUMSI, event BARU di luar yang sudah
+        // terdaftar Admin di panel gateway. Wajib dibuat template baru +
+        // diisi ke Setting 'wa_template_login_otp' (dikonfirmasi dipahami).
+        $this->whatsappService->kirimEvent(
+            eventCode: 'login_otp',
+            nomorTujuan: $user->no_telepon,
+            variables: ['nama' => $user->nama, 'otp' => $otp],
+            referenceId: "login-otp-{$user->id}-".now()->timestamp,
+        );
+    }
+
+    /**
+     * Verifikasi OTP untuk LOGIN - TIDAK menyentuh password sama sekali.
+     * status_suspend TIDAK di-guard di sini (dikonfirmasi: OTP tetap
+     * berlaku untuk user suspend, konsisten dengan
+     * User::canAccessPanel() yang selalu true - guard sesungguhnya ada
+     * di Policy per Resource, bukan di gerbang login).
+     *
+     * @throws \RuntimeException jika OTP salah/kedaluwarsa/user tidak ditemukan
+     */
+    public function verifikasiUntukLogin(string $noTelepon, string $otp): User
+    {
+        $record = LoginOtp::query()
+            ->where('no_telepon', $noTelepon)
+            ->where('expires_at', '>', now())
+            ->latest('id')
+            ->first();
+
+        if (! $record || ! Hash::check($otp, $record->otp)) {
+            throw new \RuntimeException('Kode OTP salah atau sudah kedaluwarsa.');
+        }
+
+        $user = User::query()->where('no_telepon', $noTelepon)->first();
+
+        if (! $user) {
+            throw new \RuntimeException('Akun tidak ditemukan.');
+        }
+
+        $record->delete();
+
+        return $user;
+    }
+}
+
+```
+---
+
 ## app/Services/PasswordResetOtpService.php
 ```php
 <?php
@@ -12897,6 +14414,7 @@ use App\Enums\JenisTransaksi;
 use App\Enums\KondisiBuku;
 use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
+use App\Enums\StatusRefund;
 use App\Enums\TipeDenda;
 use App\Models\Buku;
 use App\Models\Denda;
@@ -13145,6 +14663,10 @@ class PeminjamanService
             throw new RuntimeException('Peminjaman ini sudah tidak aktif/terlambat, tidak bisa dilaporkan hilang.');
         }
 
+        // Notifikasi 'denda_dibuat' SUDAH dikirim oleh tandaiDenda() di
+        // bawah - jangan kirim ulang di sini (dulu menyebabkan reference_id
+        // sama dikirim 2x dengan payload nominal berbeda -> 409 dari
+        // gateway, lihat kirimEvent()/kirimPesan() §idempotency).
         $denda = DB::transaction(function () use ($peminjaman) {
             $denda = $this->tandaiDenda(
                 $peminjaman,
@@ -13165,14 +14687,56 @@ class PeminjamanService
             return $denda;
         });
 
+        return $denda;
+    }
+
+    /**
+     * BARU (iterasi ini) - kebalikan dari laporkanHilang(): dipakai KHUSUS
+     * untuk Peminjaman yang jadi Hilang lewat laporkanHilang() (belum
+     * pernah ada Pengembalian sama sekali). Untuk Peminjaman yang jadi
+     * Hilang lewat prosesPengembalian(kondisi: Hilang), gunakan
+     * koreksiKondisiPengembalian() sebagai gantinya (ada Pengembalian yang
+     * bisa dikoreksi ke KondisiBuku::Baik) - caller (Filament Action) WAJIB
+     * memilih method yang tepat berdasarkan ada/tidaknya $peminjaman->pengembalian.
+     *
+     * TODO: GAP-SPEC - Point dari event Kehilangan TIDAK direverse di sini,
+     * konsisten dengan koreksiKondisiPengembalian() (perilaku yang sama
+     * sudah dikonfirmasi sebelumnya untuk kasus itu).
+     */
+    public function bukuDitemukanKembali(Peminjaman $peminjaman): Peminjaman
+    {
+        if ($peminjaman->status !== StatusPeminjaman::Hilang) {
+            throw new RuntimeException('Peminjaman ini tidak berstatus Hilang.');
+        }
+
+        if ($peminjaman->pengembalian) {
+            throw new RuntimeException('Peminjaman ini sudah punya data Pengembalian - gunakan aksi Koreksi Kondisi di menu Pengembalian, bukan alur ini.');
+        }
+
+        $peminjaman = DB::transaction(function () use ($peminjaman) {
+            $peminjaman->eksemplar->update(['status' => StatusEksemplar::Tersedia]);
+            $peminjaman->update(['status' => StatusPeminjaman::Selesai]);
+
+            // dihitung PeminjamanService - reuse batalkanDenda() (Aturan
+            // poin 3), termasuk logika status_refund & notifikasi WA
+            // 'denda_dibatalkan_perlu_refund' jika denda sudah lunas.
+            $this->batalkanDenda($peminjaman, TipeDenda::Kehilangan);
+
+            return $peminjaman->fresh();
+        });
+
+        // TODO: ASUMSI - eventCode 'buku_ditemukan_kembali' BARU, belum ada
+        // di daftar template WhatsApp existing. Sebelum Setting
+        // 'wa_template_buku_ditemukan_kembali' diisi Admin, kirimEvent()
+        // akan skip otomatis (bukan error) - lihat WhatsappService::kirimEvent().
         $this->whatsappService->kirimEvent(
-            eventCode: 'denda_dibuat',
+            eventCode: 'buku_ditemukan_kembali',
             nomorTujuan: $peminjaman->user->no_telepon,
-            variables: ['nama' => $peminjaman->user->nama, 'tipe' => 'kehilangan', 'nominal' => (string) $denda->nominal],
-            referenceId: "denda-{$denda->id}",
+            variables: ['nama' => $peminjaman->user->nama],
+            referenceId: "buku-ditemukan-{$peminjaman->id}",
         );
 
-        return $denda;
+        return $peminjaman;
     }
 
     /**
@@ -13274,6 +14838,17 @@ class PeminjamanService
         return $denda;
     }
 
+    /**
+     * TODO: GAP-SPEC - sebelumnya method ini TIDAK PERNAH men-set
+     * status_refund maupun mengirim notifikasi 'denda_dibatalkan_perlu_refund'
+     * walau komentar keterangan Denda sudah menyebut "perlu refund manual".
+     * Diperbaiki (dikonfirmasi): notifikasi WA dikirim KE USER (bukan
+     * Admin/Pustakawan) hanya jika denda yang dibatalkan SUDAH TERBAYAR
+     * sebelum koreksi - kalau belum terbayar, tidak ada uang yang perlu
+     * direfund sehingga tidak perlu status_refund maupun notifikasi.
+     * Nominal ASLI ditangkap sebelum di-nol-kan supaya user tahu jumlah
+     * yang dibatalkan/perlu direfund.
+     */
     protected function batalkanDenda(Peminjaman $peminjaman, TipeDenda $tipe): void
     {
         $denda = Denda::query()
@@ -13287,18 +14862,34 @@ class PeminjamanService
         }
 
         $sudahTerbayar = $denda->status_lunas;
+        $nominalAsli = $denda->nominal; // ditangkap sebelum di-nol-kan, dipakai untuk notifikasi WA
 
         $denda->update([
             'nominal' => 0,
             'status_lunas' => true,
             'tanggal_lunas' => now(),
-            'keterangan' => trim(($denda->keterangan ? $denda->keterangan.' | ' : '')
-                .($sudahTerbayar
+            'status_refund' => $sudahTerbayar ? StatusRefund::PerluRefund : $denda->status_refund,
+            'keterangan' => trim(($denda->keterangan ? $denda->keterangan . ' | ' : '')
+                . ($sudahTerbayar
                     ? 'Dibatalkan otomatis (SUDAH TERBAYAR SEBELUM KOREKSI - perlu refund manual di luar sistem): koreksi kondisi Pengembalian.'
                     : 'Dibatalkan otomatis: koreksi kondisi Pengembalian.')),
         ]);
 
-        // TODO: GAP-SPEC - refund fisik di luar sistem, sama seperti sebelumnya.
+        if ($sudahTerbayar) {
+            // dikirim ke user (dikonfirmasi) - referenceId stabil per denda
+            // supaya tidak dobel kirim jika batalkanDenda() ter-trigger ulang
+            // untuk denda yang sama (idempotency window gateway §9).
+            $this->whatsappService->kirimEvent(
+                eventCode: 'denda_dibatalkan_perlu_refund',
+                nomorTujuan: $peminjaman->user->no_telepon,
+                variables: [
+                    'nama' => $peminjaman->user->nama,
+                    'tipe' => $tipe->value,
+                    'nominal' => (string) $nominalAsli,
+                ],
+                referenceId: "denda-dibatalkan-refund-{$denda->id}",
+            );
+        }
     }
 }
 
@@ -13619,6 +15210,89 @@ class RfidResolverService
 ```
 ---
 
+## app/Services/SnapshotHarianService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Enums\RoleUser;
+use App\Enums\StatusPeminjaman;
+use App\Models\Buku;
+use App\Models\Denda;
+use App\Models\Kunjungan;
+use App\Models\Peminjaman;
+use App\Models\SnapshotHarian;
+use App\Models\User;
+use Carbon\Carbon;
+
+/**
+ * Satu sumber kebenaran perhitungan snapshot harian lintas-domain (Aturan
+ * poin 3, DRY) - dipanggil ProsesCronHarianPerpustakaan (hari berjalan)
+ * dan BackfillSnapshotHarian (histori). Metrik di sini adalah PROXY yang
+ * sama persis semantiknya dengan yang sebelumnya dihitung live di
+ * PeminjamanStatsWidget (lihat TODO: GAP-SPEC di masing-masing method) -
+ * hanya waktu eksekusinya yang dipindah dari "tiap request dashboard" ke
+ * "sekali per hari", BUKAN perbaikan akurasi proxy itu sendiri.
+ */
+class SnapshotHarianService
+{
+    public function catatUntukTanggal(Carbon $tanggal): SnapshotHarian
+    {
+        $tanggal = $tanggal->copy()->startOfDay();
+
+        return SnapshotHarian::query()->updateOrCreate(
+            ['tanggal' => $tanggal->toDateString()],
+            [
+                // TODO: GAP-SPEC - proxy "peminjaman baru per hari",
+                // dipindahkan apa adanya dari PeminjamanStatsWidget.
+                'peminjaman_baru' => Peminjaman::query()
+                    ->whereDate('tanggal_pinjam', $tanggal)
+                    ->count(),
+
+                // TODO: GAP-SPEC - proxy "jatuh tempo pada tanggal tsb DAN
+                // berstatus Terlambat SAAT service ini dijalankan" - untuk
+                // snapshot hari berjalan (dipanggil setelah
+                // PeminjamanService::prosesCronHarian() di command cron),
+                // transisi status hari itu sudah tercermin. Untuk backfill
+                // histori jauh ke belakang, angka ini merefleksikan status
+                // TERKINI record tsb, bukan status riil pada tanggal
+                // tersebut (sama seperti sebelumnya, butuh tabel histori
+                // status terpisah untuk akurat penuh).
+                'peminjaman_terlambat' => Peminjaman::query()
+                    ->whereDate('tanggal_jatuh_tempo', $tanggal)
+                    ->where('status', StatusPeminjaman::Terlambat)
+                    ->count(),
+
+                // TODO: GAP-SPEC - proxy "denda baru terbit per hari".
+                'denda_baru' => Denda::query()
+                    ->whereDate('created_at', $tanggal)
+                    ->count(),
+
+                // Akurat - Kunjungan.tanggal adalah histori peristiwa asli.
+                'kunjungan' => Kunjungan::query()
+                    ->whereDate('tanggal', $tanggal)
+                    ->count(),
+
+                // Akurat - kumulatif, Buku tidak di-hard-delete dalam alur normal.
+                'total_judul_buku' => Buku::query()
+                    ->whereDate('created_at', '<=', $tanggal->copy()->endOfDay())
+                    ->count(),
+
+                // TODO: GAP-SPEC - kumulatif PENDAFTARAN user, tidak
+                // memperhitungkan riwayat status_suspend berubah.
+                'total_anggota_aktif' => User::query()
+                    ->whereNotIn('role', [RoleUser::Admin, RoleUser::Pustakawan])
+                    ->whereDate('created_at', '<=', $tanggal->copy()->endOfDay())
+                    ->count(),
+            ],
+        );
+    }
+}
+
+```
+---
+
 ## app/Services/WhatsappService.php
 ```php
 <?php
@@ -13872,11 +15546,16 @@ Schedule::command('perpustakaan:cron-harian')
 ```php
 <?php
 
+use App\Http\Controllers\ChartExportController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return redirect('dashboard');
 });
+
+Route::post('/dashboard/chart-export/pdf', [ChartExportController::class, 'pdf'])
+    ->middleware(['web', 'auth'])
+    ->name('chart-export.pdf');
 
 ```
 ---
@@ -13963,11 +15642,11 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    'locale' => env('APP_LOCALE', 'id'),
 
-    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
+    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'id'),
 
-    'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
+    'faker_locale' => env('APP_FAKER_LOCALE', 'id_ID'),
 
     /*
     |--------------------------------------------------------------------------
@@ -14462,6 +16141,149 @@ return [
         ],
 
     ],
+
+];
+
+```
+---
+
+## config/filament.php
+```php
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Broadcasting
+    |--------------------------------------------------------------------------
+    |
+    | By uncommenting the Laravel Echo configuration, you may connect Filament
+    | to any Pusher-compatible websockets server.
+    |
+    | This will allow your users to receive real-time notifications.
+    |
+    */
+
+    'broadcasting' => [
+
+        // 'echo' => [
+        //     'broadcaster' => 'pusher',
+        //     'key' => env('VITE_PUSHER_APP_KEY'),
+        //     'cluster' => env('VITE_PUSHER_APP_CLUSTER'),
+        //     'wsHost' => env('VITE_PUSHER_HOST'),
+        //     'wsPort' => env('VITE_PUSHER_PORT'),
+        //     'wssPort' => env('VITE_PUSHER_PORT'),
+        //     'authEndpoint' => '/broadcasting/auth',
+        //     'disableStats' => true,
+        //     'encrypted' => true,
+        //     'forceTLS' => env('VITE_PUSHER_SCHEME', 'https') === 'https',
+        // ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Filesystem Disk
+    |--------------------------------------------------------------------------
+    |
+    | This is the storage disk Filament will use to store files. You may use
+    | any of the disks defined in the `config/filesystems.php`.
+    |
+    */
+
+    'default_filesystem_disk' => env('FILESYSTEM_DISK', 'local'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Temporary File URL Expiry
+    |--------------------------------------------------------------------------
+    |
+    | When Filament generates temporary URLs for previewing private files
+    | (file uploads, image columns, image entries, rich editor attachments,
+    | etc.), this value controls how many minutes those URLs remain valid.
+    |
+    | The generated URL's expiry is rounded up to the end of the hour it
+    | falls in, so the effective lifetime will be between this value and
+    | this value plus up to 60 minutes.
+    |
+    */
+
+    'temporary_file_url_expiry_minutes' => 30,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Assets Path
+    |--------------------------------------------------------------------------
+    |
+    | This is the directory where Filament's assets will be published to. It
+    | is relative to the `public` directory of your Laravel application.
+    |
+    | After changing the path, you should run `php artisan filament:assets`.
+    |
+    */
+
+    'assets_path' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cache Path
+    |--------------------------------------------------------------------------
+    |
+    | This is the directory that Filament will use to store cache files that
+    | are used to optimize the registration of components.
+    |
+    | After changing the path, you should run `php artisan filament:cache-components`.
+    |
+    */
+
+    'cache_path' => base_path('bootstrap/cache/filament'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Livewire Loading Delay
+    |--------------------------------------------------------------------------
+    |
+    | This sets the delay before loading indicators appear.
+    |
+    | Setting this to 'none' makes indicators appear immediately, which can be
+    | desirable for high-latency connections. Setting it to 'default' applies
+    | Livewire's standard 200ms delay.
+    |
+    */
+
+    'livewire_loading_delay' => 'default',
+
+    /*
+    |--------------------------------------------------------------------------
+    | File Generation
+    |--------------------------------------------------------------------------
+    |
+    | Artisan commands that generate files can be configured here by setting
+    | configuration flags that will impact their location or content.
+    |
+    | Often, this is useful to preserve file generation behavior from a
+    | previous version of Filament, to ensure consistency between older and
+    | newer generated files. These flags are often documented in the upgrade
+    | guide for the version of Filament you are upgrading to.
+    |
+    */
+
+    'file_generation' => [
+        'flags' => [],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | System Route Prefix
+    |--------------------------------------------------------------------------
+    |
+    | This is the prefix used for the system routes that Filament registers,
+    | such as the routes for downloading exports and failed import rows.
+    |
+    */
+
+    'system_route_prefix' => 'filament',
 
 ];
 
@@ -18490,6 +20312,159 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_08_02_000009_create_login_otps_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Tabel baru murni untuk OTP LOGIN (beda dari password_reset_otps yang
+ * dipakai alur reset password) - dipisah supaya semantik jelas: verifikasi
+ * di sini TIDAK mengubah password, hanya men-trigger Auth::login().
+ * Aman di-rollback, tidak berdampak ke data users/peminjaman/denda/point.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('login_otps', function (Blueprint $table) {
+            $table->id();
+            $table->string('no_telepon')->index();
+            $table->string('otp'); // disimpan hashed (Hash::make), bukan plain
+            $table->timestamp('expires_at');
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('login_otps');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_02_000010_add_jenis_kelamin_to_users_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Kolom baru murni, nullable, default null - AMAN untuk data users
+ * existing (poin 16 Aturan). Data lama tetap null sampai diisi manual
+ * lewat form UserResource (tidak ada backfill otomatis - tidak ada
+ * sumber data untuk menebak jenis kelamin user lama).
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->enum('jenis_kelamin', ['L', 'P'])->nullable()->after('nama');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('jenis_kelamin');
+        });
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_02_000011_create_whatsapp_logs_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Tabel baru murni - tidak mengubah tabel/job existing secara struktural
+ * (poin 16/17 Aturan). Satu baris per reference_id (upsert di job, bukan
+ * insert per percobaan) supaya retry job.tries=3 tidak menumpuk baris -
+ * kolom percobaan_ke merekam berapa kali handle() dijalankan untuk
+ * reference_id yang sama.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('whatsapp_logs', function (Blueprint $table) {
+            $table->id();
+            $table->string('reference_id')->nullable()->unique();
+            $table->string('template_code');
+            $table->string('nomor_tujuan');
+            $table->json('variables')->nullable();
+            $table->enum('status', ['terkirim', 'gagal_transient', 'gagal_permanen'])->default('gagal_transient');
+            $table->text('keterangan')->nullable();
+            $table->unsignedTinyInteger('percobaan_ke')->default(1);
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('whatsapp_logs');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_02_000012_create_snapshot_harians_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Tabel baru murni - tidak mengubah tabel/data existing (poin 16 Aturan).
+ * Satu baris per tanggal, diisi SnapshotHarianService::catatUntukTanggal()
+ * lewat cron harian (hari berjalan) dan command backfill (histori).
+ * Menggantikan query agregat berulang di PeminjamanStatsWidget yang
+ * sebelumnya dihitung ulang setiap dashboard dibuka (Aturan poin 3/9 -
+ * performa untuk skala data besar).
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('snapshot_harians', function (Blueprint $table) {
+            $table->id();
+            $table->date('tanggal')->unique();
+            $table->unsignedInteger('peminjaman_baru')->default(0);
+            $table->unsignedInteger('peminjaman_terlambat')->default(0);
+            $table->unsignedInteger('denda_baru')->default(0);
+            $table->unsignedInteger('kunjungan')->default(0);
+            $table->unsignedInteger('total_judul_buku')->default(0);
+            $table->unsignedInteger('total_anggota_aktif')->default(0);
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('snapshot_harians');
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -18595,6 +20570,7 @@ class SettingSeeder extends Seeder
             ['key' => 'wa_template_reset_password_otp', 'value' => 'reset_password_otp', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway.'],
             ['key' => 'wa_template_koreksi_kondisi_pengembalian', 'value' => 'koreksi_kondisi_pengembalian', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat Pustakawan/Admin mengoreksi kondisi Pengembalian yang sudah final.'],
             ['key' => 'wa_template_denda_dibatalkan_perlu_refund', 'value' => 'denda_dibatalkan_perlu_refund', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat Denda yang SUDAH TERBAYAR dibatalkan akibat koreksi kondisi - Admin wajib menindaklanjuti refund manual (lihat Denda.status_refund).'],
+            ['key' => 'wa_template_login_otp', 'value' => 'login_otp', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat user login via OTP WhatsApp (setara reset password, tapi TIDAK mengubah password).'],
         ];
 
         foreach ($settings as $setting) {
@@ -18818,6 +20794,11 @@ class ShieldSeeder extends Seeder
 
                 'ViewAny:LaporanBulanan',
 
+                'ViewAny:Peminjaman',
+                'View:Peminjaman',
+                'Create:Peminjaman',
+                'Update:Peminjaman',
+                
                 // Catatan: 'ViewAny:PengaturanSistem' SENGAJA tidak
                 // ditambahkan di sini - lihat komentar di atas.
             ])->get()
@@ -19454,6 +21435,81 @@ return [
 ```
 ---
 
+## resources/js/chart-export.js
+```js
+import { jsPDF } from "jspdf";
+
+// Logika export grafik terpusat - dipakai oleh chart-widget.blade.php dan
+// stats-overview-widget/stat.blade.php (override) supaya tidak duplikasi
+// logika toDataURL/jsPDF di banyak tempat (Aturan poin 3).
+
+function flattenToWhiteBackground(canvas) {
+    // Canvas Chart.js transparan - flatten ke putih dulu supaya PNG/PDF
+    // hasil download tetap terbaca di luar dashboard (mode gelap dsb).
+    const flattened = document.createElement("canvas");
+    flattened.width = canvas.width;
+    flattened.height = canvas.height;
+
+    const ctx = flattened.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, flattened.width, flattened.height);
+    ctx.drawImage(canvas, 0, 0);
+
+    return flattened;
+}
+
+function triggerDownload(dataUrl, filename) {
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function downloadChartImage(canvas, filename) {
+    if (!canvas) {
+        return;
+    }
+
+    const flattened = flattenToWhiteBackground(canvas);
+    triggerDownload(flattened.toDataURL("image/png"), `${filename}.png`);
+}
+
+function downloadChartPdf(canvas, filename) {
+    if (!canvas) {
+        return;
+    }
+
+    const flattened = flattenToWhiteBackground(canvas);
+    const imgData = flattened.toDataURL("image/png");
+    const isLandscape = canvas.width >= canvas.height;
+
+    const pdf = new jsPDF({
+        orientation: isLandscape ? "landscape" : "portrait",
+        unit: "pt",
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 24;
+    const maxWidth = pageWidth - margin * 2;
+    const maxHeight = pageHeight - margin * 2;
+    const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
+    const drawWidth = canvas.width * ratio;
+    const drawHeight = canvas.height * ratio;
+    const x = (pageWidth - drawWidth) / 2;
+    const y = (pageHeight - drawHeight) / 2;
+
+    pdf.addImage(imgData, "PNG", x, y, drawWidth, drawHeight);
+    pdf.save(`${filename}.pdf`);
+}
+
+window.ChartExport = { downloadChartImage, downloadChartPdf };
+
+```
+---
+
 ## resources/views/filament/pages/auth/request-password-reset.blade.php
 ```blade
 <x-filament-panels::page.simple>
@@ -19716,6 +21772,167 @@ return [
 
     </div>
 </x-filament-panels::page>
+
+```
+---
+
+## resources/views/filament/partials/chart-export-script.blade.php
+```blade
+@once
+<script>
+window.ChartExport = window.ChartExport || (function () {
+    function flattenToWhite(canvas) {
+        // Canvas Chart.js transparan - flatten ke putih dulu supaya hasil
+        // download tetap terbaca di luar dashboard (mode gelap dsb).
+        const flat = document.createElement('canvas');
+        flat.width = canvas.width;
+        flat.height = canvas.height;
+
+        const ctx = flat.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, flat.width, flat.height);
+        ctx.drawImage(canvas, 0, 0);
+
+        return flat;
+    }
+
+    function downloadImage(canvas, filename) {
+        if (!canvas) {
+            return;
+        }
+
+        const flat = flattenToWhite(canvas);
+        const link = document.createElement('a');
+        link.href = flat.toDataURL('image/png');
+        link.download = filename + '.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function downloadPdf(canvas, filename, meta) {
+    if (!canvas) {
+        return;
+    }
+
+    meta = meta || {};
+
+    const flat = flattenToWhite(canvas);
+    const dataUrl = flat.toDataURL('image/png');
+    const csrfToken = document
+        .querySelector('meta[name="csrf-token"]')
+        ?.getAttribute('content');
+
+    fetch('{{ route('chart-export.pdf') }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken ?? '',
+            Accept: 'application/pdf',
+        },
+        body: JSON.stringify({
+            image: dataUrl,
+            filename: filename,
+            widget: meta.widget,
+            type: meta.type,
+            stat_label: meta.statLabel,
+        }),
+    })
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error('Gagal membuat PDF di server');
+            }
+
+            return response.blob();
+        })
+        .then((blob) => {
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename + '.pdf';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(() => {
+            alert('Gagal membuat PDF. Silakan coba lagi.');
+        });
+}
+
+    return { downloadImage, downloadPdf };
+})();
+</script>
+@endonce
+
+```
+---
+
+## resources/views/pdf/chart-export.blade.php
+```blade
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { margin: 0; padding: 24px; font-family: sans-serif; color: #111; }
+        h1 { font-size: 16px; margin: 0 0 4px; }
+        .meta { font-size: 10px; color: #666; margin-bottom: 16px; }
+        .section-title { font-size: 12px; font-weight: bold; margin: 14px 0 6px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10px; }
+        th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
+        th { background: #f3f3f3; }
+        img { max-width: 100%; height: auto; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <h1>{{ $heading }}</h1>
+    <div class="meta">Diekspor pada {{ now()->translatedFormat('d F Y H:i') }} WIB</div>
+
+    @if (count($summary))
+        <div class="section-title">Ringkasan</div>
+        <table>
+            <thead>
+                <tr><th>Seri Data</th><th>Total</th><th>Rata-rata</th></tr>
+            </thead>
+            <tbody>
+                @foreach ($summary as $s)
+                    <tr>
+                        <td>{{ $s['label'] }}</td>
+                        <td>{{ number_format($s['total'], 0, ',', '.') }}</td>
+                        <td>{{ number_format($s['rata_rata'], 2, ',', '.') }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
+
+    @if (count($rows))
+        <div class="section-title">Data</div>
+        <table>
+            <thead>
+                <tr>
+                    @foreach (array_keys($rows[0]) as $col)
+                        <th>{{ $col === 'label' ? 'Label' : $col }}</th>
+                    @endforeach
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($rows as $row)
+                    <tr>
+                        @foreach ($row as $val)
+                            <td>{{ $val }}</td>
+                        @endforeach
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
+
+    <div class="section-title">Grafik</div>
+    <img src="{{ $image }}" alt="Grafik">
+</body>
+</html>
 
 ```
 ---
@@ -20154,229 +22371,6 @@ return [
 
 ## resources/views/welcome.blade.php
 ```blade
-<!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-
-        <title>{{ config('app.name', 'Laravel') }}</title>
-
-        @fonts
-
-        <!-- Styles / Scripts -->
-        @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-            @vite(['resources/css/app.css', 'resources/js/app.js'])
-        @else
-            <style>
-                /*! tailwindcss v4.0.7 | MIT License | https://tailwindcss.com */ @layer properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){*,:before,:after,::backdrop{--tw-translate-x:0;--tw-translate-y:0;--tw-translate-z:0;--tw-rotate-x:initial;--tw-rotate-y:initial;--tw-rotate-z:initial;--tw-skew-x:initial;--tw-skew-y:initial;--tw-space-x-reverse:0;--tw-border-style:solid;--tw-leading:initial;--tw-font-weight:initial;--tw-tracking:initial;--tw-shadow:0 0 #0000;--tw-shadow-color:initial;--tw-shadow-alpha:100%;--tw-inset-shadow:0 0 #0000;--tw-inset-shadow-color:initial;--tw-inset-shadow-alpha:100%;--tw-ring-color:initial;--tw-ring-shadow:0 0 #0000;--tw-inset-ring-color:initial;--tw-inset-ring-shadow:0 0 #0000;--tw-ring-inset:initial;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-offset-shadow:0 0 #0000;--tw-blur:initial;--tw-brightness:initial;--tw-contrast:initial;--tw-grayscale:initial;--tw-hue-rotate:initial;--tw-invert:initial;--tw-opacity:initial;--tw-saturate:initial;--tw-sepia:initial;--tw-drop-shadow:initial;--tw-drop-shadow-color:initial;--tw-drop-shadow-alpha:100%;--tw-drop-shadow-size:initial;--tw-duration:initial;--tw-ease:initial;--tw-content:""}}}@layer theme{:root,:host{--font-sans:"Instrument Sans", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";--font-serif:ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;--font-mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;--color-red-50:oklch(97.1% .013 17.38);--color-red-100:oklch(93.6% .032 17.717);--color-red-200:oklch(88.5% .062 18.334);--color-red-300:oklch(80.8% .114 19.571);--color-red-400:oklch(70.4% .191 22.216);--color-red-500:oklch(63.7% .237 25.331);--color-red-600:oklch(57.7% .245 27.325);--color-red-700:oklch(50.5% .213 27.518);--color-red-800:oklch(44.4% .177 26.899);--color-red-900:oklch(39.6% .141 25.723);--color-red-950:oklch(25.8% .092 26.042);--color-orange-50:oklch(98% .016 73.684);--color-orange-100:oklch(95.4% .038 75.164);--color-orange-200:oklch(90.1% .076 70.697);--color-orange-300:oklch(83.7% .128 66.29);--color-orange-400:oklch(75% .183 55.934);--color-orange-500:oklch(70.5% .213 47.604);--color-orange-600:oklch(64.6% .222 41.116);--color-orange-700:oklch(55.3% .195 38.402);--color-orange-800:oklch(47% .157 37.304);--color-orange-900:oklch(40.8% .123 38.172);--color-orange-950:oklch(26.6% .079 36.259);--color-amber-50:oklch(98.7% .022 95.277);--color-amber-100:oklch(96.2% .059 95.617);--color-amber-200:oklch(92.4% .12 95.746);--color-amber-300:oklch(87.9% .169 91.605);--color-amber-400:oklch(82.8% .189 84.429);--color-amber-500:oklch(76.9% .188 70.08);--color-amber-600:oklch(66.6% .179 58.318);--color-amber-700:oklch(55.5% .163 48.998);--color-amber-800:oklch(47.3% .137 46.201);--color-amber-900:oklch(41.4% .112 45.904);--color-amber-950:oklch(27.9% .077 45.635);--color-yellow-50:oklch(98.7% .026 102.212);--color-yellow-100:oklch(97.3% .071 103.193);--color-yellow-200:oklch(94.5% .129 101.54);--color-yellow-300:oklch(90.5% .182 98.111);--color-yellow-400:oklch(85.2% .199 91.936);--color-yellow-500:oklch(79.5% .184 86.047);--color-yellow-600:oklch(68.1% .162 75.834);--color-yellow-700:oklch(55.4% .135 66.442);--color-yellow-800:oklch(47.6% .114 61.907);--color-yellow-900:oklch(42.1% .095 57.708);--color-yellow-950:oklch(28.6% .066 53.813);--color-lime-50:oklch(98.6% .031 120.757);--color-lime-100:oklch(96.7% .067 122.328);--color-lime-200:oklch(93.8% .127 124.321);--color-lime-300:oklch(89.7% .196 126.665);--color-lime-400:oklch(84.1% .238 128.85);--color-lime-500:oklch(76.8% .233 130.85);--color-lime-600:oklch(64.8% .2 131.684);--color-lime-700:oklch(53.2% .157 131.589);--color-lime-800:oklch(45.3% .124 130.933);--color-lime-900:oklch(40.5% .101 131.063);--color-lime-950:oklch(27.4% .072 132.109);--color-green-50:oklch(98.2% .018 155.826);--color-green-100:oklch(96.2% .044 156.743);--color-green-200:oklch(92.5% .084 155.995);--color-green-300:oklch(87.1% .15 154.449);--color-green-400:oklch(79.2% .209 151.711);--color-green-500:oklch(72.3% .219 149.579);--color-green-600:oklch(62.7% .194 149.214);--color-green-700:oklch(52.7% .154 150.069);--color-green-800:oklch(44.8% .119 151.328);--color-green-900:oklch(39.3% .095 152.535);--color-green-950:oklch(26.6% .065 152.934);--color-emerald-50:oklch(97.9% .021 166.113);--color-emerald-100:oklch(95% .052 163.051);--color-emerald-200:oklch(90.5% .093 164.15);--color-emerald-300:oklch(84.5% .143 164.978);--color-emerald-400:oklch(76.5% .177 163.223);--color-emerald-500:oklch(69.6% .17 162.48);--color-emerald-600:oklch(59.6% .145 163.225);--color-emerald-700:oklch(50.8% .118 165.612);--color-emerald-800:oklch(43.2% .095 166.913);--color-emerald-900:oklch(37.8% .077 168.94);--color-emerald-950:oklch(26.2% .051 172.552);--color-teal-50:oklch(98.4% .014 180.72);--color-teal-100:oklch(95.3% .051 180.801);--color-teal-200:oklch(91% .096 180.426);--color-teal-300:oklch(85.5% .138 181.071);--color-teal-400:oklch(77.7% .152 181.912);--color-teal-500:oklch(70.4% .14 182.503);--color-teal-600:oklch(60% .118 184.704);--color-teal-700:oklch(51.1% .096 186.391);--color-teal-800:oklch(43.7% .078 188.216);--color-teal-900:oklch(38.6% .063 188.416);--color-teal-950:oklch(27.7% .046 192.524);--color-cyan-50:oklch(98.4% .019 200.873);--color-cyan-100:oklch(95.6% .045 203.388);--color-cyan-200:oklch(91.7% .08 205.041);--color-cyan-300:oklch(86.5% .127 207.078);--color-cyan-400:oklch(78.9% .154 211.53);--color-cyan-500:oklch(71.5% .143 215.221);--color-cyan-600:oklch(60.9% .126 221.723);--color-cyan-700:oklch(52% .105 223.128);--color-cyan-800:oklch(45% .085 224.283);--color-cyan-900:oklch(39.8% .07 227.392);--color-cyan-950:oklch(30.2% .056 229.695);--color-sky-50:oklch(97.7% .013 236.62);--color-sky-100:oklch(95.1% .026 236.824);--color-sky-200:oklch(90.1% .058 230.902);--color-sky-300:oklch(82.8% .111 230.318);--color-sky-400:oklch(74.6% .16 232.661);--color-sky-500:oklch(68.5% .169 237.323);--color-sky-600:oklch(58.8% .158 241.966);--color-sky-700:oklch(50% .134 242.749);--color-sky-800:oklch(44.3% .11 240.79);--color-sky-900:oklch(39.1% .09 240.876);--color-sky-950:oklch(29.3% .066 243.157);--color-blue-50:oklch(97% .014 254.604);--color-blue-100:oklch(93.2% .032 255.585);--color-blue-200:oklch(88.2% .059 254.128);--color-blue-300:oklch(80.9% .105 251.813);--color-blue-400:oklch(70.7% .165 254.624);--color-blue-500:oklch(62.3% .214 259.815);--color-blue-600:oklch(54.6% .245 262.881);--color-blue-700:oklch(48.8% .243 264.376);--color-blue-800:oklch(42.4% .199 265.638);--color-blue-900:oklch(37.9% .146 265.522);--color-blue-950:oklch(28.2% .091 267.935);--color-indigo-50:oklch(96.2% .018 272.314);--color-indigo-100:oklch(93% .034 272.788);--color-indigo-200:oklch(87% .065 274.039);--color-indigo-300:oklch(78.5% .115 274.713);--color-indigo-400:oklch(67.3% .182 276.935);--color-indigo-500:oklch(58.5% .233 277.117);--color-indigo-600:oklch(51.1% .262 276.966);--color-indigo-700:oklch(45.7% .24 277.023);--color-indigo-800:oklch(39.8% .195 277.366);--color-indigo-900:oklch(35.9% .144 278.697);--color-indigo-950:oklch(25.7% .09 281.288);--color-violet-50:oklch(96.9% .016 293.756);--color-violet-100:oklch(94.3% .029 294.588);--color-violet-200:oklch(89.4% .057 293.283);--color-violet-300:oklch(81.1% .111 293.571);--color-violet-400:oklch(70.2% .183 293.541);--color-violet-500:oklch(60.6% .25 292.717);--color-violet-600:oklch(54.1% .281 293.009);--color-violet-700:oklch(49.1% .27 292.581);--color-violet-800:oklch(43.2% .232 292.759);--color-violet-900:oklch(38% .189 293.745);--color-violet-950:oklch(28.3% .141 291.089);--color-purple-50:oklch(97.7% .014 308.299);--color-purple-100:oklch(94.6% .033 307.174);--color-purple-200:oklch(90.2% .063 306.703);--color-purple-300:oklch(82.7% .119 306.383);--color-purple-400:oklch(71.4% .203 305.504);--color-purple-500:oklch(62.7% .265 303.9);--color-purple-600:oklch(55.8% .288 302.321);--color-purple-700:oklch(49.6% .265 301.924);--color-purple-800:oklch(43.8% .218 303.724);--color-purple-900:oklch(38.1% .176 304.987);--color-purple-950:oklch(29.1% .149 302.717);--color-fuchsia-50:oklch(97.7% .017 320.058);--color-fuchsia-100:oklch(95.2% .037 318.852);--color-fuchsia-200:oklch(90.3% .076 319.62);--color-fuchsia-300:oklch(83.3% .145 321.434);--color-fuchsia-400:oklch(74% .238 322.16);--color-fuchsia-500:oklch(66.7% .295 322.15);--color-fuchsia-600:oklch(59.1% .293 322.896);--color-fuchsia-700:oklch(51.8% .253 323.949);--color-fuchsia-800:oklch(45.2% .211 324.591);--color-fuchsia-900:oklch(40.1% .17 325.612);--color-fuchsia-950:oklch(29.3% .136 325.661);--color-pink-50:oklch(97.1% .014 343.198);--color-pink-100:oklch(94.8% .028 342.258);--color-pink-200:oklch(89.9% .061 343.231);--color-pink-300:oklch(82.3% .12 346.018);--color-pink-400:oklch(71.8% .202 349.761);--color-pink-500:oklch(65.6% .241 354.308);--color-pink-600:oklch(59.2% .249 .584);--color-pink-700:oklch(52.5% .223 3.958);--color-pink-800:oklch(45.9% .187 3.815);--color-pink-900:oklch(40.8% .153 2.432);--color-pink-950:oklch(28.4% .109 3.907);--color-rose-50:oklch(96.9% .015 12.422);--color-rose-100:oklch(94.1% .03 12.58);--color-rose-200:oklch(89.2% .058 10.001);--color-rose-300:oklch(81% .117 11.638);--color-rose-400:oklch(71.2% .194 13.428);--color-rose-500:oklch(64.5% .246 16.439);--color-rose-600:oklch(58.6% .253 17.585);--color-rose-700:oklch(51.4% .222 16.935);--color-rose-800:oklch(45.5% .188 13.697);--color-rose-900:oklch(41% .159 10.272);--color-rose-950:oklch(27.1% .105 12.094);--color-slate-50:oklch(98.4% .003 247.858);--color-slate-100:oklch(96.8% .007 247.896);--color-slate-200:oklch(92.9% .013 255.508);--color-slate-300:oklch(86.9% .022 252.894);--color-slate-400:oklch(70.4% .04 256.788);--color-slate-500:oklch(55.4% .046 257.417);--color-slate-600:oklch(44.6% .043 257.281);--color-slate-700:oklch(37.2% .044 257.287);--color-slate-800:oklch(27.9% .041 260.031);--color-slate-900:oklch(20.8% .042 265.755);--color-slate-950:oklch(12.9% .042 264.695);--color-gray-50:oklch(98.5% .002 247.839);--color-gray-100:oklch(96.7% .003 264.542);--color-gray-200:oklch(92.8% .006 264.531);--color-gray-300:oklch(87.2% .01 258.338);--color-gray-400:oklch(70.7% .022 261.325);--color-gray-500:oklch(55.1% .027 264.364);--color-gray-600:oklch(44.6% .03 256.802);--color-gray-700:oklch(37.3% .034 259.733);--color-gray-800:oklch(27.8% .033 256.848);--color-gray-900:oklch(21% .034 264.665);--color-gray-950:oklch(13% .028 261.692);--color-zinc-50:oklch(98.5% 0 0);--color-zinc-100:oklch(96.7% .001 286.375);--color-zinc-200:oklch(92% .004 286.32);--color-zinc-300:oklch(87.1% .006 286.286);--color-zinc-400:oklch(70.5% .015 286.067);--color-zinc-500:oklch(55.2% .016 285.938);--color-zinc-600:oklch(44.2% .017 285.786);--color-zinc-700:oklch(37% .013 285.805);--color-zinc-800:oklch(27.4% .006 286.033);--color-zinc-900:oklch(21% .006 285.885);--color-zinc-950:oklch(14.1% .005 285.823);--color-neutral-50:oklch(98.5% 0 0);--color-neutral-100:oklch(97% 0 0);--color-neutral-200:oklch(92.2% 0 0);--color-neutral-300:oklch(87% 0 0);--color-neutral-400:oklch(70.8% 0 0);--color-neutral-500:oklch(55.6% 0 0);--color-neutral-600:oklch(43.9% 0 0);--color-neutral-700:oklch(37.1% 0 0);--color-neutral-800:oklch(26.9% 0 0);--color-neutral-900:oklch(20.5% 0 0);--color-neutral-950:oklch(14.5% 0 0);--color-stone-50:oklch(98.5% .001 106.423);--color-stone-100:oklch(97% .001 106.424);--color-stone-200:oklch(92.3% .003 48.717);--color-stone-300:oklch(86.9% .005 56.366);--color-stone-400:oklch(70.9% .01 56.259);--color-stone-500:oklch(55.3% .013 58.071);--color-stone-600:oklch(44.4% .011 73.639);--color-stone-700:oklch(37.4% .01 67.558);--color-stone-800:oklch(26.8% .007 34.298);--color-stone-900:oklch(21.6% .006 56.043);--color-stone-950:oklch(14.7% .004 49.25);--color-black:#000;--color-white:#fff;--spacing:.25rem;--breakpoint-sm:40rem;--breakpoint-md:48rem;--breakpoint-lg:64rem;--breakpoint-xl:80rem;--breakpoint-2xl:96rem;--container-3xs:16rem;--container-2xs:18rem;--container-xs:20rem;--container-sm:24rem;--container-md:28rem;--container-lg:32rem;--container-xl:36rem;--container-2xl:42rem;--container-3xl:48rem;--container-4xl:56rem;--container-5xl:64rem;--container-6xl:72rem;--container-7xl:80rem;--text-xs:.75rem;--text-xs--line-height:calc(1 / .75);--text-sm:.875rem;--text-sm--line-height:calc(1.25 / .875);--text-base:1rem;--text-base--line-height: 1.5 ;--text-lg:1.125rem;--text-lg--line-height:calc(1.75 / 1.125);--text-xl:1.25rem;--text-xl--line-height:calc(1.75 / 1.25);--text-2xl:1.5rem;--text-2xl--line-height:calc(2 / 1.5);--text-3xl:1.875rem;--text-3xl--line-height: 1.2 ;--text-4xl:2.25rem;--text-4xl--line-height:calc(2.5 / 2.25);--text-5xl:3rem;--text-5xl--line-height:1;--text-6xl:3.75rem;--text-6xl--line-height:1;--text-7xl:4.5rem;--text-7xl--line-height:1;--text-8xl:6rem;--text-8xl--line-height:1;--text-9xl:8rem;--text-9xl--line-height:1;--font-weight-thin:100;--font-weight-extralight:200;--font-weight-light:300;--font-weight-normal:400;--font-weight-medium:500;--font-weight-semibold:600;--font-weight-bold:700;--font-weight-extrabold:800;--font-weight-black:900;--tracking-tighter:-.05em;--tracking-tight:-.025em;--tracking-normal:0em;--tracking-wide:.025em;--tracking-wider:.05em;--tracking-widest:.1em;--leading-tight:1.25;--leading-snug:1.375;--leading-normal:1.5;--leading-relaxed:1.625;--leading-loose:2;--radius-xs:.125rem;--radius-sm:.25rem;--radius-md:.375rem;--radius-lg:.5rem;--radius-xl:.75rem;--radius-2xl:1rem;--radius-3xl:1.5rem;--radius-4xl:2rem;--shadow-2xs:0 1px #0000000d;--shadow-xs:0 1px 2px 0 #0000000d;--shadow-sm:0 1px 3px 0 #0000001a, 0 1px 2px -1px #0000001a;--shadow-md:0 4px 6px -1px #0000001a, 0 2px 4px -2px #0000001a;--shadow-lg:0 10px 15px -3px #0000001a, 0 4px 6px -4px #0000001a;--shadow-xl:0 20px 25px -5px #0000001a, 0 8px 10px -6px #0000001a;--shadow-2xl:0 25px 50px -12px #00000040;--inset-shadow-2xs:inset 0 1px #0000000d;--inset-shadow-xs:inset 0 1px 1px #0000000d;--inset-shadow-sm:inset 0 2px 4px #0000000d;--drop-shadow-xs:0 1px 1px #0000000d;--drop-shadow-sm:0 1px 2px #00000026;--drop-shadow-md:0 3px 3px #0000001f;--drop-shadow-lg:0 4px 4px #00000026;--drop-shadow-xl:0 9px 7px #0000001a;--drop-shadow-2xl:0 25px 25px #00000026;--ease-in:cubic-bezier(.4, 0, 1, 1);--ease-out:cubic-bezier(0, 0, .2, 1);--ease-in-out:cubic-bezier(.4, 0, .2, 1);--animate-spin:spin 1s linear infinite;--animate-ping:ping 1s cubic-bezier(0, 0, .2, 1) infinite;--animate-pulse:pulse 2s cubic-bezier(.4, 0, .6, 1) infinite;--animate-bounce:bounce 1s infinite;--blur-xs:4px;--blur-sm:8px;--blur-md:12px;--blur-lg:16px;--blur-xl:24px;--blur-2xl:40px;--blur-3xl:64px;--perspective-dramatic:100px;--perspective-near:300px;--perspective-normal:500px;--perspective-midrange:800px;--perspective-distant:1200px;--aspect-video:16 / 9;--default-transition-duration:.15s;--default-transition-timing-function:cubic-bezier(.4, 0, .2, 1);--default-font-family:var(--font-sans);--default-mono-font-family:var(--font-mono)}}@layer base{*,:after,:before,::backdrop{box-sizing:border-box;border:0 solid;margin:0;padding:0}::file-selector-button{box-sizing:border-box;border:0 solid;margin:0;padding:0}html,:host{-webkit-text-size-adjust:100%;tab-size:4;line-height:1.5;font-family:var(--default-font-family,ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");font-feature-settings:var(--default-font-feature-settings,normal);font-variation-settings:var(--default-font-variation-settings,normal);-webkit-tap-highlight-color:transparent}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;-webkit-text-decoration:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,samp,pre{font-family:var(--default-mono-font-family,ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);font-feature-settings:var(--default-mono-font-feature-settings,normal);font-variation-settings:var(--default-mono-font-variation-settings,normal);font-size:1em}small{font-size:80%}sub,sup{vertical-align:baseline;font-size:75%;line-height:0;position:relative}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}:-moz-focusring{outline:auto}progress{vertical-align:baseline}summary{display:list-item}ol,ul,menu{list-style:none}img,svg,video,canvas,audio,iframe,embed,object{vertical-align:middle;display:block}img,video{max-width:100%;height:auto}button,input,select,optgroup,textarea{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}::file-selector-button{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}:where(select:is([multiple],[size])) optgroup{font-weight:bolder}:where(select:is([multiple],[size])) optgroup option{padding-inline-start:20px}::file-selector-button{margin-inline-end:4px}::placeholder{opacity:1}@supports (not ((-webkit-appearance:-apple-pay-button))) or (contain-intrinsic-size:1px){::placeholder{color:currentColor}@supports (color:color-mix(in lab,red,red)){::placeholder{color:color-mix(in oklab,currentcolor 50%,transparent)}}}textarea{resize:vertical}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-date-and-time-value{min-height:1lh;text-align:inherit}::-webkit-datetime-edit{display:inline-flex}::-webkit-datetime-edit-fields-wrapper{padding:0}::-webkit-datetime-edit{padding-block:0}::-webkit-datetime-edit-year-field{padding-block:0}::-webkit-datetime-edit-month-field{padding-block:0}::-webkit-datetime-edit-day-field{padding-block:0}::-webkit-datetime-edit-hour-field{padding-block:0}::-webkit-datetime-edit-minute-field{padding-block:0}::-webkit-datetime-edit-second-field{padding-block:0}::-webkit-datetime-edit-millisecond-field{padding-block:0}::-webkit-datetime-edit-meridiem-field{padding-block:0}::-webkit-calendar-picker-indicator{line-height:1}:-moz-ui-invalid{box-shadow:none}button,input:where([type=button],[type=reset],[type=submit]){appearance:button}::file-selector-button{appearance:button}::-webkit-inner-spin-button{height:auto}::-webkit-outer-spin-button{height:auto}[hidden]:where(:not([hidden=until-found])){display:none!important}}@layer components;@layer utilities{.absolute{position:absolute}.fixed{position:fixed}.relative{position:relative}.static{position:static}.inset-0{inset:calc(var(--spacing) * 0)}.start{inset-inline-start:var(--spacing)}.top-0{top:calc(var(--spacing) * 0)}.right-0{right:calc(var(--spacing) * 0)}.container{width:100%}@media(min-width:40rem){.container{max-width:40rem}}@media(min-width:48rem){.container{max-width:48rem}}@media(min-width:64rem){.container{max-width:64rem}}@media(min-width:80rem){.container{max-width:80rem}}@media(min-width:96rem){.container{max-width:96rem}}.mx-auto{margin-inline:auto}.-mt-\[6\.6rem\]{margin-top:-6.6rem}.-mt-px{margin-top:-1px}.mt-2{margin-top:calc(var(--spacing) * 2)}.mt-4{margin-top:calc(var(--spacing) * 4)}.mt-6{margin-top:calc(var(--spacing) * 6)}.mt-8{margin-top:calc(var(--spacing) * 8)}.mr-2{margin-right:calc(var(--spacing) * 2)}.-mb-px{margin-bottom:-1px}.mb-1{margin-bottom:calc(var(--spacing) * 1)}.mb-2{margin-bottom:calc(var(--spacing) * 2)}.mb-4{margin-bottom:calc(var(--spacing) * 4)}.mb-6{margin-bottom:calc(var(--spacing) * 6)}.-ml-8{margin-left:calc(var(--spacing) * -8)}.-ml-px{margin-left:-1px}.ml-1{margin-left:calc(var(--spacing) * 1)}.ml-2{margin-left:calc(var(--spacing) * 2)}.ml-4{margin-left:calc(var(--spacing) * 4)}.ml-12{margin-left:calc(var(--spacing) * 12)}.contents{display:contents}.flex{display:flex}.grid{display:grid}.hidden{display:none}.inline-block{display:inline-block}.inline-flex{display:inline-flex}.table{display:table}.aspect-\[335\/364\]{aspect-ratio:335/364}.h-1{height:calc(var(--spacing) * 1)}.h-1\.5{height:calc(var(--spacing) * 1.5)}.h-2{height:calc(var(--spacing) * 2)}.h-2\.5{height:calc(var(--spacing) * 2.5)}.h-3{height:calc(var(--spacing) * 3)}.h-3\.5{height:calc(var(--spacing) * 3.5)}.h-5{height:calc(var(--spacing) * 5)}.h-8{height:calc(var(--spacing) * 8)}.h-14{height:calc(var(--spacing) * 14)}.h-14\.5{height:calc(var(--spacing) * 14.5)}.h-16{height:calc(var(--spacing) * 16)}.min-h-screen{min-height:100vh}.w-1{width:calc(var(--spacing) * 1)}.w-1\.5{width:calc(var(--spacing) * 1.5)}.w-2{width:calc(var(--spacing) * 2)}.w-2\.5{width:calc(var(--spacing) * 2.5)}.w-3{width:calc(var(--spacing) * 3)}.w-3\.5{width:calc(var(--spacing) * 3.5)}.w-5{width:calc(var(--spacing) * 5)}.w-8{width:calc(var(--spacing) * 8)}.w-\[438px\]{width:438px}.w-auto{width:auto}.w-full{width:100%}.max-w-6xl{max-width:var(--container-6xl)}.max-w-\[335px\]{max-width:335px}.max-w-none{max-width:none}.max-w-xl{max-width:var(--container-xl)}.flex-1{flex:1}.shrink-0{flex-shrink:0}.translate-y-0{--tw-translate-y:calc(var(--spacing) * 0);translate:var(--tw-translate-x) var(--tw-translate-y)}.transform{transform:var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,)}.cursor-default{cursor:default}.cursor-not-allowed{cursor:not-allowed}.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}.flex-col{flex-direction:column}.flex-col-reverse{flex-direction:column-reverse}.items-center{align-items:center}.justify-between{justify-content:space-between}.justify-center{justify-content:center}.justify-end{justify-content:flex-end}.justify-items-center{justify-items:center}.gap-2{gap:calc(var(--spacing) * 2)}.gap-3{gap:calc(var(--spacing) * 3)}.gap-4{gap:calc(var(--spacing) * 4)}:where(.space-x-1>:not(:last-child)){--tw-space-x-reverse:0;margin-inline-start:calc(calc(var(--spacing) * 1) * var(--tw-space-x-reverse));margin-inline-end:calc(calc(var(--spacing) * 1) * calc(1 - var(--tw-space-x-reverse)))}.overflow-hidden{overflow:hidden}.rounded-full{border-radius:3.40282e38px}.rounded-md{border-radius:var(--radius-md)}.rounded-sm{border-radius:var(--radius-sm)}.rounded-t-lg{border-top-left-radius:var(--radius-lg);border-top-right-radius:var(--radius-lg)}.rounded-l-md{border-top-left-radius:var(--radius-md);border-bottom-left-radius:var(--radius-md)}.rounded-r-md{border-top-right-radius:var(--radius-md);border-bottom-right-radius:var(--radius-md)}.rounded-br-lg{border-bottom-right-radius:var(--radius-lg)}.rounded-bl-lg{border-bottom-left-radius:var(--radius-lg)}.border{border-style:var(--tw-border-style);border-width:1px}.border-t{border-top-style:var(--tw-border-style);border-top-width:1px}.border-r{border-right-style:var(--tw-border-style);border-right-width:1px}.border-\[\#19140035\]{border-color:#19140035}.border-\[\#e3e3e0\]{border-color:#e3e3e0}.border-black{border-color:var(--color-black)}.border-gray-200{border-color:var(--color-gray-200)}.border-gray-300{border-color:var(--color-gray-300)}.border-gray-400{border-color:var(--color-gray-400)}.border-transparent{border-color:#0000}.bg-\[\#1b1b18\]{background-color:#1b1b18}.bg-\[\#FDFDFC\]{background-color:#fdfdfc}.bg-\[\#dbdbd7\]{background-color:#dbdbd7}.bg-\[\#fff2f2\]{background-color:#fff2f2}.bg-gray-100{background-color:var(--color-gray-100)}.bg-gray-200{background-color:var(--color-gray-200)}.bg-white{background-color:var(--color-white)}.p-6{padding:calc(var(--spacing) * 6)}.px-2{padding-inline:calc(var(--spacing) * 2)}.px-4{padding-inline:calc(var(--spacing) * 4)}.px-5{padding-inline:calc(var(--spacing) * 5)}.px-6{padding-inline:calc(var(--spacing) * 6)}.py-1{padding-block:calc(var(--spacing) * 1)}.py-1\.5{padding-block:calc(var(--spacing) * 1.5)}.py-2{padding-block:calc(var(--spacing) * 2)}.py-4{padding-block:calc(var(--spacing) * 4)}.pt-8{padding-top:calc(var(--spacing) * 8)}.pb-6{padding-bottom:calc(var(--spacing) * 6)}.pb-12{padding-bottom:calc(var(--spacing) * 12)}.text-center{text-align:center}.text-lg{font-size:var(--text-lg);line-height:var(--tw-leading,var(--text-lg--line-height))}.text-sm{font-size:var(--text-sm);line-height:var(--tw-leading,var(--text-sm--line-height))}.text-\[13px\]{font-size:13px}.leading-5{--tw-leading:calc(var(--spacing) * 5);line-height:calc(var(--spacing) * 5)}.leading-7{--tw-leading:calc(var(--spacing) * 7);line-height:calc(var(--spacing) * 7)}.leading-\[20px\]{--tw-leading:20px;line-height:20px}.leading-normal{--tw-leading:var(--leading-normal);line-height:var(--leading-normal)}.font-medium{--tw-font-weight:var(--font-weight-medium);font-weight:var(--font-weight-medium)}.font-semibold{--tw-font-weight:var(--font-weight-semibold);font-weight:var(--font-weight-semibold)}.tracking-wider{--tw-tracking:var(--tracking-wider);letter-spacing:var(--tracking-wider)}.text-\[\#1B1B18\],.text-\[\#1b1b18\]{color:#1b1b18}.text-\[\#706f6c\]{color:#706f6c}.text-\[\#F3BEC7\]{color:#f3bec7}.text-\[\#F8B803\]{color:#f8b803}.text-\[\#F53003\],.text-\[\#f53003\]{color:#f53003}.text-gray-200{color:var(--color-gray-200)}.text-gray-300{color:var(--color-gray-300)}.text-gray-400{color:var(--color-gray-400)}.text-gray-500{color:var(--color-gray-500)}.text-gray-600{color:var(--color-gray-600)}.text-gray-700{color:var(--color-gray-700)}.text-gray-800{color:var(--color-gray-800)}.text-gray-900{color:var(--color-gray-900)}.text-white{color:var(--color-white)}.uppercase{text-transform:uppercase}.underline{text-decoration-line:underline}.underline-offset-4{text-underline-offset:4px}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.opacity-100{opacity:1}.mix-blend-color{mix-blend-mode:color}.mix-blend-darken{mix-blend-mode:darken}.mix-blend-hard-light{mix-blend-mode:hard-light}.mix-blend-multiply{mix-blend-mode:multiply}.shadow{--tw-shadow:0 1px 3px 0 var(--tw-shadow-color,#0000001a), 0 1px 2px -1px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow)}.shadow-\[0px_0px_1px_0px_rgba\(0\,0\,0\,0\.03\)\,0px_1px_2px_0px_rgba\(0\,0\,0\,0\.06\)\]{--tw-shadow:0px 0px 1px 0px var(--tw-shadow-color,#00000008), 0px 1px 2px 0px var(--tw-shadow-color,#0000000f);box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow)}.shadow-\[inset_0px_0px_0px_1px_rgba\(26\,26\,0\,0\.16\)\]{--tw-shadow:inset 0px 0px 0px 1px var(--tw-shadow-color,#1a1a0029);box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 3px 0 var(--tw-shadow-color,#0000001a), 0 1px 2px -1px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow)}.ring-gray-300{--tw-ring-color:var(--color-gray-300)}.filter{filter:var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,)}.transition{transition-property:color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.transition-all{transition-property:all;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.transition-opacity{transition-property:opacity;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.delay-200{transition-delay:.2s}.delay-300{transition-delay:.3s}.delay-400{transition-delay:.4s}.duration-150{--tw-duration:.15s;transition-duration:.15s}.duration-750{--tw-duration:.75s;transition-duration:.75s}.ease-in-out{--tw-ease:var(--ease-in-out);transition-timing-function:var(--ease-in-out)}.\[--stroke-color\:\#1B1B18\]{--stroke-color:#1b1b18}.not-has-\[nav\]\:hidden:not(:has(:is(nav))){display:none}.before\:absolute:before{content:var(--tw-content);position:absolute}.before\:top-0:before{content:var(--tw-content);top:calc(var(--spacing) * 0)}.before\:top-1\/2:before{content:var(--tw-content);top:50%}.before\:bottom-0:before{content:var(--tw-content);bottom:calc(var(--spacing) * 0)}.before\:bottom-1\/2:before{content:var(--tw-content);bottom:50%}.before\:left-\[0\.4rem\]:before{content:var(--tw-content);left:.4rem}.before\:border-l:before{content:var(--tw-content);border-left-style:var(--tw-border-style);border-left-width:1px}.before\:border-\[\#e3e3e0\]:before{content:var(--tw-content);border-color:#e3e3e0}@media(hover:hover){.hover\:border-\[\#1915014a\]:hover{border-color:#1915014a}.hover\:border-\[\#19140035\]:hover{border-color:#19140035}.hover\:border-black:hover{border-color:var(--color-black)}.hover\:bg-black:hover{background-color:var(--color-black)}.hover\:bg-gray-100:hover{background-color:var(--color-gray-100)}.hover\:text-gray-400:hover{color:var(--color-gray-400)}.hover\:text-gray-700:hover{color:var(--color-gray-700)}}.focus\:border-blue-300:focus{border-color:var(--color-blue-300)}.focus\:ring:focus{--tw-ring-shadow:var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow)}.focus\:outline-none:focus{--tw-outline-style:none;outline-style:none}.active\:bg-gray-100:active{background-color:var(--color-gray-100)}.active\:text-gray-500:active{color:var(--color-gray-500)}.active\:text-gray-700:active{color:var(--color-gray-700)}.active\:text-gray-800:active{color:var(--color-gray-800)}@media(min-width:40rem){.sm\:flex{display:flex}.sm\:hidden{display:none}.sm\:flex-1{flex:1}.sm\:items-center{align-items:center}.sm\:justify-between{justify-content:space-between}.sm\:justify-start{justify-content:flex-start}.sm\:gap-2{gap:calc(var(--spacing) * 2)}.sm\:px-6{padding-inline:calc(var(--spacing) * 6)}.sm\:pt-0{padding-top:calc(var(--spacing) * 0)}}@media(min-width:64rem){.lg\:mt-10{margin-top:calc(var(--spacing) * 10)}.lg\:mb-0{margin-bottom:calc(var(--spacing) * 0)}.lg\:mb-6{margin-bottom:calc(var(--spacing) * 6)}.lg\:-ml-px{margin-left:-1px}.lg\:ml-0{margin-left:calc(var(--spacing) * 0)}.lg\:block{display:block}.lg\:aspect-auto{aspect-ratio:auto}.lg\:w-\[438px\]{width:438px}.lg\:max-w-4xl{max-width:var(--container-4xl)}.lg\:grow{flex-grow:1}.lg\:flex-row{flex-direction:row}.lg\:justify-center{justify-content:center}.lg\:rounded-t-none{border-top-left-radius:0;border-top-right-radius:0}.lg\:rounded-tl-lg{border-top-left-radius:var(--radius-lg)}.lg\:rounded-r-lg{border-top-right-radius:var(--radius-lg);border-bottom-right-radius:var(--radius-lg)}.lg\:rounded-br-none{border-bottom-right-radius:0}.lg\:p-8{padding:calc(var(--spacing) * 8)}.lg\:p-20{padding:calc(var(--spacing) * 20)}.lg\:px-8{padding-inline:calc(var(--spacing) * 8)}.lg\:pb-10{padding-bottom:calc(var(--spacing) * 10)}}.rtl\:flex-row-reverse:where(:dir(rtl),[dir=rtl],[dir=rtl] *){flex-direction:row-reverse}@media(prefers-color-scheme:dark){.dark\:border-\[\#3E3E3A\]{border-color:#3e3e3a}.dark\:border-\[\#eeeeec\]{border-color:#eeeeec}.dark\:border-gray-600{border-color:var(--color-gray-600)}.dark\:bg-\[\#0a0a0a\]{background-color:#0a0a0a}.dark\:bg-\[\#1D0002\]{background-color:#1d0002}.dark\:bg-\[\#3E3E3A\]{background-color:#3e3e3a}.dark\:bg-\[\#161615\]{background-color:#161615}.dark\:bg-\[\#eeeeec\]{background-color:#eeeeec}.dark\:bg-gray-700{background-color:var(--color-gray-700)}.dark\:bg-gray-800{background-color:var(--color-gray-800)}.dark\:bg-gray-900{background-color:var(--color-gray-900)}.dark\:text-\[\#1C1C1A\]{color:#1c1c1a}.dark\:text-\[\#4B0600\]{color:#4b0600}.dark\:text-\[\#391800\]{color:#391800}.dark\:text-\[\#733000\]{color:#733000}.dark\:text-\[\#A1A09A\]{color:#a1a09a}.dark\:text-\[\#EDEDEC\]{color:#ededec}.dark\:text-\[\#F61500\]{color:#f61500}.dark\:text-\[\#FF4433\]{color:#f43}.dark\:text-black{color:var(--color-black)}.dark\:text-gray-200{color:var(--color-gray-200)}.dark\:text-gray-300{color:var(--color-gray-300)}.dark\:text-gray-400{color:var(--color-gray-400)}.dark\:text-gray-600{color:var(--color-gray-600)}.dark\:mix-blend-hard-light{mix-blend-mode:hard-light}.dark\:mix-blend-normal{mix-blend-mode:normal}.dark\:shadow-\[inset_0px_0px_0px_1px_\#fffaed2d\]{--tw-shadow:inset 0px 0px 0px 1px var(--tw-shadow-color,#fffaed2d);box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow)}.dark\:\[--stroke-color\:\#FF750F\]{--stroke-color:#ff750f}.dark\:before\:border-\[\#3E3E3A\]:before{content:var(--tw-content);border-color:#3e3e3a}@media(hover:hover){.dark\:hover\:border-\[\#3E3E3A\]:hover{border-color:#3e3e3a}.dark\:hover\:border-\[\#62605b\]:hover{border-color:#62605b}.dark\:hover\:border-white:hover{border-color:var(--color-white)}.dark\:hover\:bg-gray-900:hover{background-color:var(--color-gray-900)}.dark\:hover\:bg-white:hover{background-color:var(--color-white)}.dark\:hover\:text-gray-200:hover{color:var(--color-gray-200)}.dark\:hover\:text-gray-300:hover{color:var(--color-gray-300)}}.dark\:focus\:border-blue-700:focus{border-color:var(--color-blue-700)}.dark\:focus\:border-blue-800:focus{border-color:var(--color-blue-800)}.dark\:active\:bg-gray-700:active{background-color:var(--color-gray-700)}.dark\:active\:text-gray-300:active{color:var(--color-gray-300)}}@starting-style{.starting\:opacity-0{opacity:0}}@media(prefers-reduced-motion:no-preference){@starting-style{.motion-safe\:starting\:-translate-x-\[26px\]{--tw-translate-x: -26px ;translate:var(--tw-translate-x) var(--tw-translate-y)}}@starting-style{.motion-safe\:starting\:-translate-x-\[51px\]{--tw-translate-x: -51px ;translate:var(--tw-translate-x) var(--tw-translate-y)}}@starting-style{.motion-safe\:starting\:-translate-x-\[78px\]{--tw-translate-x: -78px ;translate:var(--tw-translate-x) var(--tw-translate-y)}}@starting-style{.motion-safe\:starting\:-translate-x-\[102px\]{--tw-translate-x: -102px ;translate:var(--tw-translate-x) var(--tw-translate-y)}}@starting-style{.motion-safe\:starting\:translate-y-6{--tw-translate-y:calc(var(--spacing) * 6);translate:var(--tw-translate-x) var(--tw-translate-y)}}}}@property --tw-translate-x{syntax:"*";inherits:false;initial-value:0}@property --tw-translate-y{syntax:"*";inherits:false;initial-value:0}@property --tw-translate-z{syntax:"*";inherits:false;initial-value:0}@property --tw-rotate-x{syntax:"*";inherits:false}@property --tw-rotate-y{syntax:"*";inherits:false}@property --tw-rotate-z{syntax:"*";inherits:false}@property --tw-skew-x{syntax:"*";inherits:false}@property --tw-skew-y{syntax:"*";inherits:false}@property --tw-space-x-reverse{syntax:"*";inherits:false;initial-value:0}@property --tw-border-style{syntax:"*";inherits:false;initial-value:solid}@property --tw-leading{syntax:"*";inherits:false}@property --tw-font-weight{syntax:"*";inherits:false}@property --tw-tracking{syntax:"*";inherits:false}@property --tw-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-shadow-color{syntax:"*";inherits:false}@property --tw-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-inset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-shadow-color{syntax:"*";inherits:false}@property --tw-inset-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-ring-color{syntax:"*";inherits:false}@property --tw-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-ring-color{syntax:"*";inherits:false}@property --tw-inset-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-ring-inset{syntax:"*";inherits:false}@property --tw-ring-offset-width{syntax:"<length>";inherits:false;initial-value:0}@property --tw-ring-offset-color{syntax:"*";inherits:false;initial-value:#fff}@property --tw-ring-offset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-blur{syntax:"*";inherits:false}@property --tw-brightness{syntax:"*";inherits:false}@property --tw-contrast{syntax:"*";inherits:false}@property --tw-grayscale{syntax:"*";inherits:false}@property --tw-hue-rotate{syntax:"*";inherits:false}@property --tw-invert{syntax:"*";inherits:false}@property --tw-opacity{syntax:"*";inherits:false}@property --tw-saturate{syntax:"*";inherits:false}@property --tw-sepia{syntax:"*";inherits:false}@property --tw-drop-shadow{syntax:"*";inherits:false}@property --tw-drop-shadow-color{syntax:"*";inherits:false}@property --tw-drop-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-drop-shadow-size{syntax:"*";inherits:false}@property --tw-duration{syntax:"*";inherits:false}@property --tw-ease{syntax:"*";inherits:false}@property --tw-content{syntax:"*";inherits:false;initial-value:""}@keyframes spin{to{transform:rotate(360deg)}}@keyframes ping{75%,to{opacity:0;transform:scale(2)}}@keyframes pulse{50%{opacity:.5}}@keyframes bounce{0%,to{animation-timing-function:cubic-bezier(.8,0,1,1);transform:translateY(-25%)}50%{animation-timing-function:cubic-bezier(0,0,.2,1);transform:none}}
-            </style>
-        @endif
-    </head>
-    <body class="bg-[#FDFDFC] dark:bg-[#0a0a0a] text-[#1b1b18] flex p-6 lg:p-8 items-center lg:justify-center min-h-screen flex-col">
-        <header class="w-full lg:max-w-4xl max-w-[335px] text-sm mb-6 not-has-[nav]:hidden">
-            @if (Route::has('login'))
-                <nav class="flex items-center justify-end gap-4">
-                    @auth
-                        <a
-                            href="{{ url('/dashboard') }}"
-                            class="inline-block px-5 py-1.5 dark:text-[#EDEDEC] border-[#19140035] hover:border-[#1915014a] border text-[#1b1b18] dark:border-[#3E3E3A] dark:hover:border-[#62605b] rounded-sm text-sm leading-normal"
-                        >
-                            Dashboard
-                        </a>
-                    @else
-                        <a
-                            href="{{ route('login') }}"
-                            class="inline-block px-5 py-1.5 dark:text-[#EDEDEC] text-[#1b1b18] border border-transparent hover:border-[#19140035] dark:hover:border-[#3E3E3A] rounded-sm text-sm leading-normal"
-                        >
-                            Log in
-                        </a>
-
-                        @if (Route::has('register'))
-                            <a
-                                href="{{ route('register') }}"
-                                class="inline-block px-5 py-1.5 dark:text-[#EDEDEC] border-[#19140035] hover:border-[#1915014a] border text-[#1b1b18] dark:border-[#3E3E3A] dark:hover:border-[#62605b] rounded-sm text-sm leading-normal">
-                                Register
-                            </a>
-                        @endif
-                    @endauth
-                </nav>
-            @endif
-        </header>
-        <div class="flex items-center justify-center w-full transition-opacity opacity-100 duration-750 lg:grow starting:opacity-0">
-            <main class="flex max-w-[335px] w-full flex-col-reverse lg:max-w-4xl lg:flex-row">
-                <div class="text-[13px] leading-[20px] flex-1 p-6 pb-6 lg:p-20 lg:pb-10 bg-white dark:bg-[#161615] dark:text-[#EDEDEC] shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d] rounded-bl-lg rounded-br-lg lg:rounded-tl-lg lg:rounded-br-none">
-                    <h1 class="mb-1 font-medium">Let's get started</h1>
-                    <p class="mb-2 text-[#706f6c] dark:text-[#A1A09A]">With so many options available to you,<br /> we suggest you start with the following:</p>
-                    <ul class="flex flex-col mb-4 lg:mb-6">
-                        <li class="flex items-center gap-4 py-2 relative before:border-l before:border-[#e3e3e0] dark:before:border-[#3E3E3A] before:top-1/2 before:bottom-0 before:left-[0.4rem] before:absolute">
-                            <span class="relative py-1 bg-white dark:bg-[#161615]">
-                                <span class="flex items-center justify-center rounded-full bg-[#FDFDFC] dark:bg-[#161615] shadow-[0px_0px_1px_0px_rgba(0,0,0,0.03),0px_1px_2px_0px_rgba(0,0,0,0.06)] w-3.5 h-3.5 border dark:border-[#3E3E3A] border-[#e3e3e0]">
-                                    <span class="rounded-full bg-[#dbdbd7] dark:bg-[#3E3E3A] w-1.5 h-1.5"></span>
-                                </span>
-                            </span>
-                            <span>
-                                Read the
-                                <a href="https://laravel.com/docs" target="_blank" class="inline-flex items-center space-x-1 font-medium underline underline-offset-4 text-[#f53003] dark:text-[#FF4433] ml-1">
-                                    <span>Documentation</span>
-                                    <svg
-                                        width="10"
-                                        height="11"
-                                        viewBox="0 0 10 11"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        class="w-2.5 h-2.5"
-                                    >
-                                        <path
-                                            d="M7.70833 6.95834V2.79167H3.54167M2.5 8L7.5 3.00001"
-                                            stroke="currentColor"
-                                            stroke-linecap="square"
-                                        />
-                                    </svg>
-                                </a>
-                            </span>
-                        </li>
-                        <li class="flex items-center gap-4 py-2 relative before:border-l before:border-[#e3e3e0] dark:before:border-[#3E3E3A] before:bottom-1/2 before:top-0 before:left-[0.4rem] before:absolute">
-                            <span class="relative py-1 bg-white dark:bg-[#161615]">
-                                <span class="flex items-center justify-center rounded-full bg-[#FDFDFC] dark:bg-[#161615] shadow-[0px_0px_1px_0px_rgba(0,0,0,0.03),0px_1px_2px_0px_rgba(0,0,0,0.06)] w-3.5 h-3.5 border dark:border-[#3E3E3A] border-[#e3e3e0]">
-                                    <span class="rounded-full bg-[#dbdbd7] dark:bg-[#3E3E3A] w-1.5 h-1.5"></span>
-                                </span>
-                            </span>
-                            <span>
-                                Watch video tutorials at
-                                <a href="https://laracasts.com" target="_blank" class="inline-flex items-center space-x-1 font-medium underline underline-offset-4 text-[#f53003] dark:text-[#FF4433] ml-1">
-                                    <span>Laracasts</span>
-                                    <svg
-                                        width="10"
-                                        height="11"
-                                        viewBox="0 0 10 11"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        class="w-2.5 h-2.5"
-                                    >
-                                        <path
-                                            d="M7.70833 6.95834V2.79167H3.54167M2.5 8L7.5 3.00001"
-                                            stroke="currentColor"
-                                            stroke-linecap="square"
-                                        />
-                                    </svg>
-                                </a>
-                            </span>
-                        </li>
-                    </ul>
-                    <ul class="flex gap-3 text-sm leading-normal">
-                        <li>
-                            <a href="https://cloud.laravel.com" target="_blank" class="inline-block dark:bg-[#eeeeec] dark:border-[#eeeeec] dark:text-[#1C1C1A] dark:hover:bg-white dark:hover:border-white hover:bg-black hover:border-black px-5 py-1.5 bg-[#1b1b18] rounded-sm border border-black text-white text-sm leading-normal">
-                                Deploy now
-                            </a>
-                        </li>
-                    </ul>
-
-                    <p class="mt-6 lg:mt-10 text-[#706f6c] dark:text-[#A1A09A]">
-                        v{{ app()->version() }}
-                        <a href="https://github.com/laravel/framework/blob/13.x/CHANGELOG.md" target="_blank" class="inline-flex items-center space-x-1 font-medium underline underline-offset-4 text-[#f53003] dark:text-[#FF4433] ml-1">
-                            <span>View changelog</span>
-                            <svg
-                                width="10"
-                                height="11"
-                                viewBox="0 0 10 11"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="w-2.5 h-2.5"
-                            >
-                                <path
-                                    d="M7.70833 6.95834V2.79167H3.54167M2.5 8L7.5 3.00001"
-                                    stroke="currentColor"
-                                    stroke-linecap="square"
-                                />
-                            </svg>
-                        </a>
-                    </p>
-                </div>
-                <div class="bg-[#fff2f2] dark:bg-[#1D0002] relative lg:-ml-px -mb-px lg:mb-0 rounded-t-lg lg:rounded-t-none lg:rounded-r-lg aspect-[335/364] lg:aspect-auto w-full lg:w-[438px] shrink-0 overflow-hidden">
-                    {{-- Laravel Logo --}}
-                    <svg class="w-full text-[#F53003] dark:text-[#F61500] transition-all translate-y-0 opacity-100 max-w-none duration-750 starting:opacity-0 motion-safe:starting:translate-y-6" viewBox="0 0 438 104" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M17.2036 -3H0V102.197H49.5189V86.7187H17.2036V-3Z" fill="currentColor" />
-                        <path d="M110.256 41.6337C108.061 38.1275 104.945 35.3731 100.905 33.3681C96.8667 31.3647 92.8016 30.3618 88.7131 30.3618C83.4247 30.3618 78.5885 31.3389 74.201 33.2923C69.8111 35.2456 66.0474 37.928 62.9059 41.3333C59.7643 44.7401 57.3198 48.6726 55.5754 53.1293C53.8287 57.589 52.9572 62.274 52.9572 67.1813C52.9572 72.1925 53.8287 76.8995 55.5754 81.3069C57.3191 85.7173 59.7636 89.6241 62.9059 93.0293C66.0474 96.4361 69.8119 99.1155 74.201 101.069C78.5885 103.022 83.4247 103.999 88.7131 103.999C92.8016 103.999 96.8667 102.997 100.905 100.994C104.945 98.9911 108.061 96.2359 110.256 92.7282V102.195H126.563V32.1642H110.256V41.6337ZM108.76 75.7472C107.762 78.4531 106.366 80.8078 104.572 82.8112C102.776 84.8161 100.606 86.4183 98.0637 87.6206C95.5202 88.823 92.7004 89.4238 89.6103 89.4238C86.5178 89.4238 83.7252 88.823 81.2324 87.6206C78.7388 86.4183 76.5949 84.8161 74.7998 82.8112C73.004 80.8078 71.6319 78.4531 70.6856 75.7472C69.7356 73.0421 69.2644 70.1868 69.2644 67.1821C69.2644 64.1758 69.7356 61.3205 70.6856 58.6154C71.6319 55.9102 73.004 53.5571 74.7998 51.5522C76.5949 49.5495 78.738 47.9451 81.2324 46.7427C83.7252 45.5404 86.5178 44.9396 89.6103 44.9396C92.7012 44.9396 95.5202 45.5404 98.0637 46.7427C100.606 47.9451 102.776 49.5487 104.572 51.5522C106.367 53.5571 107.762 55.9102 108.76 58.6154C109.756 61.3205 110.256 64.1758 110.256 67.1821C110.256 70.1868 109.756 73.0421 108.76 75.7472Z" fill="currentColor" />
-                        <path d="M242.805 41.6337C240.611 38.1275 237.494 35.3731 233.455 33.3681C229.416 31.3647 225.351 30.3618 221.262 30.3618C215.974 30.3618 211.138 31.3389 206.75 33.2923C202.36 35.2456 198.597 37.928 195.455 41.3333C192.314 44.7401 189.869 48.6726 188.125 53.1293C186.378 57.589 185.507 62.274 185.507 67.1813C185.507 72.1925 186.378 76.8995 188.125 81.3069C189.868 85.7173 192.313 89.6241 195.455 93.0293C198.597 96.4361 202.361 99.1155 206.75 101.069C211.138 103.022 215.974 103.999 221.262 103.999C225.351 103.999 229.416 102.997 233.455 100.994C237.494 98.9911 240.611 96.2359 242.805 92.7282V102.195H259.112V32.1642H242.805V41.6337ZM241.31 75.7472C240.312 78.4531 238.916 80.8078 237.122 82.8112C235.326 84.8161 233.156 86.4183 230.614 87.6206C228.07 88.823 225.251 89.4238 222.16 89.4238C219.068 89.4238 216.275 88.823 213.782 87.6206C211.289 86.4183 209.145 84.8161 207.35 82.8112C205.554 80.8078 204.182 78.4531 203.236 75.7472C202.286 73.0421 201.814 70.1868 201.814 67.1821C201.814 64.1758 202.286 61.3205 203.236 58.6154C204.182 55.9102 205.554 53.5571 207.35 51.5522C209.145 49.5495 211.288 47.9451 213.782 46.7427C216.275 45.5404 219.068 44.9396 222.16 44.9396C225.251 44.9396 228.07 45.5404 230.614 46.7427C233.156 47.9451 235.326 49.5487 237.122 51.5522C238.917 53.5571 240.312 55.9102 241.31 58.6154C242.306 61.3205 242.806 64.1758 242.806 67.1821C242.805 70.1868 242.305 73.0421 241.31 75.7472Z" fill="currentColor" />
-                        <path d="M438 -3H421.694V102.197H438V-3Z" fill="currentColor" />
-                        <path d="M139.43 102.197H155.735V48.2834H183.712V32.1665H139.43V102.197Z" fill="currentColor" />
-                        <path d="M324.49 32.1665L303.995 85.794L283.498 32.1665H266.983L293.748 102.197H314.242L341.006 32.1665H324.49Z" fill="currentColor" />
-                        <path d="M376.571 30.3656C356.603 30.3656 340.797 46.8497 340.797 67.1828C340.797 89.6597 356.094 104 378.661 104C391.29 104 399.354 99.1488 409.206 88.5848L398.189 80.0226C398.183 80.031 389.874 90.9895 377.468 90.9895C363.048 90.9895 356.977 79.3111 356.977 73.269H411.075C413.917 50.1328 398.775 30.3656 376.571 30.3656ZM357.02 61.0967C357.145 59.7487 359.023 43.3761 376.442 43.3761C393.861 43.3761 395.978 59.7464 396.099 61.0967H357.02Z" fill="currentColor" />
-                    </svg>
-
-                    {{-- 13 --}}
-                    <svg class="w-[438px] max-w-none relative -mt-[6.6rem] -ml-8 lg:ml-0 [--stroke-color:#1B1B18] dark:[--stroke-color:#FF750F]" viewBox="0 0 440 392" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <g class="mix-blend-darken dark:mix-blend-normal transition-all delay-300 opacity-100 duration-750 starting:opacity-0 text-[#1B1B18] dark:text-black">
-                            <mask id="path-1-mask" maskUnits="userSpaceOnUse" x="-0.328613" y="103" width="338" height="299" fill="black">
-                                <rect fill="white" x="-0.328613" y="103" width="338" height="299"/>
-                                <path d="M234.936 400.8C204.136 400.8 178.936 392.4 159.336 375.6C140.136 358.8 130.536 337 130.536 310.2H200.736C200.736 318.2 203.736 324.8 209.736 330C215.736 335.2 223.736 337.8 233.736 337.8C243.336 337.8 251.136 335 257.136 329.4C263.536 323.8 266.736 316.6 266.736 307.8C266.736 299.8 263.936 293.2 258.336 288C252.736 282.8 245.536 280.2 236.736 280.2H199.536V218.4H236.736C243.536 218.4 249.336 216 254.136 211.2C258.936 206.4 261.336 200.4 261.336 193.2C261.336 184.8 258.736 178.2 253.536 173.4C248.336 168.6 241.736 166.2 233.736 166.2C226.536 166.2 220.336 168.4 215.136 172.8C210.336 177.2 207.936 182.8 207.936 189.6H141.336C141.336 164.8 150.136 144.6 167.736 129C185.336 113 207.936 105 235.536 105C263.136 105 285.536 112.2 302.736 126.6C320.336 141 329.136 160 329.136 183.6C329.136 200.8 324.536 214.8 315.336 225.6C306.136 236 294.336 243.2 279.936 247.2C297.136 252 310.736 260.2 320.736 271.8C331.136 283.4 336.336 298 336.336 315.6C336.336 340.4 326.936 360.8 308.136 376.8C289.336 392.8 264.936 400.8 234.936 400.8Z"/>
-                                <path d="M26.8714 167.6H1.67139V105.2H94.6714V400.2H26.8714V167.6Z"/>
-                            </mask>
-                            <path d="M234.936 400.8C204.136 400.8 178.936 392.4 159.336 375.6C140.136 358.8 130.536 337 130.536 310.2H200.736C200.736 318.2 203.736 324.8 209.736 330C215.736 335.2 223.736 337.8 233.736 337.8C243.336 337.8 251.136 335 257.136 329.4C263.536 323.8 266.736 316.6 266.736 307.8C266.736 299.8 263.936 293.2 258.336 288C252.736 282.8 245.536 280.2 236.736 280.2H199.536V218.4H236.736C243.536 218.4 249.336 216 254.136 211.2C258.936 206.4 261.336 200.4 261.336 193.2C261.336 184.8 258.736 178.2 253.536 173.4C248.336 168.6 241.736 166.2 233.736 166.2C226.536 166.2 220.336 168.4 215.136 172.8C210.336 177.2 207.936 182.8 207.936 189.6H141.336C141.336 164.8 150.136 144.6 167.736 129C185.336 113 207.936 105 235.536 105C263.136 105 285.536 112.2 302.736 126.6C320.336 141 329.136 160 329.136 183.6C329.136 200.8 324.536 214.8 315.336 225.6C306.136 236 294.336 243.2 279.936 247.2C297.136 252 310.736 260.2 320.736 271.8C331.136 283.4 336.336 298 336.336 315.6C336.336 340.4 326.936 360.8 308.136 376.8C289.336 392.8 264.936 400.8 234.936 400.8Z" fill="currentColor"/>
-                            <path d="M26.8714 167.6H1.67139V105.2H94.6714V400.2H26.8714V167.6Z" fill="currentColor"/>
-                            <path d="M234.936 400.8C204.136 400.8 178.936 392.4 159.336 375.6C140.136 358.8 130.536 337 130.536 310.2H200.736C200.736 318.2 203.736 324.8 209.736 330C215.736 335.2 223.736 337.8 233.736 337.8C243.336 337.8 251.136 335 257.136 329.4C263.536 323.8 266.736 316.6 266.736 307.8C266.736 299.8 263.936 293.2 258.336 288C252.736 282.8 245.536 280.2 236.736 280.2H199.536V218.4H236.736C243.536 218.4 249.336 216 254.136 211.2C258.936 206.4 261.336 200.4 261.336 193.2C261.336 184.8 258.736 178.2 253.536 173.4C248.336 168.6 241.736 166.2 233.736 166.2C226.536 166.2 220.336 168.4 215.136 172.8C210.336 177.2 207.936 182.8 207.936 189.6H141.336C141.336 164.8 150.136 144.6 167.736 129C185.336 113 207.936 105 235.536 105C263.136 105 285.536 112.2 302.736 126.6C320.336 141 329.136 160 329.136 183.6C329.136 200.8 324.536 214.8 315.336 225.6C306.136 236 294.336 243.2 279.936 247.2C297.136 252 310.736 260.2 320.736 271.8C331.136 283.4 336.336 298 336.336 315.6C336.336 340.4 326.936 360.8 308.136 376.8C289.336 392.8 264.936 400.8 234.936 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-1-mask)"/>
-                            <path d="M26.8714 167.6H1.67139V105.2H94.6714V400.2H26.8714V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-1-mask)"/>
-                        </g>
-
-                        <g class="transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[26px] text-[#F3BEC7] dark:text-[#4B0600]">
-                            <mask id="path-2-mask" maskUnits="userSpaceOnUse" x="25.3357" y="103" width="338" height="299" fill="black">
-                                <rect fill="white" x="25.3357" y="103" width="338" height="299"/>
-                                <path d="M260.6 400.8C229.8 400.8 204.6 392.4 185 375.6C165.8 358.8 156.2 337 156.2 310.2H226.4C226.4 318.2 229.4 324.8 235.4 330C241.4 335.2 249.4 337.8 259.4 337.8C269 337.8 276.8 335 282.8 329.4C289.2 323.8 292.4 316.6 292.4 307.8C292.4 299.8 289.6 293.2 284 288C278.4 282.8 271.2 280.2 262.4 280.2H225.2V218.4H262.4C269.2 218.4 275 216 279.8 211.2C284.6 206.4 287 200.4 287 193.2C287 184.8 284.4 178.2 279.2 173.4C274 168.6 267.4 166.2 259.4 166.2C252.2 166.2 246 168.4 240.8 172.8C236 177.2 233.6 182.8 233.6 189.6H167C167 164.8 175.8 144.6 193.4 129C211 113 233.6 105 261.2 105C288.8 105 311.2 112.2 328.4 126.6C346 141 354.8 160 354.8 183.6C354.8 200.8 350.2 214.8 341 225.6C331.8 236 320 243.2 305.6 247.2C322.8 252 336.4 260.2 346.4 271.8C356.8 283.4 362 298 362 315.6C362 340.4 352.6 360.8 333.8 376.8C315 392.8 290.6 400.8 260.6 400.8Z"/>
-                                <path d="M52.5357 167.6H27.3357V105.2H120.336V400.2H52.5357V167.6Z"/>
-                            </mask>
-                            <path d="M260.6 400.8C229.8 400.8 204.6 392.4 185 375.6C165.8 358.8 156.2 337 156.2 310.2H226.4C226.4 318.2 229.4 324.8 235.4 330C241.4 335.2 249.4 337.8 259.4 337.8C269 337.8 276.8 335 282.8 329.4C289.2 323.8 292.4 316.6 292.4 307.8C292.4 299.8 289.6 293.2 284 288C278.4 282.8 271.2 280.2 262.4 280.2H225.2V218.4H262.4C269.2 218.4 275 216 279.8 211.2C284.6 206.4 287 200.4 287 193.2C287 184.8 284.4 178.2 279.2 173.4C274 168.6 267.4 166.2 259.4 166.2C252.2 166.2 246 168.4 240.8 172.8C236 177.2 233.6 182.8 233.6 189.6H167C167 164.8 175.8 144.6 193.4 129C211 113 233.6 105 261.2 105C288.8 105 311.2 112.2 328.4 126.6C346 141 354.8 160 354.8 183.6C354.8 200.8 350.2 214.8 341 225.6C331.8 236 320 243.2 305.6 247.2C322.8 252 336.4 260.2 346.4 271.8C356.8 283.4 362 298 362 315.6C362 340.4 352.6 360.8 333.8 376.8C315 392.8 290.6 400.8 260.6 400.8Z" fill="currentColor"/>
-                            <path d="M52.5357 167.6H27.3357V105.2H120.336V400.2H52.5357V167.6Z" fill="currentColor"/>
-                            <path d="M260.6 400.8C229.8 400.8 204.6 392.4 185 375.6C165.8 358.8 156.2 337 156.2 310.2H226.4C226.4 318.2 229.4 324.8 235.4 330C241.4 335.2 249.4 337.8 259.4 337.8C269 337.8 276.8 335 282.8 329.4C289.2 323.8 292.4 316.6 292.4 307.8C292.4 299.8 289.6 293.2 284 288C278.4 282.8 271.2 280.2 262.4 280.2H225.2V218.4H262.4C269.2 218.4 275 216 279.8 211.2C284.6 206.4 287 200.4 287 193.2C287 184.8 284.4 178.2 279.2 173.4C274 168.6 267.4 166.2 259.4 166.2C252.2 166.2 246 168.4 240.8 172.8C236 177.2 233.6 182.8 233.6 189.6H167C167 164.8 175.8 144.6 193.4 129C211 113 233.6 105 261.2 105C288.8 105 311.2 112.2 328.4 126.6C346 141 354.8 160 354.8 183.6C354.8 200.8 350.2 214.8 341 225.6C331.8 236 320 243.2 305.6 247.2C322.8 252 336.4 260.2 346.4 271.8C356.8 283.4 362 298 362 315.6C362 340.4 352.6 360.8 333.8 376.8C315 392.8 290.6 400.8 260.6 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-2-mask)"/>
-                            <path d="M52.5357 167.6H27.3357V105.2H120.336V400.2H52.5357V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-2-mask)"/>
-                        </g>
-                        
-                        <g class="mix-blend-color dark:mix-blend-hard-light transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[51px] text-[#F8B803] dark:text-[#391800]">
-                            <mask id="path-3-mask" maskUnits="userSpaceOnUse" x="51" y="103" width="338" height="299" fill="black">
-                                <rect fill="white" x="51" y="103" width="338" height="299"/>
-                                <path d="M286.264 400.8C255.464 400.8 230.264 392.4 210.664 375.6C191.464 358.8 181.864 337 181.864 310.2H252.064C252.064 318.2 255.064 324.8 261.064 330C267.064 335.2 275.064 337.8 285.064 337.8C294.664 337.8 302.464 335 308.464 329.4C314.864 323.8 318.064 316.6 318.064 307.8C318.064 299.8 315.264 293.2 309.664 288C304.064 282.8 296.864 280.2 288.064 280.2H250.864V218.4H288.064C294.864 218.4 300.664 216 305.464 211.2C310.264 206.4 312.664 200.4 312.664 193.2C312.664 184.8 310.064 178.2 304.864 173.4C299.664 168.6 293.064 166.2 285.064 166.2C277.864 166.2 271.664 168.4 266.464 172.8C261.664 177.2 259.264 182.8 259.264 189.6H192.664C192.664 164.8 201.464 144.6 219.064 129C236.664 113 259.264 105 286.864 105C314.464 105 336.864 112.2 354.064 126.6C371.664 141 380.464 160 380.464 183.6C380.464 200.8 375.864 214.8 366.664 225.6C357.464 236 345.664 243.2 331.264 247.2C348.464 252 362.064 260.2 372.064 271.8C382.464 283.4 387.664 298 387.664 315.6C387.664 340.4 378.264 360.8 359.464 376.8C340.664 392.8 316.264 400.8 286.264 400.8Z"/>
-                                <path d="M78.2 167.6H53V105.2H146V400.2H78.2V167.6Z"/>
-                            </mask>
-                            <path d="M286.264 400.8C255.464 400.8 230.264 392.4 210.664 375.6C191.464 358.8 181.864 337 181.864 310.2H252.064C252.064 318.2 255.064 324.8 261.064 330C267.064 335.2 275.064 337.8 285.064 337.8C294.664 337.8 302.464 335 308.464 329.4C314.864 323.8 318.064 316.6 318.064 307.8C318.064 299.8 315.264 293.2 309.664 288C304.064 282.8 296.864 280.2 288.064 280.2H250.864V218.4H288.064C294.864 218.4 300.664 216 305.464 211.2C310.264 206.4 312.664 200.4 312.664 193.2C312.664 184.8 310.064 178.2 304.864 173.4C299.664 168.6 293.064 166.2 285.064 166.2C277.864 166.2 271.664 168.4 266.464 172.8C261.664 177.2 259.264 182.8 259.264 189.6H192.664C192.664 164.8 201.464 144.6 219.064 129C236.664 113 259.264 105 286.864 105C314.464 105 336.864 112.2 354.064 126.6C371.664 141 380.464 160 380.464 183.6C380.464 200.8 375.864 214.8 366.664 225.6C357.464 236 345.664 243.2 331.264 247.2C348.464 252 362.064 260.2 372.064 271.8C382.464 283.4 387.664 298 387.664 315.6C387.664 340.4 378.264 360.8 359.464 376.8C340.664 392.8 316.264 400.8 286.264 400.8Z" fill="currentColor"/>
-                            <path d="M78.2 167.6H53V105.2H146V400.2H78.2V167.6Z" fill="currentColor"/>
-                            <path d="M286.264 400.8C255.464 400.8 230.264 392.4 210.664 375.6C191.464 358.8 181.864 337 181.864 310.2H252.064C252.064 318.2 255.064 324.8 261.064 330C267.064 335.2 275.064 337.8 285.064 337.8C294.664 337.8 302.464 335 308.464 329.4C314.864 323.8 318.064 316.6 318.064 307.8C318.064 299.8 315.264 293.2 309.664 288C304.064 282.8 296.864 280.2 288.064 280.2H250.864V218.4H288.064C294.864 218.4 300.664 216 305.464 211.2C310.264 206.4 312.664 200.4 312.664 193.2C312.664 184.8 310.064 178.2 304.864 173.4C299.664 168.6 293.064 166.2 285.064 166.2C277.864 166.2 271.664 168.4 266.464 172.8C261.664 177.2 259.264 182.8 259.264 189.6H192.664C192.664 164.8 201.464 144.6 219.064 129C236.664 113 259.264 105 286.864 105C314.464 105 336.864 112.2 354.064 126.6C371.664 141 380.464 160 380.464 183.6C380.464 200.8 375.864 214.8 366.664 225.6C357.464 236 345.664 243.2 331.264 247.2C348.464 252 362.064 260.2 372.064 271.8C382.464 283.4 387.664 298 387.664 315.6C387.664 340.4 378.264 360.8 359.464 376.8C340.664 392.8 316.264 400.8 286.264 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-3-mask)"/>
-                            <path d="M78.2 167.6H53V105.2H146V400.2H78.2V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-3-mask)"/>
-                        </g>
-                        
-                        <g class="mix-blend-multiply dark:mix-blend-normal transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[78px] text-[#F3BEC7] dark:text-[#733000]">
-                            <mask id="path-4-mask" maskUnits="userSpaceOnUse" x="76.6643" y="103" width="338" height="299" fill="black">
-                                <rect fill="white" x="76.6643" y="103" width="338" height="299"/>
-                                <path d="M311.929 400.8C281.129 400.8 255.929 392.4 236.329 375.6C217.129 358.8 207.529 337 207.529 310.2H277.729C277.729 318.2 280.729 324.8 286.729 330C292.729 335.2 300.729 337.8 310.729 337.8C320.329 337.8 328.129 335 334.129 329.4C340.529 323.8 343.729 316.6 343.729 307.8C343.729 299.8 340.929 293.2 335.329 288C329.729 282.8 322.529 280.2 313.729 280.2H276.529V218.4H313.729C320.529 218.4 326.329 216 331.129 211.2C335.929 206.4 338.329 200.4 338.329 193.2C338.329 184.8 335.729 178.2 330.529 173.4C325.329 168.6 318.729 166.2 310.729 166.2C303.529 166.2 297.329 168.4 292.129 172.8C287.329 177.2 284.929 182.8 284.929 189.6H218.329C218.329 164.8 227.129 144.6 244.729 129C262.329 113 284.929 105 312.529 105C340.129 105 362.529 112.2 379.729 126.6C397.329 141 406.129 160 406.129 183.6C406.129 200.8 401.529 214.8 392.329 225.6C383.129 236 371.329 243.2 356.929 247.2C374.129 252 387.729 260.2 397.729 271.8C408.129 283.4 413.329 298 413.329 315.6C413.329 340.4 403.929 360.8 385.129 376.8C366.329 392.8 341.929 400.8 311.929 400.8Z"/>
-                                <path d="M103.864 167.6H78.6643V105.2H171.664V400.2H103.864V167.6Z"/>
-                            </mask>
-                            <path d="M311.929 400.8C281.129 400.8 255.929 392.4 236.329 375.6C217.129 358.8 207.529 337 207.529 310.2H277.729C277.729 318.2 280.729 324.8 286.729 330C292.729 335.2 300.729 337.8 310.729 337.8C320.329 337.8 328.129 335 334.129 329.4C340.529 323.8 343.729 316.6 343.729 307.8C343.729 299.8 340.929 293.2 335.329 288C329.729 282.8 322.529 280.2 313.729 280.2H276.529V218.4H313.729C320.529 218.4 326.329 216 331.129 211.2C335.929 206.4 338.329 200.4 338.329 193.2C338.329 184.8 335.729 178.2 330.529 173.4C325.329 168.6 318.729 166.2 310.729 166.2C303.529 166.2 297.329 168.4 292.129 172.8C287.329 177.2 284.929 182.8 284.929 189.6H218.329C218.329 164.8 227.129 144.6 244.729 129C262.329 113 284.929 105 312.529 105C340.129 105 362.529 112.2 379.729 126.6C397.329 141 406.129 160 406.129 183.6C406.129 200.8 401.529 214.8 392.329 225.6C383.129 236 371.329 243.2 356.929 247.2C374.129 252 387.729 260.2 397.729 271.8C408.129 283.4 413.329 298 413.329 315.6C413.329 340.4 403.929 360.8 385.129 376.8C366.329 392.8 341.929 400.8 311.929 400.8Z" fill="currentColor"/>
-                            <path d="M103.864 167.6H78.6643V105.2H171.664V400.2H103.864V167.6Z" fill="currentColor"/>
-                            <path d="M311.929 400.8C281.129 400.8 255.929 392.4 236.329 375.6C217.129 358.8 207.529 337 207.529 310.2H277.729C277.729 318.2 280.729 324.8 286.729 330C292.729 335.2 300.729 337.8 310.729 337.8C320.329 337.8 328.129 335 334.129 329.4C340.529 323.8 343.729 316.6 343.729 307.8C343.729 299.8 340.929 293.2 335.329 288C329.729 282.8 322.529 280.2 313.729 280.2H276.529V218.4H313.729C320.529 218.4 326.329 216 331.129 211.2C335.929 206.4 338.329 200.4 338.329 193.2C338.329 184.8 335.729 178.2 330.529 173.4C325.329 168.6 318.729 166.2 310.729 166.2C303.529 166.2 297.329 168.4 292.129 172.8C287.329 177.2 284.929 182.8 284.929 189.6H218.329C218.329 164.8 227.129 144.6 244.729 129C262.329 113 284.929 105 312.529 105C340.129 105 362.529 112.2 379.729 126.6C397.329 141 406.129 160 406.129 183.6C406.129 200.8 401.529 214.8 392.329 225.6C383.129 236 371.329 243.2 356.929 247.2C374.129 252 387.729 260.2 397.729 271.8C408.129 283.4 413.329 298 413.329 315.6C413.329 340.4 403.929 360.8 385.129 376.8C366.329 392.8 341.929 400.8 311.929 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-4-mask)"/>
-                            <path d="M103.864 167.6H78.6643V105.2H171.664V400.2H103.864V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-4-mask)"/>
-                        </g>
-                        
-                        <g class="mix-blend-hard-light transition-all delay-400 opacity-100 duration-750 starting:opacity-0 motion-safe:starting:-translate-x-[102px] text-[#F3BEC7] dark:text-[#4B0600]">
-                            <mask id="path-5-mask" maskUnits="userSpaceOnUse" x="102.329" y="103" width="338" height="299" fill="black">
-                                <rect fill="white" x="102.329" y="103" width="338" height="299"/>
-                                <path d="M337.593 400.8C306.793 400.8 281.593 392.4 261.993 375.6C242.793 358.8 233.193 337 233.193 310.2H303.393C303.393 318.2 306.393 324.8 312.393 330C318.393 335.2 326.393 337.8 336.393 337.8C345.993 337.8 353.793 335 359.793 329.4C366.193 323.8 369.393 316.6 369.393 307.8C369.393 299.8 366.593 293.2 360.993 288C355.393 282.8 348.193 280.2 339.393 280.2H302.193V218.4H339.393C346.193 218.4 351.993 216 356.793 211.2C361.593 206.4 363.993 200.4 363.993 193.2C363.993 184.8 361.393 178.2 356.193 173.4C350.993 168.6 344.393 166.2 336.393 166.2C329.193 166.2 322.993 168.4 317.793 172.8C312.993 177.2 310.593 182.8 310.593 189.6H243.993C243.993 164.8 252.793 144.6 270.393 129C287.993 113 310.593 105 338.193 105C365.793 105 388.193 112.2 405.393 126.6C422.993 141 431.793 160 431.793 183.6C431.793 200.8 427.193 214.8 417.993 225.6C408.793 236 396.993 243.2 382.593 247.2C399.793 252 413.393 260.2 423.393 271.8C433.793 283.4 438.993 298 438.993 315.6C438.993 340.4 429.593 360.8 410.793 376.8C391.993 392.8 367.593 400.8 337.593 400.8Z"/>
-                                <path d="M129.529 167.6H104.329V105.2H197.329V400.2H129.529V167.6Z"/>
-                            </mask>
-                            <path d="M337.593 400.8C306.793 400.8 281.593 392.4 261.993 375.6C242.793 358.8 233.193 337 233.193 310.2H303.393C303.393 318.2 306.393 324.8 312.393 330C318.393 335.2 326.393 337.8 336.393 337.8C345.993 337.8 353.793 335 359.793 329.4C366.193 323.8 369.393 316.6 369.393 307.8C369.393 299.8 366.593 293.2 360.993 288C355.393 282.8 348.193 280.2 339.393 280.2H302.193V218.4H339.393C346.193 218.4 351.993 216 356.793 211.2C361.593 206.4 363.993 200.4 363.993 193.2C363.993 184.8 361.393 178.2 356.193 173.4C350.993 168.6 344.393 166.2 336.393 166.2C329.193 166.2 322.993 168.4 317.793 172.8C312.993 177.2 310.593 182.8 310.593 189.6H243.993C243.993 164.8 252.793 144.6 270.393 129C287.993 113 310.593 105 338.193 105C365.793 105 388.193 112.2 405.393 126.6C422.993 141 431.793 160 431.793 183.6C431.793 200.8 427.193 214.8 417.993 225.6C408.793 236 396.993 243.2 382.593 247.2C399.793 252 413.393 260.2 423.393 271.8C433.793 283.4 438.993 298 438.993 315.6C438.993 340.4 429.593 360.8 410.793 376.8C391.993 392.8 367.593 400.8 337.593 400.8Z" fill="currentColor"/>
-                            <path d="M129.529 167.6H104.329V105.2H197.329V400.2H129.529V167.6Z" fill="currentColor"/>
-                            <path d="M337.593 400.8C306.793 400.8 281.593 392.4 261.993 375.6C242.793 358.8 233.193 337 233.193 310.2H303.393C303.393 318.2 306.393 324.8 312.393 330C318.393 335.2 326.393 337.8 336.393 337.8C345.993 337.8 353.793 335 359.793 329.4C366.193 323.8 369.393 316.6 369.393 307.8C369.393 299.8 366.593 293.2 360.993 288C355.393 282.8 348.193 280.2 339.393 280.2H302.193V218.4H339.393C346.193 218.4 351.993 216 356.793 211.2C361.593 206.4 363.993 200.4 363.993 193.2C363.993 184.8 361.393 178.2 356.193 173.4C350.993 168.6 344.393 166.2 336.393 166.2C329.193 166.2 322.993 168.4 317.793 172.8C312.993 177.2 310.593 182.8 310.593 189.6H243.993C243.993 164.8 252.793 144.6 270.393 129C287.993 113 310.593 105 338.193 105C365.793 105 388.193 112.2 405.393 126.6C422.993 141 431.793 160 431.793 183.6C431.793 200.8 427.193 214.8 417.993 225.6C408.793 236 396.993 243.2 382.593 247.2C399.793 252 413.393 260.2 423.393 271.8C433.793 283.4 438.993 298 438.993 315.6C438.993 340.4 429.593 360.8 410.793 376.8C391.993 392.8 367.593 400.8 337.593 400.8Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-5-mask)"/>
-                            <path d="M129.529 167.6H104.329V105.2H197.329V400.2H129.529V167.6Z" stroke="var(--stroke-color)" stroke-width="2.4" mask="url(#path-5-mask)"/>
-                        </g>
-                    </svg>
-                    <div class="absolute inset-0 rounded-t-lg lg:rounded-t-none lg:rounded-r-lg shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d]"></div>
-                </div>
-            </main>
-        </div>
-
-        @if (Route::has('login'))
-            <div class="h-14.5 hidden lg:block"></div>
-        @endif
-    </body>
-</html>
 
 ```
 ---

@@ -88,7 +88,7 @@ class KategoriResource extends Resource
                     ->badge()
                     ->color(fn (Kategori $record) => $record->stokTersedia() > 0 ? 'success' : 'danger'),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

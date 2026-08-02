@@ -49,7 +49,7 @@ class JurusanResource extends Resource
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('kode')->searchable(),
                 TextColumn::make('kelas_count')->label('Jumlah Kelas')->counts('kelas'),
-                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime('d F Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->recordActions([DeleteAction::make()])
             ->toolbarActions([DeleteBulkAction::make()]);

@@ -66,7 +66,7 @@ class TransaksiResource extends Resource
                     ->label('Diproses Oleh')
                     ->toggleable(),
                 TextColumn::make('tanggal')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable(),
                 TextColumn::make('keterangan')
                     ->limit(50)

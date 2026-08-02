@@ -8,6 +8,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -27,9 +28,17 @@ use Illuminate\Support\HtmlString;
  * untuk kasus non-Resource page ini.
  *
  * TODO: verifikasi signature terhadap versi package yang terpasang -
- * komponen Tabs/Tab diasumsikan berada di Filament\Schemas\Components
+ * komponen Tabs/Tab/Grid diasumsikan berada di Filament\Schemas\Components
  * (mengikuti pola Schema/Select yang sudah dipakai LaporanBulanan),
  * cek ulang jika filament/filament ^5.7 punya lokasi berbeda.
+ *
+ * TODO: GAP-SPEC/UI - setiap Tab dibungkus Grid responsif (default 1
+ * kolom mobile, 2 kolom tablet, 3 kolom desktop, 4 kolom layar lebar)
+ * agar field pendek (angka jam, point, tarif) tidak memanjang penuh
+ * satu baris - proporsional terhadap panjang label/nilai. Tab
+ * "WhatsApp Template" tetap dibatasi maksimal 3 kolom (bukan 4) karena
+ * label & helperText lebih panjang, 4 kolom akan membuat teks terpotong/
+ * wrap berlebihan.
  */
 class PengaturanSistem extends Page
 {
@@ -62,6 +71,27 @@ class PengaturanSistem extends Page
         'device_ota_check_interval_ms',
     ];
 
+    /**
+     * Kolom grid responsif standar untuk tab dengan field pendek
+     * (Peminjaman/Denda, Point, Device) - proporsional di layar lebar.
+     */
+    protected const GRID_KOLOM_STANDAR = [
+        'default' => 1,
+        'sm' => 2,
+        'lg' => 3,
+        'xl' => 4,
+    ];
+
+    /**
+     * Kolom grid untuk tab dengan label/helperText panjang (WhatsApp
+     * Template) - dibatasi 3 kolom maksimal supaya tidak wrap berlebihan.
+     */
+    protected const GRID_KOLOM_PADAT = [
+        'default' => 1,
+        'sm' => 2,
+        'lg' => 3,
+    ];
+
     public static function canAccess(): bool
     {
         return auth()->user()?->can('ViewAny:PengaturanSistem') ?? false;
@@ -86,77 +116,92 @@ class PengaturanSistem extends Page
                 ->tabs([
                     Tab::make('Peminjaman & Denda')
                         ->schema([
-                            TextInput::make('max_peminjaman_aktif')
-                                ->label('Maks. Peminjaman Aktif per User')
-                                ->numeric()->integer()->minValue(1)->required(),
-                            TextInput::make('lama_peminjaman_hari')
-                                ->label('Lama Masa Pinjam (hari)')
-                                ->numeric()->integer()->minValue(1)->required(),
-                            TextInput::make('tarif_denda_per_hari')
-                                ->label('Tarif Denda Keterlambatan / Hari (Rp)')
-                                ->numeric()->minValue(0)->required(),
-                            TextInput::make('persentase_denda_kerusakan')
-                                ->label('Persentase Denda Kerusakan (%)')
-                                ->numeric()->minValue(0)->maxValue(100)->required(),
+                            Grid::make(self::GRID_KOLOM_STANDAR)
+                                ->schema([
+                                    TextInput::make('max_peminjaman_aktif')
+                                        ->label('Maks. Peminjaman Aktif per User')
+                                        ->numeric()->integer()->minValue(1)->required(),
+                                    TextInput::make('lama_peminjaman_hari')
+                                        ->label('Lama Masa Pinjam (hari)')
+                                        ->numeric()->integer()->minValue(1)->required(),
+                                    TextInput::make('tarif_denda_per_hari')
+                                        ->label('Tarif Denda Keterlambatan / Hari (Rp)')
+                                        ->numeric()->minValue(0)->required(),
+                                    TextInput::make('persentase_denda_kerusakan')
+                                        ->label('Persentase Denda Kerusakan (%)')
+                                        ->numeric()->minValue(0)->maxValue(100)->required(),
+                                ]),
                         ]),
 
                     Tab::make('Point')
                         ->schema([
-                            TextInput::make('point_kunjungan')->label('Point Kunjungan')->numeric()->integer()->required(),
-                            TextInput::make('point_peminjaman')->label('Point Peminjaman')->numeric()->integer()->required(),
-                            TextInput::make('point_pengembalian')->label('Point Pengembalian')->numeric()->integer()->required(),
-                            TextInput::make('point_kerusakan')->label('Point Kerusakan (negatif)')->numeric()->integer()->maxValue(0)->required(),
-                            TextInput::make('point_kehilangan')->label('Point Kehilangan (negatif)')->numeric()->integer()->maxValue(0)->required(),
+                            Grid::make(self::GRID_KOLOM_STANDAR)
+                                ->schema([
+                                    TextInput::make('point_kunjungan')->label('Point Kunjungan')->numeric()->integer()->required(),
+                                    TextInput::make('point_peminjaman')->label('Point Peminjaman')->numeric()->integer()->required(),
+                                    TextInput::make('point_pengembalian')->label('Point Pengembalian')->numeric()->integer()->required(),
+                                    TextInput::make('point_kerusakan')->label('Point Kerusakan (negatif)')->numeric()->integer()->maxValue(0)->required(),
+                                    TextInput::make('point_kehilangan')->label('Point Kehilangan (negatif)')->numeric()->integer()->maxValue(0)->required(),
+                                ]),
                         ]),
 
                     Tab::make('WhatsApp Template')
-                        ->schema(
-                            collect([
-                                'wa_template_peminjaman_aktif' => 'Peminjaman Aktif',
-                                'wa_template_reminder_h3' => 'Reminder H-3',
-                                'wa_template_reminder_h1' => 'Reminder H-1',
-                                'wa_template_jadi_terlambat' => 'Jadi Terlambat',
-                                'wa_template_pengembalian_diproses' => 'Pengembalian Diproses',
-                                'wa_template_denda_dibuat' => 'Denda Dibuat',
-                                'wa_template_denda_lunas' => 'Denda Lunas',
-                                'wa_template_badge_naik' => 'Badge Naik',
-                                'wa_template_reward_didapat' => 'Reward Didapat',
-                                'wa_template_punishment_diterapkan' => 'Punishment Diterapkan',
-                                'wa_template_reset_password_otp' => 'Reset Password OTP',
-                                'wa_template_koreksi_kondisi_pengembalian' => 'Koreksi Kondisi Pengembalian',
-                                'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
-                            ])->map(
-                                fn (string $label, string $key) => TextInput::make($key)
-                                    ->label($label)
-                                    ->required()
-                                    ->helperText('Wajib sama persis dengan template_code di panel gateway.')
-                            )->values()->all()
-                        ),
+                        ->schema([
+                            Grid::make(self::GRID_KOLOM_PADAT)
+                                ->schema(
+                                    collect([
+                                        'wa_template_peminjaman_aktif' => 'Peminjaman Aktif',
+                                        'wa_template_reminder_h3' => 'Reminder H-3',
+                                        'wa_template_reminder_h1' => 'Reminder H-1',
+                                        'wa_template_jadi_terlambat' => 'Jadi Terlambat',
+                                        'wa_template_pengembalian_diproses' => 'Pengembalian Diproses',
+                                        'wa_template_denda_dibuat' => 'Denda Dibuat',
+                                        'wa_template_denda_lunas' => 'Denda Lunas',
+                                        'wa_template_badge_naik' => 'Badge Naik',
+                                        'wa_template_reward_didapat' => 'Reward Didapat',
+                                        'wa_template_punishment_diterapkan' => 'Punishment Diterapkan',
+                                        'wa_template_reset_password_otp' => 'Reset Password OTP',
+                                        'wa_template_login_otp' => 'Login OTP',
+                                        'wa_template_koreksi_kondisi_pengembalian' => 'Koreksi Kondisi Pengembalian',
+                                        'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
+                                        'wa_template_buku_ditemukan_kembali' => 'Buku Ditemukan Kembali',
+                                    ])->map(
+                                        fn(string $label, string $key) => TextInput::make($key)
+                                            ->label($label)
+                                            ->required()
+                                            ->helperText('Wajib sama persis dengan template_code di panel gateway.')
+                                    )->values()->all()
+                                ),
+                        ]),
 
                     Tab::make('Device')
                         ->schema([
                             Placeholder::make('rfid_db_ver')
                                 ->label('Versi Daftar Kartu RFID (otomatis)')
-                                ->content(fn () => (string) Setting::get('rfid_db_ver', 0)),
-                            TextInput::make('device_sleep_start_hour')
-                                ->label('Jam Mulai Sleep (0-23)')
-                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
-                            TextInput::make('device_sleep_end_hour')
-                                ->label('Jam Bangun dari Sleep (0-23)')
-                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
-                            TextInput::make('device_oled_dim_start_hour')
-                                ->label('Jam OLED Dimatikan Sementara (0-23)')
-                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
-                            TextInput::make('device_oled_dim_end_hour')
-                                ->label('Jam OLED Menyala Kembali (0-23)')
-                                ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
-                            TextInput::make('device_sync_interval_ms')
-                                ->label('Interval Sinkronisasi (ms)')
-                                ->numeric()->integer()->minValue(1000)->required()
-                                ->helperText('Minimum 1000ms - nilai terlalu kecil membebani device & jaringan.'),
-                            TextInput::make('device_ota_check_interval_ms')
-                                ->label('Interval Cek Firmware OTA (ms)')
-                                ->numeric()->integer()->minValue(1000)->required(),
+                                ->content(fn() => (string) Setting::get('rfid_db_ver', 0))
+                                ->columnSpanFull(),
+                            Grid::make(self::GRID_KOLOM_STANDAR)
+                                ->schema([
+                                    TextInput::make('device_sleep_start_hour')
+                                        ->label('Jam Mulai Sleep (0-23)')
+                                        ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                                    TextInput::make('device_sleep_end_hour')
+                                        ->label('Jam Bangun dari Sleep (0-23)')
+                                        ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                                    TextInput::make('device_oled_dim_start_hour')
+                                        ->label('Jam OLED Dimatikan Sementara (0-23)')
+                                        ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                                    TextInput::make('device_oled_dim_end_hour')
+                                        ->label('Jam OLED Menyala Kembali (0-23)')
+                                        ->numeric()->integer()->minValue(0)->maxValue(23)->required(),
+                                    TextInput::make('device_sync_interval_ms')
+                                        ->label('Interval Sinkronisasi (ms)')
+                                        ->numeric()->integer()->minValue(1000)->required()
+                                        ->helperText('Minimum 1000ms - nilai terlalu kecil membebani device & jaringan.'),
+                                    TextInput::make('device_ota_check_interval_ms')
+                                        ->label('Interval Cek Firmware OTA (ms)')
+                                        ->numeric()->integer()->minValue(1000)->required(),
+                                ]),
                         ]),
                 ]),
         ])->statePath('data');

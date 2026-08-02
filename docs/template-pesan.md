@@ -742,8 +742,6 @@ Halo {{nama}}, mohon perhatikan aturan perpustakaan. Alasan: {{alasan}}.
 
 ---
 
-# Template WhatsApp — Reset Password OTP
-
 ## 11. Reset Password OTP
 
 **Kode Template:** `reset_password_otp`
@@ -820,11 +818,316 @@ Halo {{nama}}, kami menerima permintaan reset password untuk akunmu. Kode OTP: {
 
 ---
 
-Setelah Anda pilih salah satu varian dan daftarkan `template_code: reset_password_otp` di panel gateway, jangan lupa isi Setting:
+## 12. Login OTP
+
+**Kode Template:** `login_otp`
+**Kategori:** `Akun`
+**Prioritas:** `High`
+**Variabel Wajib:** `nama,otp`
 
 ```
-key   = wa_template_reset_password_otp
-value = reset_password_otp  (atau template_code sesuai yang muncul di panel)
-group = whatsapp
+1.
+*Perpustakaan*
+
+*Kode Login OTP*
+Nama: {{nama}}
+Kode OTP: {{otp}}
+Berlaku 5 menit. Jangan bagikan kode ini ke siapa pun, kode ini bisa dipakai untuk masuk ke akunmu.
+
+2.
+*Perpustakaan*
+
+*Permintaan Masuk (Login)*
+Halo {{nama}}, gunakan kode berikut untuk masuk ke akunmu: {{otp}}. Kode berlaku 5 menit.
+
+3.
+*Perpustakaan*
+
+*Kode Verifikasi Login*
+Nama    : {{nama}}
+Kode OTP: {{otp}}
+Jangan berikan kode ini kepada siapa pun, termasuk pihak yang mengaku dari perpustakaan.
+
+4.
+*Perpustakaan*
+
+Halo {{nama}}, kode OTP untuk masuk ke akunmu adalah {{otp}}. Kode ini berlaku selama 5 menit.
+
+5.
+*Perpustakaan*
+
+*Info Login*
+{{nama}} - Kode OTP: {{otp}}
+Segera masukkan kode ini di halaman login.
+
+6.
+*Perpustakaan*
+
+*Kode OTP Login*
+Permintaan masuk (login) atas nama {{nama}}. Kode: {{otp}} (berlaku 5 menit).
+
+7.
+*Perpustakaan*
+
+*Login dengan OTP*
+Nama: {{nama}}
+Kode OTP: {{otp}}
+Jika kamu tidak meminta ini, abaikan pesan ini dan segera hubungi Pustakawan/Admin - seseorang mungkin mencoba masuk ke akunmu.
+
+8.
+*Perpustakaan*
+
+Kode login untuk {{nama}}: {{otp}}. Berlaku 5 menit, jangan dibagikan ke siapa pun.
+
+9.
+*Perpustakaan*
+
+*Permintaan Masuk ke Akun*
+Halo {{nama}}, kami menerima permintaan login ke akunmu. Kode OTP: {{otp}}. Berlaku 5 menit.
+
+10.
+*Perpustakaan*
+
+*Kode Verifikasi Login*
+{{nama}}, masukkan kode berikut untuk masuk ke akunmu: {{otp}}. Kode kedaluwarsa dalam 5 menit demi keamanan akunmu. Kode ini setara password - jangan bagikan.
 ```
 
+---
+
+## 13. Koreksi Kondisi Pengembalian
+
+**Kode Template:** `koreksi_kondisi_pengembalian`
+**Kategori:** `Peminjaman`
+**Prioritas:** `Medium`
+**Variabel Wajib:** `nama,kondisi_lama,kondisi_baru`
+
+```
+1.
+*Perpustakaan*
+
+*Koreksi Kondisi Buku*
+Nama: {{nama}}
+Kondisi Sebelumnya: {{kondisi_lama}}
+Kondisi Sekarang: {{kondisi_baru}}
+
+2.
+*Perpustakaan*
+
+*Pemberitahuan Koreksi*
+Halo {{nama}}, kondisi buku yang kamu kembalikan telah dikoreksi dari {{kondisi_lama}} menjadi {{kondisi_baru}}.
+
+3.
+*Perpustakaan*
+
+*Koreksi Data Pengembalian*
+Nama              : {{nama}}
+Kondisi Sebelumnya: {{kondisi_lama}}
+Kondisi Sekarang  : {{kondisi_baru}}
+
+4.
+*Perpustakaan*
+
+Halo {{nama}}, pustakawan telah memperbarui catatan kondisi bukumu dari {{kondisi_lama}} menjadi {{kondisi_baru}}.
+
+5.
+*Perpustakaan*
+
+*Info Koreksi Kondisi*
+{{nama}} - {{kondisi_lama}} -> {{kondisi_baru}}
+
+6.
+*Perpustakaan*
+
+*Koreksi Kondisi Buku*
+Kondisi buku atas nama {{nama}} dikoreksi: {{kondisi_lama}} menjadi {{kondisi_baru}}.
+
+7.
+*Perpustakaan*
+
+*Pembaruan Kondisi Pengembalian*
+Nama: {{nama}}
+Dari: {{kondisi_lama}}
+Menjadi: {{kondisi_baru}}
+
+8.
+*Perpustakaan*
+
+Info: {{nama}} - kondisi buku dikoreksi dari {{kondisi_lama}} ke {{kondisi_baru}}.
+
+9.
+*Perpustakaan*
+
+*Koreksi Kondisi Buku*
+Halo {{nama}}, mohon diperhatikan: kondisi buku yang tercatat sebelumnya ({{kondisi_lama}}) telah diperbarui menjadi {{kondisi_baru}}. Jika ada denda terkait, akan disesuaikan otomatis.
+
+10.
+*Perpustakaan*
+
+*Pemberitahuan Koreksi Kondisi*
+{{nama}}, catatan kondisi bukumu diperbarui dari {{kondisi_lama}} menjadi {{kondisi_baru}} oleh pustakawan.
+```
+
+---
+
+## 14. Denda Dibatalkan (Perlu Refund)
+
+**Kode Template:** `denda_dibatalkan_perlu_refund`
+**Kategori:** `Denda`
+**Prioritas:** `High`
+**Variabel Wajib:** `nama,tipe,nominal`
+
+```
+1.
+*Perpustakaan*
+
+*Denda Dibatalkan*
+Nama: {{nama}}
+Jenis: {{tipe}}
+Nominal: Rp{{nominal}}
+Denda ini sudah terbayar sebelumnya - refund akan diproses secara manual oleh pustakawan.
+
+2.
+*Perpustakaan*
+
+*Pemberitahuan Pembatalan Denda*
+Halo {{nama}}, denda {{tipe}} sebesar Rp{{nominal}} yang sudah kamu bayar telah dibatalkan akibat koreksi kondisi. Silakan hubungi pustakawan untuk proses refund.
+
+3.
+*Perpustakaan*
+
+*Denda Dibatalkan - Perlu Refund*
+Nama    : {{nama}}
+Jenis    : {{tipe}}
+Nominal : Rp{{nominal}}
+
+4.
+*Perpustakaan*
+
+Halo {{nama}}, denda {{tipe}} yang sudah kamu bayar (Rp{{nominal}}) dibatalkan setelah koreksi kondisi buku. Silakan datang ke perpustakaan untuk klaim refund.
+
+5.
+*Perpustakaan*
+
+*Info Pembatalan Denda*
+{{nama}} - {{tipe}}
+Nominal dibatalkan: Rp{{nominal}} (perlu refund manual)
+
+6.
+*Perpustakaan*
+
+*Denda Dibatalkan*
+Denda {{tipe}} atas nama {{nama}} sebesar Rp{{nominal}} dibatalkan karena koreksi kondisi buku. Refund akan diproses pustakawan.
+
+7.
+*Perpustakaan*
+
+*Pembatalan Denda - Perlu Refund*
+Nama: {{nama}}
+Jenis: {{tipe}}
+Nominal: Rp{{nominal}}
+
+8.
+*Perpustakaan*
+
+Info: denda {{tipe}} milik {{nama}} (Rp{{nominal}}) dibatalkan, perlu refund manual.
+
+9.
+*Perpustakaan*
+
+*Denda Dibatalkan*
+Halo {{nama}}, mohon maaf atas ketidaknyamanannya. Denda {{tipe}} yang sudah kamu bayar (Rp{{nominal}}) dibatalkan karena kondisi buku dikoreksi. Silakan konfirmasi ke pustakawan untuk pengembalian dana.
+
+10.
+*Perpustakaan*
+
+*Pemberitahuan Refund*
+{{nama}}, denda {{tipe}} sebesar Rp{{nominal}} yang telah dibayar dibatalkan. Silakan hubungi pustakawan/admin untuk proses refund lebih lanjut.
+```
+
+---
+
+Untuk memeriksa widget dan menutup gap N+1 di sana, saya perlu lihat isi filenya dulu (poin 18) — jangan sampai saya menebak query yang dipakai. Yang relevan (mengandung kata "Buku"/"Denda" per nama file dari tree project):
+
+```bash
+cat app/Filament/Widgets/BukuPerKategoriWidget.php
+cat app/Filament/Widgets/BukuRusakHilangWidget.php
+cat app/Filament/Widgets/DendaTerbaruWidget.php
+cat app/Filament/Widgets/GamifikasiBulananWidget.php
+cat app/Filament/Widgets/PeminjamanJatuhTempoWidget.php
+cat app/Filament/Widgets/PeminjamanStatsWidget.php
+cat app/Filament/Widgets/PerJenisKelaminWidget.php
+cat app/Filament/Widgets/TrenBulananWidget.php
+cat app/Filament/Widgets/WhatsappLogWidget.php
+```
+
+---
+
+## 15. Buku Ditemukan Kembali
+
+**Kode Template:** `buku_ditemukan_kembali`
+**Kategori:** `Peminjaman`
+**Prioritas:** `Medium`
+**Variabel Wajib:** `nama`
+
+```
+1.
+*Perpustakaan*
+
+*Buku Ditemukan Kembali*
+Nama: {{nama}}
+Status: Buku yang sempat dilaporkan hilang sudah ditemukan. Denda kehilangan dibatalkan.
+
+2.
+*Perpustakaan*
+
+*Kabar Baik!*
+{{nama}}, buku yang sempat dilaporkan hilang sudah ditemukan kembali. Denda terkait sudah dibatalkan.
+
+3.
+*Perpustakaan*
+
+*Konfirmasi Buku Ditemukan*
+Nama  : {{nama}}
+Status: Denda kehilangan dibatalkan, akun diperbarui.
+
+4.
+*Perpustakaan*
+
+Halo {{nama}}, terima kasih! Buku yang hilang sudah ditemukan kembali dan Denda kehilangan sudah dibatalkan.
+
+5.
+*Perpustakaan*
+
+*Info Pembatalan Denda*
+{{nama}} - Buku ditemukan, Denda kehilangan dibatalkan.
+
+6.
+*Perpustakaan*
+
+*Buku Ditemukan*
+Buku yang dilaporkan hilang atas nama {{nama}} sudah ditemukan kembali oleh pustakawan.
+
+7.
+*Perpustakaan*
+
+*Konfirmasi Buku Ditemukan Kembali*
+Nama: {{nama}}
+Status: Denda kehilangan dibatalkan.
+
+8.
+*Perpustakaan*
+
+Info: buku milik {{nama}} yang sempat hilang sudah ditemukan, Denda dibatalkan.
+
+9.
+*Perpustakaan*
+
+*Buku Ditemukan Kembali*
+Halo {{nama}}, buku yang kamu laporkan hilang sudah kami terima kembali. Denda kehilangan otomatis dibatalkan. Jika sebelumnya sudah membayar, silakan hubungi pustakawan untuk proses refund.
+
+10.
+*Perpustakaan*
+
+*Kabar Baik - Buku Ditemukan!*
+{{nama}}, buku yang sempat hilang sudah ditemukan dan dikembalikan ke rak. Terima kasih atas kejujurannya.
+```

@@ -32,7 +32,7 @@ class FirmwareResource extends Resource
 
     protected static ?string $navigationLabel = 'Firmware OTA';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Perangkat';
+    protected static string|\UnitEnum|null $navigationGroup = 'Sistem';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cpu-chip';
 
@@ -78,7 +78,7 @@ class FirmwareResource extends Resource
                 IconColumn::make('aktif')
                     ->boolean(),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

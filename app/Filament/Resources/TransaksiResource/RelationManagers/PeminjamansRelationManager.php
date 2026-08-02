@@ -27,7 +27,7 @@ class PeminjamansRelationManager extends RelationManager
                     ->placeholder('(eksemplar sudah dihapus permanen)')
                     ->searchable(),
                 TextColumn::make('tanggal_jatuh_tempo')
-                    ->date(),
+                    ->date('d F Y'),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (StatusPeminjaman $state) => match ($state) {

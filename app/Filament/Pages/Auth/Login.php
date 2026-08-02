@@ -24,18 +24,34 @@ use Illuminate\Support\HtmlString;
  * (filament/filament ^5.7). Override content() dan getFormActions() di
  * bawah didasarkan pada pembacaan langsung source
  * vendor/filament/filament/src/Auth/Pages/Login.php yang diberikan
- * pengguna - lebih terverifikasi dari upaya sebelumnya, tapi authenticate()
- * override TOTAL (bukan extend logic rate-limit/timebox/multi-factor
- * bawaan) tetap ASUMSI BESAR untuk cabang mode 'otp': rate-limit(5),
- * Timebox, dan multi-factor challenge bawaan SEMUA di-skip untuk mode
- * OTP. Risiko diterima sadar sesuai konfirmasi (setara reset password),
- * tapi WAJIB diuji end-to-end (poin 12).
+ * pengguna - authenticate() override TOTAL (bukan extend logic
+ * rate-limit/timebox/multi-factor bawaan) tetap ASUMSI BESAR untuk cabang
+ * mode 'otp': rate-limit(5), Timebox, dan multi-factor challenge bawaan
+ * SEMUA di-skip untuk mode OTP. Risiko diterima sadar sesuai konfirmasi
+ * (setara reset password), tapi WAJIB diuji end-to-end (poin 12).
+ *
+ * TODO: GAP-SPEC/BUG FIX - sebelumnya authenticate() mode OTP memakai
+ * $data['login'] (raw input, bisa NISN/NIP/No. Telepon) langsung sebagai
+ * no_telepon ke LoginOtpService::verifikasiUntukLogin() yang mencari
+ * berdasarkan no_telepon murni - OTP selalu gagal untuk user yang login
+ * pakai NISN/NIP. Diperbaiki dengan menyimpan no_telepon hasil resolve
+ * di property $noTeleponOtp saat kirimOtpLogin() berhasil, dipakai ulang
+ * di authenticate() - bukan raw input field lagi.
  */
 class Login extends BaseLogin
 {
     public string $mode = 'password';
 
     public bool $otpTerkirim = false;
+
+    /**
+     * no_telepon ASLI hasil resolve dari input login (NISN/NIP/No.
+     * Telepon) - disimpan terpisah dari raw field 'login' karena
+     * LoginOtpService bekerja murni berbasis no_telepon (sama seperti
+     * pola RequestPasswordReset menyimpan no_telepon di session, disini
+     * cukup property Livewire karena same-page cycle).
+     */
+    public ?string $noTeleponOtp = null;
 
     public function form(Schema $schema): Schema
     {
@@ -82,6 +98,7 @@ class Login extends BaseLogin
     {
         $this->mode = $mode;
         $this->otpTerkirim = false;
+        $this->noTeleponOtp = null;
     }
 
     protected function resolveUser(string $login): ?User
@@ -116,6 +133,10 @@ class Login extends BaseLogin
             return;
         }
 
+        // simpan no_telepon ASLI hasil resolve - bukan raw input 'login',
+        // supaya verifikasi OTP di authenticate() tetap benar walau user
+        // login pakai NISN/NIP.
+        $this->noTeleponOtp = $user->no_telepon;
         $this->otpTerkirim = true;
 
         Notification::make()->title('Kode OTP terkirim ke WhatsApp terdaftar.')->success()->send();
@@ -137,16 +158,43 @@ class Login extends BaseLogin
         ];
     }
 
+    /**
+     * TODO: GAP-SPEC - livewireSubmitHandler pada <form> di-hardcode ke
+     * 'authenticate' oleh base class Filament\Auth\Pages\Login
+     * (getFormContentComponent(), tidak di-override disini) - artinya
+     * menekan Enter di field manapun dalam form SELALU memanggil
+     * authenticate(), terlepas tombol mana yang visible. Di mode 'otp'
+     * sebelum OTP terkirim, ini didelegasikan ke kirimOtpLogin() supaya
+     * Enter berperilaku sama seperti klik tombol "Kirim OTP" - BUKAN
+     * menampilkan galat "kirim OTP terlebih dahulu" (UX buruk, bukan bug
+     * keamanan, karena kirimOtpLogin() sendiri sudah divalidasi/rate-limited).
+     */
     public function authenticate(): ?LoginResponse
     {
         if ($this->mode === 'password') {
             return parent::authenticate();
         }
 
+        if ($this->mode === 'otp' && ! $this->otpTerkirim) {
+            $this->kirimOtpLogin();
+
+            return null;
+        }
+
         $data = $this->form->getState();
 
+        if (! $this->noTeleponOtp) {
+            // defensif: seharusnya tidak tercapai lagi via Enter (sudah
+            // ditangani cabang di atas), tapi dipertahankan untuk kasus
+            // race/edge lain (mis. otpTerkirim true tapi noTeleponOtp
+            // ter-reset oleh sebab tak terduga).
+            Notification::make()->title('Kirim OTP terlebih dahulu.')->warning()->send();
+
+            return null;
+        }
+
         try {
-            $user = app(LoginOtpService::class)->verifikasiUntukLogin((string) $data['login'], (string) $data['otp']);
+            $user = app(LoginOtpService::class)->verifikasiUntukLogin($this->noTeleponOtp, (string) $data['otp']);
         } catch (\RuntimeException $e) {
             Notification::make()->title($e->getMessage())->danger()->send();
 
@@ -176,13 +224,6 @@ class Login extends BaseLogin
         ]);
     }
 
-    /**
-     * Segmented control (pil) untuk toggle mode - dibangun dari Actions API
-     * asli (bukan Blade custom, konsisten dengan pelajaran dari percobaan
-     * sebelumnya), diberi extraAttributes untuk tampilan pil dengan latar
-     * abu-abu gelap dan indikator aktif, tanpa menyentuh warna primary/tema
-     * panel.
-     */
     protected function getModeSwitcherComponent(): Component
     {
         return Actions::make([
@@ -213,13 +254,6 @@ class Login extends BaseLogin
             ]);
     }
 
-    /**
-     * Override tombol submit - tombol berubah fungsi/label sesuai mode
-     * (dikonfirmasi): mode 'otp' belum kirim -> tombol jadi "Kirim OTP"
-     * (action method, bukan submit form). Setelah OTP terkirim atau mode
-     * 'password' -> tombol submit biasa, label "Verifikasi & Masuk" di
-     * mode OTP, "Masuk" di mode password.
-     */
     protected function getFormActions(): array
     {
         return [

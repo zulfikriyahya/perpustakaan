@@ -60,11 +60,11 @@ class PeminjamanResource extends Resource
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->options(fn () => Eksemplar::query()
+                ->options(fn() => Eksemplar::query()
                     ->where('status', StatusEksemplar::Tersedia)
                     ->with('buku')
                     ->get()
-                    ->mapWithKeys(fn ($e) => [$e->id => "{$e->buku->judul} — {$e->barcode}"]))
+                    ->mapWithKeys(fn($e) => [$e->id => "{$e->buku->judul} — {$e->barcode}"]))
                 ->helperText('Hanya menampilkan eksemplar berstatus tersedia. Validasi limit peminjaman aktif & status suspend dicek otomatis saat submit.')
                 ->required(),
         ]);
@@ -76,7 +76,7 @@ class PeminjamanResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(PeminjamanExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Peminjaman::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Peminjaman::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')
@@ -89,37 +89,39 @@ class PeminjamanResource extends Resource
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('tanggal_pinjam')
-                    ->date()
+                    ->date('d F Y')
                     ->sortable(),
                 TextColumn::make('tanggal_jatuh_tempo')
-                    ->date()
+                    ->date('d F Y')
                     ->sortable(),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn (StatusPeminjaman $state) => match ($state) {
+                    ->color(fn(StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Aktif => 'success',
                         StatusPeminjaman::Terlambat => 'danger',
                         StatusPeminjaman::Selesai => 'gray',
                         StatusPeminjaman::Hilang => 'warning',
                     }),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options(collect(StatusPeminjaman::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
+                    ->options(collect(StatusPeminjaman::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
             ])
             ->recordActions([
                 Action::make('proses_pengembalian')
                     ->label('Proses Pengembalian')
                     ->icon('heroicon-o-arrow-uturn-left')
-                    ->visible(fn (Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->authorize(fn(Peminjaman $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
                     ->schema([
                         Select::make('kondisi')
                             ->label('Kondisi Buku')
-                            ->options(collect(KondisiBuku::cases())->mapWithKeys(fn ($k) => [$k->value => ucfirst($k->value)]))
+                            ->options(collect(KondisiBuku::cases())->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)]))
                             ->required(),
                         Textarea::make('catatan')
                             ->label('Catatan'),
@@ -150,9 +152,11 @@ class PeminjamanResource extends Resource
                     ->label('Laporkan Hilang')
                     ->icon('heroicon-o-exclamation-triangle')
                     ->color('danger')
+                    ->authorize(fn(Peminjaman $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->requiresConfirmation()
                     ->requiresConfirmation()
                     ->modalDescription('Buku belum dikembalikan secara fisik. Denda kehilangan penuh (Buku.harga_ganti) akan langsung dicatat.')
-                    ->visible(fn (Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
                     ->action(function (Peminjaman $record) {
                         try {
                             app(PeminjamanService::class)->laporkanHilang($record);

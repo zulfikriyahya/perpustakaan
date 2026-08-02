@@ -56,8 +56,8 @@ class TahunPelajaranResource extends Resource
             ])
             ->columns([
                 TextColumn::make('nama')->searchable()->sortable(),
-                TextColumn::make('tanggal_mulai')->date(),
-                TextColumn::make('tanggal_selesai')->date(),
+                TextColumn::make('tanggal_mulai')->date('d F Y'),
+                TextColumn::make('tanggal_selesai')->date('d F Y'),
                 IconColumn::make('aktif')->boolean()->label('Aktif'),
             ])
             ->recordActions([

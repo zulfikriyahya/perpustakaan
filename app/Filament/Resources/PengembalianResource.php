@@ -68,7 +68,7 @@ class PengembalianResource extends Resource
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('tanggal_kembali')
-                    ->date()
+                    ->date('d F Y')
                     ->sortable(),
                 TextColumn::make('kondisi')
                     ->badge()

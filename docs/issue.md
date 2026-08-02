@@ -100,8 +100,13 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- finalkan fitur avatar dan import user agar gambar avatar yang diunggah via link atau path dapat tampil.
-- finalkan fitur login dengan phone -> otp, selain dengan password.
+- Perbaiki:
+
+```bash
+[2026-08-02 23:18:35] local.WARNING: WhatsappService: template untuk event 'buku_ditemukan_kembali' belum dikonfigurasi di Setting, notifikasi di-skip.
+[2026-08-02 23:41:47] local.ERROR: KirimNotifikasiWhatsapp: kegagalan permanen (status 409), tidak di-retry. Template 'koreksi_kondisi_pengembalian' ke 628211558571: Gateway WhatsApp mengembalikan status 409: reference_id sudah pernah dipakai dengan payload berbeda
+[2026-08-02 23:41:47] local.ERROR: KirimNotifikasiWhatsapp: job gagal permanen. Template 'koreksi_kondisi_pengembalian' ke 628211558571: Gateway WhatsApp mengembalikan status 409: reference_id sudah pernah dipakai dengan payload berbeda
+```
 
 ---
 

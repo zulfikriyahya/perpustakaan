@@ -93,7 +93,7 @@ class DendaResource extends Resource
                     ->formatStateUsing(fn (bool $state) => $state ? 'Lunas' : 'Belum Lunas')
                     ->color(fn (bool $state) => $state ? 'success' : 'danger'),
                 TextColumn::make('tanggal_lunas')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->toggleable(),
                 TextColumn::make('status_refund')
                     ->label('Refund')
@@ -108,7 +108,7 @@ class DendaResource extends Resource
                     ->limit(50)
                     ->toggleable(),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

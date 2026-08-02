@@ -52,7 +52,7 @@ class KunjunganResource extends Resource
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('tanggal')
-                    ->date()
+                    ->date('d F Y')
                     ->sortable(),
                 TextColumn::make('jam_tap')
                     ->time()
@@ -65,7 +65,7 @@ class KunjunganResource extends Resource
                         SourceKunjungan::Manual => 'warning',
                     }),
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d F Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

@@ -21,7 +21,7 @@ class PunishmentLogStatsWidget extends StatsOverviewWidget
             // null ATAU masih di masa depan; belum ada spec eksplisit soal
             // definisi ini di Logic Module.
             Stat::make('Sedang Berlaku', PunishmentLog::query()
-                ->where(fn($q) => $q->whereNull('tanggal_berakhir')->orWhere('tanggal_berakhir', '>', now()))
+                ->where(fn ($q) => $q->whereNull('tanggal_berakhir')->orWhere('tanggal_berakhir', '>', now()))
                 ->count()),
         ];
     }

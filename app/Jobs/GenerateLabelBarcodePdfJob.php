@@ -79,7 +79,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
         $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
             ->setPaper('a4', 'portrait');
 
-        $filename = 'label-barcode-' . now()->format('Ymd-His') . '-' . substr(md5(uniqid()), 0, 6) . '.pdf';
+        $filename = 'label-barcode-'.now()->format('Ymd-His').'-'.substr(md5(uniqid()), 0, 6).'.pdf';
         $path = "labels/{$filename}";
 
         Storage::disk('public')->put($path, $pdf->output());
@@ -87,7 +87,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
         Notification::make()
             ->success()
             ->title('Label barcode siap diunduh')
-            ->body(count($labels) . ' label berhasil dibuat.')
+            ->body(count($labels).' label berhasil dibuat.')
             ->actions([
                 Action::make('download')
                     ->label('Download PDF')
@@ -99,7 +99,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateLabelBarcodePdfJob: gagal generate label. EksemplarIDs: ' . implode(',', $this->eksemplarIds) . ". Error: {$exception->getMessage()}");
+        Log::error('GenerateLabelBarcodePdfJob: gagal generate label. EksemplarIDs: '.implode(',', $this->eksemplarIds).". Error: {$exception->getMessage()}");
 
         $user = User::query()->find($this->userId);
 

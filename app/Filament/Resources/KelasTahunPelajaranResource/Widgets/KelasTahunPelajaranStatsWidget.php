@@ -25,7 +25,7 @@ class KelasTahunPelajaranStatsWidget extends StatsOverviewWidget
             Stat::make(
                 'Total Siswa Aktif (Tahun Berjalan)',
                 $tahunAktif
-                    ? User::query()->whereHas('kelasTahunPelajaran', fn($q) => $q->where('tahun_pelajaran_id', $tahunAktif->id))->count()
+                    ? User::query()->whereHas('kelasTahunPelajaran', fn ($q) => $q->where('tahun_pelajaran_id', $tahunAktif->id))->count()
                     : 0
             ),
         ];

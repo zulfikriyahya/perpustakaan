@@ -51,5 +51,4 @@
 ---
 
 
-- tambahkan widget stats overview untuk masing masing resource.
 

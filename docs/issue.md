@@ -100,13 +100,7 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- Perbaiki:
-
-```bash
-[2026-08-02 23:18:35] local.WARNING: WhatsappService: template untuk event 'buku_ditemukan_kembali' belum dikonfigurasi di Setting, notifikasi di-skip.
-[2026-08-02 23:41:47] local.ERROR: KirimNotifikasiWhatsapp: kegagalan permanen (status 409), tidak di-retry. Template 'koreksi_kondisi_pengembalian' ke 628211558571: Gateway WhatsApp mengembalikan status 409: reference_id sudah pernah dipakai dengan payload berbeda
-[2026-08-02 23:41:47] local.ERROR: KirimNotifikasiWhatsapp: job gagal permanen. Template 'koreksi_kondisi_pengembalian' ke 628211558571: Gateway WhatsApp mengembalikan status 409: reference_id sudah pernah dipakai dengan payload berbeda
-```
+- Perbaiki dan finalkan fitur softdeletes dari semua model/migration/data, dan semua perilakunya agar project ini solid dan tidak ada bottleneck.
 
 ---
 

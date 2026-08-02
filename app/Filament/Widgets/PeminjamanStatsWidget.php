@@ -50,7 +50,7 @@ class PeminjamanStatsWidget extends StatsOverviewWidget
         return SnapshotHarian::query()
             ->whereBetween('tanggal', [$mulai->toDateString(), $akhir->toDateString()])
             ->get()
-            ->keyBy(fn(SnapshotHarian $s) => $s->tanggal->format('d/m'));
+            ->keyBy(fn (SnapshotHarian $s) => $s->tanggal->format('d/m'));
     }
 
     /**
@@ -99,9 +99,9 @@ class PeminjamanStatsWidget extends StatsOverviewWidget
                 ->color($terlambat > 0 ? 'danger' : 'gray')
                 ->chart(array_values($this->trendDariSnapshot($snapshots, 'peminjaman_terlambat'))),
 
-            Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas . ' transaksi')
+            Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas.' transaksi')
                 ->icon('heroicon-o-banknotes')
-                ->description('Rp ' . number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
+                ->description('Rp '.number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->color($jumlahDendaBelumLunas > 0 ? 'warning' : 'gray')
                 ->chart(array_values($this->trendDariSnapshot($snapshots, 'denda_baru'))),

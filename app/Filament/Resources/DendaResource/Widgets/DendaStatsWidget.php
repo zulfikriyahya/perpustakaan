@@ -20,7 +20,7 @@ class DendaStatsWidget extends StatsOverviewWidget
 
         return [
             Stat::make('Total Denda', Denda::query()->count()),
-            Stat::make('Belum Lunas (Rp)', 'Rp' . number_format($belumLunas, 0, ',', '.'))->color('danger'),
+            Stat::make('Belum Lunas (Rp)', 'Rp'.number_format($belumLunas, 0, ',', '.'))->color('danger'),
             Stat::make('Perlu Refund', Denda::query()->where('status_refund', StatusRefund::PerluRefund)->count())->color('warning'),
         ];
     }

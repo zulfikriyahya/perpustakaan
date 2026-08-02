@@ -9,6 +9,7 @@ use App\Enums\TipeDenda;
 use App\Filament\Exports\EksemplarExporter;
 use App\Filament\Imports\EksemplarImporter;
 use App\Jobs\GenerateLabelBarcodePdfJob;
+use App\Models\Denda;
 use App\Models\Eksemplar;
 use App\Services\LabelBarcodeService;
 use App\Services\PeminjamanService;
@@ -51,7 +52,7 @@ class EksemplarsRelationManager extends RelationManager
                 ->searchable()
                 ->preload(),
             Select::make('status')
-                ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)]))
+                ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)]))
                 ->required()
                 ->default(StatusEksemplar::Tersedia->value)
                 ->helperText('Ubah manual hanya untuk koreksi data - alur normal status diubah otomatis oleh PeminjamanService.'),
@@ -65,24 +66,24 @@ class EksemplarsRelationManager extends RelationManager
             // BARU (iterasi ini) - eager load relasi yang dipakai kolom
             // Peminjam/Denda/Refund di bawah, supaya tidak N+1 query per
             // baris (Aturan poin 3/9 - performa).
-            ->modifyQueryUsing(fn(Builder $query) => $query->with([
+            ->modifyQueryUsing(fn (Builder $query) => $query->with([
                 'peminjamanTerakhir.user',
                 'peminjamanTerakhir.dendas',
             ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(EksemplarImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Eksemplar::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Eksemplar::class) ?? false),
                 ExportAction::make()
                     ->exporter(EksemplarExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('barcode')->searchable(),
                 TextColumn::make('rak.nama')->label('Rak'),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn(StatusEksemplar $state) => match ($state) {
+                    ->color(fn (StatusEksemplar $state) => match ($state) {
                         StatusEksemplar::Tersedia => 'success',
                         StatusEksemplar::Dipinjam => 'warning',
                         StatusEksemplar::Rusak, StatusEksemplar::Hilang => 'danger',
@@ -97,9 +98,9 @@ class EksemplarsRelationManager extends RelationManager
                     ->toggleable(),
                 TextColumn::make('status_denda')
                     ->label('Status Denda')
-                    ->state(fn(Eksemplar $record) => static::labelStatusDenda($record))
+                    ->state(fn (Eksemplar $record) => static::labelStatusDenda($record))
                     ->badge()
-                    ->color(fn(Eksemplar $record) => match (static::labelStatusDenda($record)) {
+                    ->color(fn (Eksemplar $record) => match (static::labelStatusDenda($record)) {
                         'Lunas' => 'success',
                         'Belum Lunas' => 'danger',
                         default => 'gray',
@@ -108,10 +109,10 @@ class EksemplarsRelationManager extends RelationManager
                     ->toggleable(),
                 TextColumn::make('status_refund_denda')
                     ->label('Status Refund')
-                    ->state(fn(Eksemplar $record) => static::dendaTerkait($record)?->status_refund?->value)
-                    ->formatStateUsing(fn(?string $state) => $state ? ucfirst(str_replace('_', ' ', $state)) : null)
+                    ->state(fn (Eksemplar $record) => static::dendaTerkait($record)?->status_refund?->value)
+                    ->formatStateUsing(fn (?string $state) => $state ? ucfirst(str_replace('_', ' ', $state)) : null)
                     ->badge()
-                    ->color(fn(?string $state) => match ($state) {
+                    ->color(fn (?string $state) => match ($state) {
                         'perlu_refund' => 'warning',
                         'sudah_direfund' => 'success',
                         default => 'gray',
@@ -121,18 +122,18 @@ class EksemplarsRelationManager extends RelationManager
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
+                    ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
                 TrashedFilter::make(),
             ])
             ->recordActions([
                 EditAction::make()
-                    ->disabled(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
-                    ->tooltip(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
                         ? 'Eksemplar sedang dipinjam - tidak bisa diedit manual di sini.'
                         : null),
                 DeleteAction::make()
-                    ->disabled(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
-                    ->tooltip(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
                         ? 'Eksemplar sedang dipinjam - tidak bisa dihapus.'
                         : null),
                 RestoreAction::make(),
@@ -166,10 +167,10 @@ class EksemplarsRelationManager extends RelationManager
                     ->label('Buku Ditemukan Kembali')
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
-                    ->visible(fn(Eksemplar $record) => $record->status === StatusEksemplar::Hilang)
+                    ->visible(fn (Eksemplar $record) => $record->status === StatusEksemplar::Hilang)
                     ->requiresConfirmation()
                     ->modalDescription('Eksemplar akan dikembalikan ke status Tersedia dan Denda kehilangan terkait dibatalkan. Jika Denda sudah lunas, refund manual tetap perlu diproses pustakawan.')
-                    ->authorize(fn() => auth()->user()?->can('Update:Pengembalian') ?? false)
+                    ->authorize(fn () => auth()->user()?->can('Update:Pengembalian') ?? false)
                     ->action(function (Eksemplar $record) {
                         $peminjaman = $record->peminjamanTerakhir;
 
@@ -212,7 +213,7 @@ class EksemplarsRelationManager extends RelationManager
                 Action::make('cetak_label')
                     ->label('Cetak Label')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn(Eksemplar $record) => auth()->user()?->can('view', $record) ?? false)
+                    ->authorize(fn (Eksemplar $record) => auth()->user()?->can('view', $record) ?? false)
                     ->action(function (Eksemplar $record, LabelBarcodeService $service) {
                         $record->loadMissing('buku');
                         $labels = $service->generateData(collect([$record]));
@@ -221,7 +222,7 @@ class EksemplarsRelationManager extends RelationManager
                             ->setPaper('a4', 'portrait');
 
                         return response()->streamDownload(
-                            fn() => print($pdf->output()),
+                            fn () => print ($pdf->output()),
                             "label-{$record->barcode}.pdf",
                             ['Content-Type' => 'application/pdf'],
                         );
@@ -235,7 +236,7 @@ class EksemplarsRelationManager extends RelationManager
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label (Massal)')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
                     ->action(function (Collection $records) {
                         GenerateLabelBarcodePdfJob::dispatch(
                             $records->pluck('id')->all(),
@@ -256,7 +257,7 @@ class EksemplarsRelationManager extends RelationManager
      * dihitung sekali, dipakai kolom Status Denda & Status Refund supaya
      * tidak duplikasi logic pencarian Denda terkait (Aturan poin 3).
      */
-    protected static function dendaTerkait(Eksemplar $record): ?\App\Models\Denda
+    protected static function dendaTerkait(Eksemplar $record): ?Denda
     {
         $tipe = match ($record->status) {
             StatusEksemplar::Rusak => TipeDenda::Kerusakan,

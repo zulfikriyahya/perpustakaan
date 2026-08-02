@@ -55,7 +55,7 @@ class BukuRusakHilangWidget extends TableWidget
                         'buku',
                         'rak',
                         'peminjamanTerakhir.user',
-                        'peminjamanTerakhir.dendas' => fn($q) => $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])
+                        'peminjamanTerakhir.dendas' => fn ($q) => $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])
                             ->latest('updated_at'),
                     ])
                     ->where(function (Builder $query) {
@@ -75,13 +75,13 @@ class BukuRusakHilangWidget extends TableWidget
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
-                    ->color(fn(StatusEksemplar $state) => match ($state) {
+                    ->color(fn (StatusEksemplar $state) => match ($state) {
                         StatusEksemplar::Rusak => 'warning',
                         StatusEksemplar::Hilang => 'danger',
                         StatusEksemplar::Tersedia => 'success',
                         default => 'gray',
                     })
-                    ->formatStateUsing(fn(Eksemplar $record, StatusEksemplar $state) => $state === StatusEksemplar::Tersedia
+                    ->formatStateUsing(fn (Eksemplar $record, StatusEksemplar $state) => $state === StatusEksemplar::Tersedia
                         ? 'Ditemukan Kembali'
                         : ucfirst($state->value)),
                 // BARU - siapa yang merusak/menghilangkan, diambil dari
@@ -95,10 +95,10 @@ class BukuRusakHilangWidget extends TableWidget
                 // kerusakan/kehilangan terbaru dari Peminjaman terakhir).
                 TextColumn::make('status_denda')
                     ->label('Status Denda')
-                    ->state(fn(Eksemplar $record) => static::dendaTerkait($record)?->status_lunas)
+                    ->state(fn (Eksemplar $record) => static::dendaTerkait($record)?->status_lunas)
                     ->badge()
-                    ->formatStateUsing(fn(?bool $state) => $state === null ? null : ($state ? 'Lunas' : 'Belum Lunas'))
-                    ->color(fn(?bool $state) => match (true) {
+                    ->formatStateUsing(fn (?bool $state) => $state === null ? null : ($state ? 'Lunas' : 'Belum Lunas'))
+                    ->color(fn (?bool $state) => match (true) {
                         $state === true => 'success',
                         $state === false => 'danger',
                         default => 'gray',
@@ -109,10 +109,10 @@ class BukuRusakHilangWidget extends TableWidget
                 // kembali/koreksi kondisi (lihat PeminjamanService::batalkanDenda()).
                 TextColumn::make('status_refund_denda')
                     ->label('Status Refund')
-                    ->state(fn(Eksemplar $record) => static::dendaTerkait($record)?->status_refund)
+                    ->state(fn (Eksemplar $record) => static::dendaTerkait($record)?->status_refund)
                     ->badge()
-                    ->formatStateUsing(fn(?StatusRefund $state) => $state ? ucfirst(str_replace('_', ' ', $state->value)) : null)
-                    ->color(fn(?StatusRefund $state) => match ($state) {
+                    ->formatStateUsing(fn (?StatusRefund $state) => $state ? ucfirst(str_replace('_', ' ', $state->value)) : null)
+                    ->color(fn (?StatusRefund $state) => match ($state) {
                         StatusRefund::PerluRefund => 'warning',
                         StatusRefund::SudahDirefund => 'success',
                         StatusRefund::TidakPerlu, null => 'gray',
@@ -124,7 +124,7 @@ class BukuRusakHilangWidget extends TableWidget
                 // menghindari duplikasi sumber kebenaran (Aturan poin 3).
                 TextColumn::make('keterangan_denda')
                     ->label('Keterangan')
-                    ->state(fn(Eksemplar $record) => static::dendaTerkait($record)?->keterangan)
+                    ->state(fn (Eksemplar $record) => static::dendaTerkait($record)?->keterangan)
                     ->limit(60)
                     ->placeholder('-')
                     ->toggleable(),
@@ -140,8 +140,8 @@ class BukuRusakHilangWidget extends TableWidget
                 TernaryFilter::make('status_lunas')
                     ->label('Status Denda')
                     ->queries(
-                        true: fn(Builder $query) => $query->whereHas('peminjamanTerakhir.dendas', fn($q) => $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])->where('status_lunas', true)),
-                        false: fn(Builder $query) => $query->whereHas('peminjamanTerakhir.dendas', fn($q) => $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])->where('status_lunas', false)),
+                        true: fn (Builder $query) => $query->whereHas('peminjamanTerakhir.dendas', fn ($q) => $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])->where('status_lunas', true)),
+                        false: fn (Builder $query) => $query->whereHas('peminjamanTerakhir.dendas', fn ($q) => $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])->where('status_lunas', false)),
                     ),
             ])
             ->paginated([5, 10])

@@ -3545,6 +3545,7 @@ class PengaturanSistem extends Page
                                         'wa_template_login_otp' => 'Login OTP',
                                         'wa_template_koreksi_kondisi_pengembalian' => 'Koreksi Kondisi Pengembalian',
                                         'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
+                                        'wa_template_buku_ditemukan_kembali' => 'Buku Ditemukan Kembali',
                                     ])->map(
                                         fn (string $label, string $key) => TextInput::make($key)
                                             ->label($label)
@@ -4156,6 +4157,7 @@ class EditBuku extends EditRecord
 namespace App\Filament\Resources\BukuResource\Pages;
 
 use App\Filament\Resources\BukuResource;
+use App\Filament\Resources\BukuResource\Widgets\BukuStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -4169,6 +4171,11 @@ class ListBukus extends ListRecords
             CreateAction::make(),
         ];
     }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [BukuStatsWidget::class];
+    }
 }
 
 ```
@@ -4180,6 +4187,7 @@ class ListBukus extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\BukuExporter;
 use App\Filament\Imports\BukuImporter;
@@ -4207,6 +4215,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class BukuResource extends Resource
@@ -4274,7 +4283,7 @@ class BukuResource extends Resource
                 ->visibleOn('create'),
             Select::make('rak_id_eksemplar_awal')
                 ->label('Rak untuk Eksemplar Awal')
-                ->options(fn() => Rak::query()->pluck('nama', 'id'))
+                ->options(fn () => Rak::query()->pluck('nama', 'id'))
                 ->searchable()
                 ->helperText('Opsional - rak yang sama dipakaikan ke semuaeksemplar awal yang dibuat.')
                 ->dehydrated(false)
@@ -4285,24 +4294,24 @@ class BukuResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn(\Illuminate\Database\Eloquent\Builder $query) => $query->withCount([
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount([
                 // BARU (iterasi ini) - diganti dari 4x query N+1 per baris
                 // (method model dipanggil di ->state() closure) jadi 4
                 // sub-select dalam SATU query withCount, dieksekusi sekali
                 // untuk seluruh halaman (bukan per baris) - Aturan poin 3/9,
                 // penting untuk skala data besar.
-                'eksemplars as jumlah_eksemplar_aktif' => fn($q) => $q->where('status', '!=', \App\Enums\StatusEksemplar::Hilang),
-                'eksemplars as jumlah_stok_tersedia' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Tersedia),
-                'eksemplars as jumlah_eksemplar_rusak' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Rusak),
-                'eksemplars as jumlah_eksemplar_hilang' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Hilang),
+                'eksemplars as jumlah_eksemplar_aktif' => fn ($q) => $q->where('status', '!=', StatusEksemplar::Hilang),
+                'eksemplars as jumlah_stok_tersedia' => fn ($q) => $q->where('status', StatusEksemplar::Tersedia),
+                'eksemplars as jumlah_eksemplar_rusak' => fn ($q) => $q->where('status', StatusEksemplar::Rusak),
+                'eksemplars as jumlah_eksemplar_hilang' => fn ($q) => $q->where('status', StatusEksemplar::Hilang),
             ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(BukuImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Buku::class) ?? false),
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -4322,22 +4331,22 @@ class BukuResource extends Resource
                 // menjalankan query baru tiap baris).
                 TextColumn::make('jumlah_eksemplar_aktif')
                     ->label('Jumlah Buku')
-                    ->description(fn(Buku $record) => $record->jumlah_eksemplar_hilang > 0
+                    ->description(fn (Buku $record) => $record->jumlah_eksemplar_hilang > 0
                         ? "{$record->jumlah_eksemplar_hilang} hilang (tidak dihitung)"
                         : null)
                     ->badge()
-                    ->color(fn(Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
+                    ->color(fn (Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
                     ->sortable(),
                 TextColumn::make('jumlah_stok_tersedia')
                     ->label('Stok Tersedia')
                     ->badge()
-                    ->color(fn(Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
+                    ->color(fn (Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
                     ->sortable(),
                 TextColumn::make('eksemplar_bermasalah')
                     ->label('Rusak/Hilang')
-                    ->state(fn(Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
+                    ->state(fn (Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
                     ->badge()
-                    ->color(fn(Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
+                    ->color(fn (Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
@@ -4355,7 +4364,7 @@ class BukuResource extends Resource
                         $adaPeminjamanBerjalan = Eksemplar::query()
                             ->withTrashed()
                             ->where('buku_id', $record->id)
-                            ->whereHas('peminjamans', fn($q) => $q->whereIn('status', [
+                            ->whereHas('peminjamans', fn ($q) => $q->whereIn('status', [
                                 StatusPeminjaman::Aktif,
                                 StatusPeminjaman::Terlambat,
                             ]))
@@ -4385,7 +4394,7 @@ class BukuResource extends Resource
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label Eksemplar')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
                     ->action(function (Collection $records) {
                         $eksemplarIds = Eksemplar::query()
                             ->whereIn('buku_id', $records->pluck('id'))
@@ -4447,6 +4456,7 @@ use App\Enums\TipeDenda;
 use App\Filament\Exports\EksemplarExporter;
 use App\Filament\Imports\EksemplarImporter;
 use App\Jobs\GenerateLabelBarcodePdfJob;
+use App\Models\Denda;
 use App\Models\Eksemplar;
 use App\Services\LabelBarcodeService;
 use App\Services\PeminjamanService;
@@ -4489,7 +4499,7 @@ class EksemplarsRelationManager extends RelationManager
                 ->searchable()
                 ->preload(),
             Select::make('status')
-                ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)]))
+                ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)]))
                 ->required()
                 ->default(StatusEksemplar::Tersedia->value)
                 ->helperText('Ubah manual hanya untuk koreksi data - alur normal status diubah otomatis oleh PeminjamanService.'),
@@ -4503,24 +4513,24 @@ class EksemplarsRelationManager extends RelationManager
             // BARU (iterasi ini) - eager load relasi yang dipakai kolom
             // Peminjam/Denda/Refund di bawah, supaya tidak N+1 query per
             // baris (Aturan poin 3/9 - performa).
-            ->modifyQueryUsing(fn(Builder $query) => $query->with([
+            ->modifyQueryUsing(fn (Builder $query) => $query->with([
                 'peminjamanTerakhir.user',
                 'peminjamanTerakhir.dendas',
             ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(EksemplarImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Eksemplar::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Eksemplar::class) ?? false),
                 ExportAction::make()
                     ->exporter(EksemplarExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('barcode')->searchable(),
                 TextColumn::make('rak.nama')->label('Rak'),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn(StatusEksemplar $state) => match ($state) {
+                    ->color(fn (StatusEksemplar $state) => match ($state) {
                         StatusEksemplar::Tersedia => 'success',
                         StatusEksemplar::Dipinjam => 'warning',
                         StatusEksemplar::Rusak, StatusEksemplar::Hilang => 'danger',
@@ -4535,9 +4545,9 @@ class EksemplarsRelationManager extends RelationManager
                     ->toggleable(),
                 TextColumn::make('status_denda')
                     ->label('Status Denda')
-                    ->state(fn(Eksemplar $record) => static::labelStatusDenda($record))
+                    ->state(fn (Eksemplar $record) => static::labelStatusDenda($record))
                     ->badge()
-                    ->color(fn(Eksemplar $record) => match (static::labelStatusDenda($record)) {
+                    ->color(fn (Eksemplar $record) => match (static::labelStatusDenda($record)) {
                         'Lunas' => 'success',
                         'Belum Lunas' => 'danger',
                         default => 'gray',
@@ -4546,10 +4556,10 @@ class EksemplarsRelationManager extends RelationManager
                     ->toggleable(),
                 TextColumn::make('status_refund_denda')
                     ->label('Status Refund')
-                    ->state(fn(Eksemplar $record) => static::dendaTerkait($record)?->status_refund?->value)
-                    ->formatStateUsing(fn(?string $state) => $state ? ucfirst(str_replace('_', ' ', $state)) : null)
+                    ->state(fn (Eksemplar $record) => static::dendaTerkait($record)?->status_refund?->value)
+                    ->formatStateUsing(fn (?string $state) => $state ? ucfirst(str_replace('_', ' ', $state)) : null)
                     ->badge()
-                    ->color(fn(?string $state) => match ($state) {
+                    ->color(fn (?string $state) => match ($state) {
                         'perlu_refund' => 'warning',
                         'sudah_direfund' => 'success',
                         default => 'gray',
@@ -4559,18 +4569,18 @@ class EksemplarsRelationManager extends RelationManager
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
+                    ->options(collect(StatusEksemplar::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
                 TrashedFilter::make(),
             ])
             ->recordActions([
                 EditAction::make()
-                    ->disabled(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
-                    ->tooltip(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
                         ? 'Eksemplar sedang dipinjam - tidak bisa diedit manual di sini.'
                         : null),
                 DeleteAction::make()
-                    ->disabled(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
-                    ->tooltip(fn(Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
+                    ->disabled(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam)
+                    ->tooltip(fn (Eksemplar $record) => $record->status === StatusEksemplar::Dipinjam
                         ? 'Eksemplar sedang dipinjam - tidak bisa dihapus.'
                         : null),
                 RestoreAction::make(),
@@ -4604,10 +4614,10 @@ class EksemplarsRelationManager extends RelationManager
                     ->label('Buku Ditemukan Kembali')
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
-                    ->visible(fn(Eksemplar $record) => $record->status === StatusEksemplar::Hilang)
+                    ->visible(fn (Eksemplar $record) => $record->status === StatusEksemplar::Hilang)
                     ->requiresConfirmation()
                     ->modalDescription('Eksemplar akan dikembalikan ke status Tersedia dan Denda kehilangan terkait dibatalkan. Jika Denda sudah lunas, refund manual tetap perlu diproses pustakawan.')
-                    ->authorize(fn() => auth()->user()?->can('Update:Pengembalian') ?? false)
+                    ->authorize(fn () => auth()->user()?->can('Update:Pengembalian') ?? false)
                     ->action(function (Eksemplar $record) {
                         $peminjaman = $record->peminjamanTerakhir;
 
@@ -4650,7 +4660,7 @@ class EksemplarsRelationManager extends RelationManager
                 Action::make('cetak_label')
                     ->label('Cetak Label')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn(Eksemplar $record) => auth()->user()?->can('view', $record) ?? false)
+                    ->authorize(fn (Eksemplar $record) => auth()->user()?->can('view', $record) ?? false)
                     ->action(function (Eksemplar $record, LabelBarcodeService $service) {
                         $record->loadMissing('buku');
                         $labels = $service->generateData(collect([$record]));
@@ -4659,7 +4669,7 @@ class EksemplarsRelationManager extends RelationManager
                             ->setPaper('a4', 'portrait');
 
                         return response()->streamDownload(
-                            fn() => print($pdf->output()),
+                            fn () => print ($pdf->output()),
                             "label-{$record->barcode}.pdf",
                             ['Content-Type' => 'application/pdf'],
                         );
@@ -4673,7 +4683,7 @@ class EksemplarsRelationManager extends RelationManager
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label (Massal)')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
                     ->action(function (Collection $records) {
                         GenerateLabelBarcodePdfJob::dispatch(
                             $records->pluck('id')->all(),
@@ -4694,7 +4704,7 @@ class EksemplarsRelationManager extends RelationManager
      * dihitung sekali, dipakai kolom Status Denda & Status Refund supaya
      * tidak duplikasi logic pencarian Denda terkait (Aturan poin 3).
      */
-    protected static function dendaTerkait(Eksemplar $record): ?\App\Models\Denda
+    protected static function dendaTerkait(Eksemplar $record): ?Denda
     {
         $tipe = match ($record->status) {
             StatusEksemplar::Rusak => TipeDenda::Kerusakan,
@@ -4727,6 +4737,39 @@ class EksemplarsRelationManager extends RelationManager
 ```
 ---
 
+## app/Filament/Resources/BukuResource/Widgets/BukuStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\BukuResource\Widgets;
+
+use App\Enums\StatusEksemplar;
+use App\Models\Buku;
+use App\Models\Eksemplar;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class BukuStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Buku::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Judul Buku', Buku::query()->count()),
+            Stat::make('Total Eksemplar', Eksemplar::query()->count()),
+            Stat::make('Stok Tersedia', Eksemplar::query()->where('status', StatusEksemplar::Tersedia)->count()),
+            Stat::make('Rusak/Hilang', Eksemplar::query()->whereIn('status', [StatusEksemplar::Rusak, StatusEksemplar::Hilang])->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/DendaResource/Pages/ListDendas.php
 ```php
 <?php
@@ -4734,11 +4777,17 @@ class EksemplarsRelationManager extends RelationManager
 namespace App\Filament\Resources\DendaResource\Pages;
 
 use App\Filament\Resources\DendaResource;
+use App\Filament\Resources\DendaResource\Widgets\DendaStatsWidget;
 use Filament\Resources\Pages\ListRecords;
 
 class ListDendas extends ListRecords
 {
     protected static string $resource = DendaResource::class;
+
+    protected function getHeaderWidgets(): array
+    {
+        return [DendaStatsWidget::class];
+    }
 }
 
 ```
@@ -4961,6 +5010,39 @@ class DendaResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/DendaResource/Widgets/DendaStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\DendaResource\Widgets;
+
+use App\Enums\StatusRefund;
+use App\Models\Denda;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class DendaStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Denda::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        $belumLunas = (float) Denda::query()->where('status_lunas', false)->sum('nominal');
+
+        return [
+            Stat::make('Total Denda', Denda::query()->count()),
+            Stat::make('Belum Lunas (Rp)', 'Rp'.number_format($belumLunas, 0, ',', '.'))->color('danger'),
+            Stat::make('Perlu Refund', Denda::query()->where('status_refund', StatusRefund::PerluRefund)->count())->color('warning'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/FirmwareResource/Pages/CreateFirmwareRelease.php
 ```php
 <?php
@@ -5040,6 +5122,7 @@ class EditFirmwareRelease extends EditRecord
 namespace App\Filament\Resources\FirmwareResource\Pages;
 
 use App\Filament\Resources\FirmwareResource;
+use App\Filament\Resources\FirmwareResource\Widgets\FirmwareStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -5052,6 +5135,11 @@ class ListFirmwareReleases extends ListRecords
         return [
             CreateAction::make(),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [FirmwareStatsWidget::class];
     }
 }
 
@@ -5162,6 +5250,37 @@ class FirmwareResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/FirmwareResource/Widgets/FirmwareStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\FirmwareResource\Widgets;
+
+use App\Models\FirmwareRelease;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class FirmwareStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', FirmwareRelease::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        $versiAktif = FirmwareRelease::query()->where('aktif', true)->orderByDesc('version')->first();
+
+        return [
+            Stat::make('Total Rilis', FirmwareRelease::query()->count()),
+            Stat::make('Versi Aktif Tertinggi', $versiAktif?->version ?? '-'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/JurusanResource/Pages/CreateJurusan.php
 ```php
 <?php
@@ -5219,6 +5338,7 @@ class EditJurusan extends EditRecord
 namespace App\Filament\Resources\JurusanResource\Pages;
 
 use App\Filament\Resources\JurusanResource;
+use App\Filament\Resources\JurusanResource\Widgets\JurusanStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -5229,6 +5349,11 @@ class ListJurusans extends ListRecords
     protected function getHeaderActions(): array
     {
         return [CreateAction::make()];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [JurusanStatsWidget::class];
     }
 }
 
@@ -5307,6 +5432,36 @@ class JurusanResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/JurusanResource/Widgets/JurusanStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\JurusanResource\Widgets;
+
+use App\Models\Jurusan;
+use App\Models\Kelas;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class JurusanStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Jurusan::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Jurusan', Jurusan::query()->count()),
+            Stat::make('Total Kelas Terhubung', Kelas::query()->whereNotNull('jurusan_id')->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/KategoriResource/Pages/CreateKategori.php
 ```php
 <?php
@@ -5366,6 +5521,7 @@ class EditKategori extends EditRecord
 namespace App\Filament\Resources\KategoriResource\Pages;
 
 use App\Filament\Resources\KategoriResource;
+use App\Filament\Resources\KategoriResource\Widgets\KategoriStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -5378,6 +5534,11 @@ class ListKategoris extends ListRecords
         return [
             CreateAction::make(),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [KategoriStatsWidget::class];
     }
 }
 
@@ -5498,6 +5659,37 @@ class KategoriResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/KategoriResource/Widgets/KategoriStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\KategoriResource\Widgets;
+
+use App\Enums\StatusEksemplar;
+use App\Models\Eksemplar;
+use App\Models\Kategori;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class KategoriStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Kategori::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Kategori', Kategori::query()->count()),
+            Stat::make('Total Stok Tersedia (Semua Kategori)', Eksemplar::query()->where('status', StatusEksemplar::Tersedia)->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/KelasResource/Pages/CreateKelas.php
 ```php
 <?php
@@ -5555,6 +5747,7 @@ class EditKelas extends EditRecord
 namespace App\Filament\Resources\KelasResource\Pages;
 
 use App\Filament\Resources\KelasResource;
+use App\Filament\Resources\KelasResource\Widgets\KelasStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -5565,6 +5758,11 @@ class ListKelas extends ListRecords
     protected function getHeaderActions(): array
     {
         return [CreateAction::make()];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [KelasStatsWidget::class];
     }
 }
 
@@ -5666,6 +5864,36 @@ class KelasResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/KelasResource/Widgets/KelasStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\KelasResource\Widgets;
+
+use App\Models\Kelas;
+use App\Models\KelasTahunPelajaran;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class KelasStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Kelas::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Kelas', Kelas::query()->count()),
+            Stat::make('Total Instance Kelas per Tahun Pelajaran', KelasTahunPelajaran::query()->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/KelasTahunPelajaranResource/Pages/CreateKelasTahunPelajaran.php
 ```php
 <?php
@@ -5723,6 +5951,7 @@ class EditKelasTahunPelajaran extends EditRecord
 namespace App\Filament\Resources\KelasTahunPelajaranResource\Pages;
 
 use App\Filament\Resources\KelasTahunPelajaranResource;
+use App\Filament\Resources\KelasTahunPelajaranResource\Widgets\KelasTahunPelajaranStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -5733,6 +5962,11 @@ class ListKelasTahunPelajarans extends ListRecords
     protected function getHeaderActions(): array
     {
         return [CreateAction::make()];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [KelasTahunPelajaranStatsWidget::class];
     }
 }
 
@@ -5954,6 +6188,45 @@ class SiswaAktifRelationManager extends RelationManager
 ```
 ---
 
+## app/Filament/Resources/KelasTahunPelajaranResource/Widgets/KelasTahunPelajaranStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\KelasTahunPelajaranResource\Widgets;
+
+use App\Models\KelasTahunPelajaran;
+use App\Models\TahunPelajaran;
+use App\Models\User;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class KelasTahunPelajaranStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', KelasTahunPelajaran::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        $tahunAktif = TahunPelajaran::aktif();
+
+        return [
+            Stat::make('Total Instance Kelas', KelasTahunPelajaran::query()->count()),
+            Stat::make('Tahun Pelajaran Aktif', $tahunAktif?->nama ?? '-'),
+            Stat::make(
+                'Total Siswa Aktif (Tahun Berjalan)',
+                $tahunAktif
+                    ? User::query()->whereHas('kelasTahunPelajaran', fn ($q) => $q->where('tahun_pelajaran_id', $tahunAktif->id))->count()
+                    : 0
+            ),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/KunjunganResource/Pages/ListKunjungans.php
 ```php
 <?php
@@ -5961,11 +6234,17 @@ class SiswaAktifRelationManager extends RelationManager
 namespace App\Filament\Resources\KunjunganResource\Pages;
 
 use App\Filament\Resources\KunjunganResource;
+use App\Filament\Resources\KunjunganResource\Widgets\KunjunganStatsWidget;
 use Filament\Resources\Pages\ListRecords;
 
 class ListKunjungans extends ListRecords
 {
     protected static string $resource = KunjunganResource::class;
+
+    protected function getHeaderWidgets(): array
+    {
+        return [KunjunganStatsWidget::class];
+    }
 }
 
 ```
@@ -6073,6 +6352,37 @@ class KunjunganResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/KunjunganResource/Widgets/KunjunganStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\KunjunganResource\Widgets;
+
+use App\Models\Kunjungan;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Support\Carbon;
+
+class KunjunganStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Kunjungan::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Kunjungan Hari Ini', Kunjungan::query()->whereDate('tanggal', Carbon::today())->count()),
+            Stat::make('Kunjungan Bulan Ini', Kunjungan::query()->whereMonth('tanggal', now()->month)->whereYear('tanggal', now()->year)->count()),
+            Stat::make('Total Kunjungan', Kunjungan::query()->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/LevelBadgeLogResource/Pages/ListLevelBadgeLogs.php
 ```php
 <?php
@@ -6080,11 +6390,17 @@ class KunjunganResource extends Resource
 namespace App\Filament\Resources\LevelBadgeLogResource\Pages;
 
 use App\Filament\Resources\LevelBadgeLogResource;
+use App\Filament\Resources\LevelBadgeLogResource\Widgets\LevelBadgeLogStatsWidget;
 use Filament\Resources\Pages\ListRecords;
 
 class ListLevelBadgeLogs extends ListRecords
 {
     protected static string $resource = LevelBadgeLogResource::class;
+
+    protected function getHeaderWidgets(): array
+    {
+        return [LevelBadgeLogStatsWidget::class];
+    }
 }
 
 ```
@@ -6159,6 +6475,35 @@ class LevelBadgeLogResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/LevelBadgeLogResource/Widgets/LevelBadgeLogStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\LevelBadgeLogResource\Widgets;
+
+use App\Models\LevelBadgeLog;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class LevelBadgeLogStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Kenaikan Badge', LevelBadgeLog::query()->count()),
+            Stat::make('Bulan Ini', LevelBadgeLog::query()->whereMonth('tanggal_didapat', now()->month)->whereYear('tanggal_didapat', now()->year)->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/LevelBadgeResource/Pages/CreateLevelBadge.php
 ```php
 <?php
@@ -6216,6 +6561,7 @@ class EditLevelBadge extends EditRecord
 namespace App\Filament\Resources\LevelBadgeResource\Pages;
 
 use App\Filament\Resources\LevelBadgeResource;
+use App\Filament\Resources\LevelBadgeResource\Widgets\LevelBadgeStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -6226,6 +6572,11 @@ class ListLevelBadges extends ListRecords
     protected function getHeaderActions(): array
     {
         return [CreateAction::make()];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [LevelBadgeStatsWidget::class];
     }
 }
 
@@ -6326,6 +6677,36 @@ class LevelBadgeResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/LevelBadgeResource/Widgets/LevelBadgeStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\LevelBadgeResource\Widgets;
+
+use App\Models\LevelBadge;
+use App\Models\LevelBadgeLog;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class LevelBadgeStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', LevelBadge::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Level Badge', LevelBadge::query()->count()),
+            Stat::make('Total Kenaikan Badge Tercatat', LevelBadgeLog::query()->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/PeminjamanResource/Pages/CreatePeminjaman.php
 ```php
 <?php
@@ -6390,6 +6771,7 @@ class CreatePeminjaman extends CreateRecord
 namespace App\Filament\Resources\PeminjamanResource\Pages;
 
 use App\Filament\Resources\PeminjamanResource;
+use App\Filament\Resources\PeminjamanResource\Widgets\PeminjamanOverviewWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -6403,6 +6785,11 @@ class ListPeminjamans extends ListRecords
             CreateAction::make()
                 ->label('Input Peminjaman Manual'),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [PeminjamanOverviewWidget::class];
     }
 }
 
@@ -6473,11 +6860,11 @@ class PeminjamanResource extends Resource
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->options(fn() => Eksemplar::query()
+                ->options(fn () => Eksemplar::query()
                     ->where('status', StatusEksemplar::Tersedia)
                     ->with('buku')
                     ->get()
-                    ->mapWithKeys(fn($e) => [$e->id => "{$e->buku->judul} — {$e->barcode}"]))
+                    ->mapWithKeys(fn ($e) => [$e->id => "{$e->buku->judul} — {$e->barcode}"]))
                 ->helperText('Hanya menampilkan eksemplar berstatus tersedia. Validasi limit peminjaman aktif & status suspend dicek otomatis saat submit.')
                 ->required(),
         ]);
@@ -6489,7 +6876,7 @@ class PeminjamanResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(PeminjamanExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Peminjaman::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Peminjaman::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')
@@ -6509,7 +6896,7 @@ class PeminjamanResource extends Resource
                     ->sortable(),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn(StatusPeminjaman $state) => match ($state) {
+                    ->color(fn (StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Aktif => 'success',
                         StatusPeminjaman::Terlambat => 'danger',
                         StatusPeminjaman::Selesai => 'gray',
@@ -6522,19 +6909,19 @@ class PeminjamanResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options(collect(StatusPeminjaman::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst($s->value)])),
+                    ->options(collect(StatusPeminjaman::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst($s->value)])),
             ])
             ->recordActions([
                 Action::make('proses_pengembalian')
                     ->label('Proses Pengembalian')
                     ->icon('heroicon-o-arrow-uturn-left')
-                    ->authorize(fn(Peminjaman $record) => auth()->user()?->can('update', $record) ?? false)
-                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
-                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->authorize(fn (Peminjaman $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->visible(fn (Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->visible(fn (Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
                     ->schema([
                         Select::make('kondisi')
                             ->label('Kondisi Buku')
-                            ->options(collect(KondisiBuku::cases())->mapWithKeys(fn($k) => [$k->value => ucfirst($k->value)]))
+                            ->options(collect(KondisiBuku::cases())->mapWithKeys(fn ($k) => [$k->value => ucfirst($k->value)]))
                             ->required(),
                         Textarea::make('catatan')
                             ->label('Catatan'),
@@ -6565,11 +6952,11 @@ class PeminjamanResource extends Resource
                     ->label('Laporkan Hilang')
                     ->icon('heroicon-o-exclamation-triangle')
                     ->color('danger')
-                    ->authorize(fn(Peminjaman $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->authorize(fn (Peminjaman $record) => auth()->user()?->can('update', $record) ?? false)
                     ->requiresConfirmation()
                     ->requiresConfirmation()
                     ->modalDescription('Buku belum dikembalikan secara fisik. Denda kehilangan penuh (Buku.harga_ganti) akan langsung dicatat.')
-                    ->visible(fn(Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
+                    ->visible(fn (Peminjaman $record) => in_array($record->status, [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat], true))
                     ->action(function (Peminjaman $record) {
                         try {
                             app(PeminjamanService::class)->laporkanHilang($record);
@@ -6601,6 +6988,44 @@ class PeminjamanResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/PeminjamanResource/Widgets/PeminjamanOverviewWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\PeminjamanResource\Widgets;
+
+use App\Enums\StatusPeminjaman;
+use App\Models\Peminjaman;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+/**
+ * Terpisah dari App\Filament\Widgets\PeminjamanStatsWidget (dashboard
+ * global) - widget ini khusus tampil di header ListPeminjamans, namespace
+ * berbeda jadi tidak bentrok nama class (Aturan poin 3 - reuse logic
+ * query, bukan duplikasi definisi status).
+ */
+class PeminjamanOverviewWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Peminjaman::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Aktif', Peminjaman::query()->where('status', StatusPeminjaman::Aktif)->count())->color('success'),
+            Stat::make('Terlambat', Peminjaman::query()->where('status', StatusPeminjaman::Terlambat)->count())->color('danger'),
+            Stat::make('Selesai', Peminjaman::query()->where('status', StatusPeminjaman::Selesai)->count())->color('gray'),
+            Stat::make('Hilang', Peminjaman::query()->where('status', StatusPeminjaman::Hilang)->count())->color('warning'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/PengembalianResource/Pages/ListPengembalians.php
 ```php
 <?php
@@ -6608,6 +7033,7 @@ class PeminjamanResource extends Resource
 namespace App\Filament\Resources\PengembalianResource\Pages;
 
 use App\Filament\Resources\PengembalianResource;
+use App\Filament\Resources\PengembalianResource\Widgets\PengembalianStatsWidget;
 use Filament\Resources\Pages\ListRecords;
 
 class ListPengembalians extends ListRecords
@@ -6617,6 +7043,11 @@ class ListPengembalians extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [PengembalianStatsWidget::class];
     }
 
     protected function getRedirectUrl(): string
@@ -6782,6 +7213,38 @@ class PengembalianResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/PengembalianResource/Widgets/PengembalianStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\PengembalianResource\Widgets;
+
+use App\Enums\KondisiBuku;
+use App\Models\Pengembalian;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class PengembalianStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Pengembalian::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Pengembalian', Pengembalian::query()->count()),
+            Stat::make('Kondisi Baik', Pengembalian::query()->where('kondisi', KondisiBuku::Baik)->count())->color('success'),
+            Stat::make('Kondisi Rusak', Pengembalian::query()->where('kondisi', KondisiBuku::Rusak)->count())->color('warning'),
+            Stat::make('Kondisi Hilang', Pengembalian::query()->where('kondisi', KondisiBuku::Hilang)->count())->color('danger'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/PunishmentLogResource/Pages/ListPunishmentLogs.php
 ```php
 <?php
@@ -6789,6 +7252,7 @@ class PengembalianResource extends Resource
 namespace App\Filament\Resources\PunishmentLogResource\Pages;
 
 use App\Filament\Resources\PunishmentLogResource;
+use App\Filament\Resources\PunishmentLogResource\Widgets\PunishmentLogStatsWidget;
 use Filament\Resources\Pages\ListRecords;
 
 class ListPunishmentLogs extends ListRecords
@@ -6798,6 +7262,11 @@ class ListPunishmentLogs extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [PunishmentLogStatsWidget::class];
     }
 }
 
@@ -6871,6 +7340,40 @@ class PunishmentLogResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/PunishmentLogResource/Widgets/PunishmentLogStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\PunishmentLogResource\Widgets;
+
+use App\Models\PunishmentLog;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class PunishmentLogStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', PunishmentLog::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Diterapkan', PunishmentLog::query()->count()),
+            // TODO: GAP-SPEC - "sedang berlaku" diasumsikan tanggal_berakhir
+            // null ATAU masih di masa depan; belum ada spec eksplisit soal
+            // definisi ini di Logic Module.
+            Stat::make('Sedang Berlaku', PunishmentLog::query()
+                ->where(fn ($q) => $q->whereNull('tanggal_berakhir')->orWhere('tanggal_berakhir', '>', now()))
+                ->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/PunishmentResource/Pages/CreatePunishment.php
 ```php
 <?php
@@ -6928,6 +7431,7 @@ class EditPunishment extends EditRecord
 namespace App\Filament\Resources\PunishmentResource\Pages;
 
 use App\Filament\Resources\PunishmentResource;
+use App\Filament\Resources\PunishmentResource\Widgets\PunishmentStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -6938,6 +7442,11 @@ class ListPunishments extends ListRecords
     protected function getHeaderActions(): array
     {
         return [CreateAction::make()];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [PunishmentStatsWidget::class];
     }
 }
 
@@ -7040,6 +7549,37 @@ class PunishmentResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/PunishmentResource/Widgets/PunishmentStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\PunishmentResource\Widgets;
+
+use App\Models\Punishment;
+use App\Models\PunishmentLog;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class PunishmentStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Punishment::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Punishment', Punishment::query()->count()),
+            Stat::make('Punishment Aktif', Punishment::query()->where('aktif', true)->count()),
+            Stat::make('Total Diterapkan', PunishmentLog::query()->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/RakResource/Pages/CreateRak.php
 ```php
 <?php
@@ -7099,6 +7639,7 @@ class EditRak extends EditRecord
 namespace App\Filament\Resources\RakResource\Pages;
 
 use App\Filament\Resources\RakResource;
+use App\Filament\Resources\RakResource\Widgets\RakStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -7111,6 +7652,11 @@ class ListRaks extends ListRecords
         return [
             CreateAction::make(),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [RakStatsWidget::class];
     }
 }
 
@@ -7288,6 +7834,38 @@ class EksemplarsRelationManager extends RelationManager
 ```
 ---
 
+## app/Filament/Resources/RakResource/Widgets/RakStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\RakResource\Widgets;
+
+use App\Enums\StatusEksemplar;
+use App\Models\Eksemplar;
+use App\Models\Rak;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class RakStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Rak::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Rak', Rak::query()->count()),
+            Stat::make('Total Eksemplar Ter-rak', Eksemplar::query()->whereNotNull('rak_id')->count()),
+            Stat::make('Stok Tersedia', Eksemplar::query()->whereNotNull('rak_id')->where('status', StatusEksemplar::Tersedia)->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/RewardLogResource/Pages/ListRewardLogs.php
 ```php
 <?php
@@ -7295,6 +7873,7 @@ class EksemplarsRelationManager extends RelationManager
 namespace App\Filament\Resources\RewardLogResource\Pages;
 
 use App\Filament\Resources\RewardLogResource;
+use App\Filament\Resources\RewardLogResource\Widgets\RewardLogStatsWidget;
 use Filament\Resources\Pages\ListRecords;
 
 class ListRewardLogs extends ListRecords
@@ -7304,6 +7883,11 @@ class ListRewardLogs extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [RewardLogStatsWidget::class];
     }
 }
 
@@ -7382,6 +7966,35 @@ class RewardLogResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/RewardLogResource/Widgets/RewardLogStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\RewardLogResource\Widgets;
+
+use App\Models\RewardLog;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class RewardLogStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', RewardLog::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Diperoleh', RewardLog::query()->count()),
+            Stat::make('Bulan Ini', RewardLog::query()->whereMonth('tanggal_didapat', now()->month)->whereYear('tanggal_didapat', now()->year)->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/RewardResource/Pages/CreateReward.php
 ```php
 <?php
@@ -7439,6 +8052,7 @@ class EditReward extends EditRecord
 namespace App\Filament\Resources\RewardResource\Pages;
 
 use App\Filament\Resources\RewardResource;
+use App\Filament\Resources\RewardResource\Widgets\RewardStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -7449,6 +8063,11 @@ class ListRewards extends ListRecords
     protected function getHeaderActions(): array
     {
         return [CreateAction::make()];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [RewardStatsWidget::class];
     }
 }
 
@@ -7543,6 +8162,37 @@ class RewardResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/RewardResource/Widgets/RewardStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\RewardResource\Widgets;
+
+use App\Models\Reward;
+use App\Models\RewardLog;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class RewardStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Reward::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Reward', Reward::query()->count()),
+            Stat::make('Reward Aktif', Reward::query()->where('aktif', true)->count()),
+            Stat::make('Total Diperoleh', RewardLog::query()->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/RiwayatKelasSiswaResource/Pages/ListRiwayatKelasSiswas.php
 ```php
 <?php
@@ -7550,6 +8200,7 @@ class RewardResource extends Resource
 namespace App\Filament\Resources\RiwayatKelasSiswaResource\Pages;
 
 use App\Filament\Resources\RiwayatKelasSiswaResource;
+use App\Filament\Resources\RiwayatKelasSiswaResource\Widgets\RiwayatKelasSiswaStatsWidget;
 use Filament\Resources\Pages\ListRecords;
 
 class ListRiwayatKelasSiswas extends ListRecords
@@ -7559,6 +8210,11 @@ class ListRiwayatKelasSiswas extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [RiwayatKelasSiswaStatsWidget::class];
     }
 }
 
@@ -7642,6 +8298,38 @@ class RiwayatKelasSiswaResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/RiwayatKelasSiswaResource/Widgets/RiwayatKelasSiswaStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\RiwayatKelasSiswaResource\Widgets;
+
+use App\Enums\StatusRiwayatKelas;
+use App\Models\RiwayatKelasSiswa;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class RiwayatKelasSiswaStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', RiwayatKelasSiswa::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Riwayat', RiwayatKelasSiswa::query()->count()),
+            Stat::make('Naik Kelas', RiwayatKelasSiswa::query()->where('status', StatusRiwayatKelas::Naik)->count()),
+            Stat::make('Tinggal Kelas', RiwayatKelasSiswa::query()->where('status', StatusRiwayatKelas::Tinggal)->count()),
+            Stat::make('Lulus', RiwayatKelasSiswa::query()->where('status', StatusRiwayatKelas::Lulus)->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/TahunPelajaranResource/Pages/CreateTahunPelajaran.php
 ```php
 <?php
@@ -7699,6 +8387,7 @@ class EditTahunPelajaran extends EditRecord
 namespace App\Filament\Resources\TahunPelajaranResource\Pages;
 
 use App\Filament\Resources\TahunPelajaranResource;
+use App\Filament\Resources\TahunPelajaranResource\Widgets\TahunPelajaranStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -7709,6 +8398,11 @@ class ListTahunPelajarans extends ListRecords
     protected function getHeaderActions(): array
     {
         return [CreateAction::make()];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [TahunPelajaranStatsWidget::class];
     }
 }
 
@@ -7812,6 +8506,35 @@ class TahunPelajaranResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/TahunPelajaranResource/Widgets/TahunPelajaranStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\TahunPelajaranResource\Widgets;
+
+use App\Models\TahunPelajaran;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class TahunPelajaranStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', TahunPelajaran::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Tahun Pelajaran', TahunPelajaran::query()->count()),
+            Stat::make('Tahun Pelajaran Aktif', TahunPelajaran::aktif()?->nama ?? '-'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/TransaksiResource/Pages/ListTransaksis.php
 ```php
 <?php
@@ -7819,11 +8542,17 @@ class TahunPelajaranResource extends Resource
 namespace App\Filament\Resources\TransaksiResource\Pages;
 
 use App\Filament\Resources\TransaksiResource;
+use App\Filament\Resources\TransaksiResource\Widgets\TransaksiStatsWidget;
 use Filament\Resources\Pages\ListRecords;
 
 class ListTransaksis extends ListRecords
 {
     protected static string $resource = TransaksiResource::class;
+
+    protected function getHeaderWidgets(): array
+    {
+        return [TransaksiStatsWidget::class];
+    }
 }
 
 ```
@@ -8009,6 +8738,38 @@ class PeminjamansRelationManager extends RelationManager
 ```
 ---
 
+## app/Filament/Resources/TransaksiResource/Widgets/TransaksiStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\TransaksiResource\Widgets;
+
+use App\Enums\JenisTransaksi;
+use App\Models\Transaksi;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class TransaksiStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', Transaksi::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total Transaksi', Transaksi::query()->count()),
+            Stat::make('Peminjaman', Transaksi::query()->where('jenis', JenisTransaksi::Peminjaman)->count()),
+            Stat::make('Kunjungan', Transaksi::query()->where('jenis', JenisTransaksi::Kunjungan)->count()),
+            Stat::make('Pembayaran Denda', Transaksi::query()->where('jenis', JenisTransaksi::PembayaranDenda)->count()),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/UserResource/Pages/CreateUser.php
 ```php
 <?php
@@ -8102,6 +8863,7 @@ class EditUser extends EditRecord
 namespace App\Filament\Resources\UserResource\Pages;
 
 use App\Filament\Resources\UserResource;
+use App\Filament\Resources\UserResource\Widgets\UserStatsWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -8114,6 +8876,11 @@ class ListUsers extends ListRecords
         return [
             CreateAction::make(),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [UserStatsWidget::class];
     }
 }
 
@@ -8423,6 +9190,38 @@ class UserResource extends Resource
 ```
 ---
 
+## app/Filament/Resources/UserResource/Widgets/UserStatsWidget.php
+```php
+<?php
+
+namespace App\Filament\Resources\UserResource\Widgets;
+
+use App\Enums\RoleUser;
+use App\Models\User;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+
+class UserStatsWidget extends StatsOverviewWidget
+{
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('viewAny', User::class) ?? false;
+    }
+
+    protected function getStats(): array
+    {
+        return [
+            Stat::make('Total User', User::query()->count()),
+            Stat::make('Siswa', User::query()->where('role', RoleUser::Siswa)->count()),
+            Stat::make('Pegawai', User::query()->where('role', RoleUser::Pegawai)->count()),
+            Stat::make('Suspend Aktif', User::query()->where('status_suspend', true)->count())->color('danger'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Widgets/BukuPerKategoriWidget.php
 ```php
 <?php
@@ -8499,24 +9298,38 @@ class BukuPerKategoriWidget extends ChartWidget
 namespace App\Filament\Widgets;
 
 use App\Enums\StatusEksemplar;
+use App\Enums\StatusRefund;
+use App\Enums\TipeDenda;
+use App\Models\Denda;
 use App\Models\Eksemplar;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Daftar Eksemplar dengan status Rusak/Hilang SAAT INI - sumber
- * kebenaran Eksemplar.status (Aturan poin 3, konsisten dengan
- * Buku::stokTersedia()), BUKAN histori Pengembalian.kondisi/Denda.tipe -
- * eksemplar yang sudah diperbaiki/dihapus setelah kejadian rusak/hilang
- * TIDAK akan muncul di sini, karena statusnya sudah berubah.
+ * Daftar Eksemplar Rusak/Hilang SAAT INI, DITAMBAH eksemplar yang baru
+ * saja ditemukan kembali (status kembali Tersedia tapi masih ada Denda
+ * kerusakan/kehilangan yang dibatalkan otomatis - lihat
+ * PeminjamanService::batalkanDenda()/bukuDitemukanKembali()).
+ *
+ * TODO: GAP-SPEC - "baru saja ditemukan kembali" didefinisikan sebagai
+ * Denda dengan keterangan mengandung "Dibatalkan otomatis" DAN
+ * updated_at dalam 30 hari terakhir (belum ada spec eksplisit soal
+ * jendela waktu ini) - supaya widget tidak membengkak menampilkan
+ * seluruh histori eksemplar yang pernah rusak/hilang sejak awal.
+ * Kalau perlu histori penuh, sebaiknya dibuat halaman/laporan terpisah,
+ * bukan menambah beban widget dashboard ini.
  */
 class BukuRusakHilangWidget extends TableWidget
 {
     protected static ?int $sort = 8;
 
     protected int|string|array $columnSpan = 2;
+
+    protected const HARI_JENDELA_DITEMUKAN = 30;
 
     public static function canView(): bool
     {
@@ -8525,7 +9338,7 @@ class BukuRusakHilangWidget extends TableWidget
 
     protected function getTableHeading(): string
     {
-        return 'Eksemplar Rusak & Hilang';
+        return 'Eksemplar Rusak, Hilang & Ditemukan Kembali';
     }
 
     public function table(Table $table): Table
@@ -8533,8 +9346,21 @@ class BukuRusakHilangWidget extends TableWidget
         return $table
             ->query(
                 Eksemplar::query()
-                    ->with('buku', 'rak')
-                    ->whereIn('status', [StatusEksemplar::Rusak, StatusEksemplar::Hilang])
+                    ->with([
+                        'buku',
+                        'rak',
+                        'peminjamanTerakhir.user',
+                        'peminjamanTerakhir.dendas' => fn ($q) => $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])
+                            ->latest('updated_at'),
+                    ])
+                    ->where(function (Builder $query) {
+                        $query->whereIn('status', [StatusEksemplar::Rusak, StatusEksemplar::Hilang])
+                            ->orWhereHas('peminjamanTerakhir.dendas', function (Builder $q) {
+                                $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])
+                                    ->where('keterangan', 'like', '%Dibatalkan otomatis%')
+                                    ->where('updated_at', '>=', now()->subDays(self::HARI_JENDELA_DITEMUKAN));
+                            });
+                    })
                     ->latest('updated_at')
             )
             ->columns([
@@ -8547,8 +9373,56 @@ class BukuRusakHilangWidget extends TableWidget
                     ->color(fn (StatusEksemplar $state) => match ($state) {
                         StatusEksemplar::Rusak => 'warning',
                         StatusEksemplar::Hilang => 'danger',
+                        StatusEksemplar::Tersedia => 'success',
                         default => 'gray',
-                    }),
+                    })
+                    ->formatStateUsing(fn (Eksemplar $record, StatusEksemplar $state) => $state === StatusEksemplar::Tersedia
+                        ? 'Ditemukan Kembali'
+                        : ucfirst($state->value)),
+                // BARU - siapa yang merusak/menghilangkan, diambil dari
+                // Peminjaman terakhir eksemplar ini (pola sama seperti
+                // EksemplarsRelationManager).
+                TextColumn::make('peminjamanTerakhir.user.nama')
+                    ->label('Dirusak/Dihilangkan Oleh')
+                    ->placeholder('-')
+                    ->searchable(),
+                // BARU - status pembayaran Denda terkait (ambil Denda
+                // kerusakan/kehilangan terbaru dari Peminjaman terakhir).
+                TextColumn::make('status_denda')
+                    ->label('Status Denda')
+                    ->state(fn (Eksemplar $record) => static::dendaTerkait($record)?->status_lunas)
+                    ->badge()
+                    ->formatStateUsing(fn (?bool $state) => $state === null ? null : ($state ? 'Lunas' : 'Belum Lunas'))
+                    ->color(fn (?bool $state) => match (true) {
+                        $state === true => 'success',
+                        $state === false => 'danger',
+                        default => 'gray',
+                    })
+                    ->placeholder('-'),
+                // BARU - status refund, relevan khusus untuk kasus Denda
+                // yang SUDAH terbayar lalu dibatalkan karena buku ditemukan
+                // kembali/koreksi kondisi (lihat PeminjamanService::batalkanDenda()).
+                TextColumn::make('status_refund_denda')
+                    ->label('Status Refund')
+                    ->state(fn (Eksemplar $record) => static::dendaTerkait($record)?->status_refund)
+                    ->badge()
+                    ->formatStateUsing(fn (?StatusRefund $state) => $state ? ucfirst(str_replace('_', ' ', $state->value)) : null)
+                    ->color(fn (?StatusRefund $state) => match ($state) {
+                        StatusRefund::PerluRefund => 'warning',
+                        StatusRefund::SudahDirefund => 'success',
+                        StatusRefund::TidakPerlu, null => 'gray',
+                    })
+                    ->placeholder('-'),
+                // BARU - keterangan Denda memuat info "ditemukan kembali/
+                // dibatalkan otomatis" (diisi PeminjamanService::batalkanDenda()),
+                // ditampilkan apa adanya, bukan kolom boolean terpisah -
+                // menghindari duplikasi sumber kebenaran (Aturan poin 3).
+                TextColumn::make('keterangan_denda')
+                    ->label('Keterangan')
+                    ->state(fn (Eksemplar $record) => static::dendaTerkait($record)?->keterangan)
+                    ->limit(60)
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d F Y H:i'),
             ])
             ->filters([
@@ -8556,10 +9430,32 @@ class BukuRusakHilangWidget extends TableWidget
                     ->options([
                         StatusEksemplar::Rusak->value => 'Rusak',
                         StatusEksemplar::Hilang->value => 'Hilang',
+                        StatusEksemplar::Tersedia->value => 'Ditemukan Kembali',
                     ]),
+                TernaryFilter::make('status_lunas')
+                    ->label('Status Denda')
+                    ->queries(
+                        true: fn (Builder $query) => $query->whereHas('peminjamanTerakhir.dendas', fn ($q) => $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])->where('status_lunas', true)),
+                        false: fn (Builder $query) => $query->whereHas('peminjamanTerakhir.dendas', fn ($q) => $q->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])->where('status_lunas', false)),
+                    ),
             ])
             ->paginated([5, 10])
             ->defaultPaginationPageOption(5);
+    }
+
+    /**
+     * dihitung sekali per baris - Denda kerusakan/kehilangan TERBARU dari
+     * Peminjaman terakhir eksemplar ini. Reuse pola yang sama dengan
+     * EksemplarsRelationManager::dendaTerkait() (Aturan poin 3 - DRY),
+     * tapi di sini tidak bergantung pada Eksemplar::status karena widget
+     * ini juga menampilkan eksemplar yang statusnya sudah Tersedia lagi.
+     */
+    protected static function dendaTerkait(Eksemplar $record): ?Denda
+    {
+        return $record->peminjamanTerakhir?->dendas
+            ->whereIn('tipe', [TipeDenda::Kerusakan, TipeDenda::Kehilangan])
+            ->sortByDesc('updated_at')
+            ->first();
     }
 }
 
@@ -8616,13 +9512,13 @@ class DendaTerbaruWidget extends TableWidget
                 TextColumn::make('tipe')
                     ->label('Tipe')
                     ->badge()
-                    ->color(fn(TipeDenda $state) => match ($state) {
+                    ->color(fn (TipeDenda $state) => match ($state) {
                         TipeDenda::Keterlambatan => 'warning',
                         TipeDenda::Kerusakan => 'danger',
                         TipeDenda::Kehilangan => 'gray',
                     }),
                 TextColumn::make('nominal')->label('Nominal')
-                    ->formatStateUsing(fn($state) => 'Rp ' . number_format((float) $state, 0, ',', '.')),
+                    ->formatStateUsing(fn ($state) => 'Rp '.number_format((float) $state, 0, ',', '.')),
                 IconColumn::make('status_refund')
                     ->label('Refund')
                     ->boolean()
@@ -8915,7 +9811,7 @@ class PeminjamanStatsWidget extends StatsOverviewWidget
         return SnapshotHarian::query()
             ->whereBetween('tanggal', [$mulai->toDateString(), $akhir->toDateString()])
             ->get()
-            ->keyBy(fn(SnapshotHarian $s) => $s->tanggal->format('d/m'));
+            ->keyBy(fn (SnapshotHarian $s) => $s->tanggal->format('d/m'));
     }
 
     /**
@@ -8964,9 +9860,9 @@ class PeminjamanStatsWidget extends StatsOverviewWidget
                 ->color($terlambat > 0 ? 'danger' : 'gray')
                 ->chart(array_values($this->trendDariSnapshot($snapshots, 'peminjaman_terlambat'))),
 
-            Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas . ' transaksi')
+            Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas.' transaksi')
                 ->icon('heroicon-o-banknotes')
-                ->description('Rp ' . number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
+                ->description('Rp '.number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->color($jumlahDendaBelumLunas > 0 ? 'warning' : 'gray')
                 ->chart(array_values($this->trendDariSnapshot($snapshots, 'denda_baru'))),
@@ -9931,7 +10827,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
         $pdf = Pdf::loadView('pdf.label-barcode', ['labels' => $labels])
             ->setPaper('a4', 'portrait');
 
-        $filename = 'label-barcode-' . now()->format('Ymd-His') . '-' . substr(md5(uniqid()), 0, 6) . '.pdf';
+        $filename = 'label-barcode-'.now()->format('Ymd-His').'-'.substr(md5(uniqid()), 0, 6).'.pdf';
         $path = "labels/{$filename}";
 
         Storage::disk('public')->put($path, $pdf->output());
@@ -9939,7 +10835,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
         Notification::make()
             ->success()
             ->title('Label barcode siap diunduh')
-            ->body(count($labels) . ' label berhasil dibuat.')
+            ->body(count($labels).' label berhasil dibuat.')
             ->actions([
                 Action::make('download')
                     ->label('Download PDF')
@@ -9951,7 +10847,7 @@ class GenerateLabelBarcodePdfJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateLabelBarcodePdfJob: gagal generate label. EksemplarIDs: ' . implode(',', $this->eksemplarIds) . ". Error: {$exception->getMessage()}");
+        Log::error('GenerateLabelBarcodePdfJob: gagal generate label. EksemplarIDs: '.implode(',', $this->eksemplarIds).". Error: {$exception->getMessage()}");
 
         $user = User::query()->find($this->userId);
 
@@ -10399,10 +11295,10 @@ class Eksemplar extends Model
      */
     public static function generateBarcodeUntuk(Buku $buku, int $urutan): string
     {
-        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)) . '-' . $urutan);
+        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)).'-'.$urutan);
 
         if (static::query()->where('barcode', $barcode)->exists()) {
-            $barcode .= '-' . strtoupper(Str::random(4));
+            $barcode .= '-'.strtoupper(Str::random(4));
         }
 
         return $barcode;
@@ -14647,11 +15543,21 @@ class PeminjamanService
             return $pengembalian->fresh();
         });
 
+        // reference_id HARUS unik per kejadian koreksi (bukan cuma per
+        // pengembalian) - kalau eksemplar yang sama dikoreksi lebih dari
+        // sekali (mis. baik->rusak lalu rusak->hilang), payload variables
+        // berbeda meski pengembalian_id sama. Reference_id lama yang hanya
+        // memakai pengembalian->id menyebabkan gateway menolak 409 karena
+        // reference_id sudah dipakai dengan payload berbeda (lihat log).
+        // Menyertakan pasangan kondisi_lama->kondisi_baru + timestamp
+        // presisi tinggi (dibuat SEKALI di sini, sebelum dispatch, jadi
+        // tetap stabil untuk retry job yang sama) menutup celah ini tanpa
+        // menambah kolom counter baru di tabel pengembalians (poin 16).
         $this->whatsappService->kirimEvent(
             eventCode: 'koreksi_kondisi_pengembalian',
             nomorTujuan: $peminjaman->user->no_telepon,
             variables: ['nama' => $peminjaman->user->nama, 'kondisi_lama' => $kondisiLama->value, 'kondisi_baru' => $kondisiBaru->value],
-            referenceId: "koreksi-pengembalian-{$pengembalian->id}",
+            referenceId: "koreksi-pengembalian-{$pengembalian->id}-{$kondisiLama->value}-{$kondisiBaru->value}-".now()->format('YmdHisu'),
         );
 
         return $pengembalian;
@@ -14869,8 +15775,8 @@ class PeminjamanService
             'status_lunas' => true,
             'tanggal_lunas' => now(),
             'status_refund' => $sudahTerbayar ? StatusRefund::PerluRefund : $denda->status_refund,
-            'keterangan' => trim(($denda->keterangan ? $denda->keterangan . ' | ' : '')
-                . ($sudahTerbayar
+            'keterangan' => trim(($denda->keterangan ? $denda->keterangan.' | ' : '')
+                .($sudahTerbayar
                     ? 'Dibatalkan otomatis (SUDAH TERBAYAR SEBELUM KOREKSI - perlu refund manual di luar sistem): koreksi kondisi Pengembalian.'
                     : 'Dibatalkan otomatis: koreksi kondisi Pengembalian.')),
         ]);
@@ -20571,6 +21477,7 @@ class SettingSeeder extends Seeder
             ['key' => 'wa_template_koreksi_kondisi_pengembalian', 'value' => 'koreksi_kondisi_pengembalian', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat Pustakawan/Admin mengoreksi kondisi Pengembalian yang sudah final.'],
             ['key' => 'wa_template_denda_dibatalkan_perlu_refund', 'value' => 'denda_dibatalkan_perlu_refund', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat Denda yang SUDAH TERBAYAR dibatalkan akibat koreksi kondisi - Admin wajib menindaklanjuti refund manual (lihat Denda.status_refund).'],
             ['key' => 'wa_template_login_otp', 'value' => 'login_otp', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat user login via OTP WhatsApp (setara reset password, tapi TIDAK mengubah password).'],
+            ['key' => 'wa_template_buku_ditemukan_kembali', 'value' => 'buku_ditemukan_kembali', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat buku yang dilaporkan hilang (via laporkanHilang(), belum pernah punya Pengembalian) ditemukan kembali.'],
         ];
 
         foreach ($settings as $setting) {
@@ -20798,7 +21705,7 @@ class ShieldSeeder extends Seeder
                 'View:Peminjaman',
                 'Create:Peminjaman',
                 'Update:Peminjaman',
-                
+
                 // Catatan: 'ViewAny:PengaturanSistem' SENGAJA tidak
                 // ditambahkan di sini - lihat komentar di atas.
             ])->get()

@@ -166,7 +166,7 @@ class PengaturanSistem extends Page
                                         'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
                                         'wa_template_buku_ditemukan_kembali' => 'Buku Ditemukan Kembali',
                                     ])->map(
-                                        fn(string $label, string $key) => TextInput::make($key)
+                                        fn (string $label, string $key) => TextInput::make($key)
                                             ->label($label)
                                             ->required()
                                             ->helperText('Wajib sama persis dengan template_code di panel gateway.')
@@ -178,7 +178,7 @@ class PengaturanSistem extends Page
                         ->schema([
                             Placeholder::make('rfid_db_ver')
                                 ->label('Versi Daftar Kartu RFID (otomatis)')
-                                ->content(fn() => (string) Setting::get('rfid_db_ver', 0))
+                                ->content(fn () => (string) Setting::get('rfid_db_ver', 0))
                                 ->columnSpanFull(),
                             Grid::make(self::GRID_KOLOM_STANDAR)
                                 ->schema([

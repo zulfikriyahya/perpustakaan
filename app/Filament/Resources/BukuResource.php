@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\BukuExporter;
 use App\Filament\Imports\BukuImporter;
@@ -29,6 +30,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class BukuResource extends Resource
@@ -96,7 +98,7 @@ class BukuResource extends Resource
                 ->visibleOn('create'),
             Select::make('rak_id_eksemplar_awal')
                 ->label('Rak untuk Eksemplar Awal')
-                ->options(fn() => Rak::query()->pluck('nama', 'id'))
+                ->options(fn () => Rak::query()->pluck('nama', 'id'))
                 ->searchable()
                 ->helperText('Opsional - rak yang sama dipakaikan ke semuaeksemplar awal yang dibuat.')
                 ->dehydrated(false)
@@ -107,24 +109,24 @@ class BukuResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn(\Illuminate\Database\Eloquent\Builder $query) => $query->withCount([
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount([
                 // BARU (iterasi ini) - diganti dari 4x query N+1 per baris
                 // (method model dipanggil di ->state() closure) jadi 4
                 // sub-select dalam SATU query withCount, dieksekusi sekali
                 // untuk seluruh halaman (bukan per baris) - Aturan poin 3/9,
                 // penting untuk skala data besar.
-                'eksemplars as jumlah_eksemplar_aktif' => fn($q) => $q->where('status', '!=', \App\Enums\StatusEksemplar::Hilang),
-                'eksemplars as jumlah_stok_tersedia' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Tersedia),
-                'eksemplars as jumlah_eksemplar_rusak' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Rusak),
-                'eksemplars as jumlah_eksemplar_hilang' => fn($q) => $q->where('status', \App\Enums\StatusEksemplar::Hilang),
+                'eksemplars as jumlah_eksemplar_aktif' => fn ($q) => $q->where('status', '!=', StatusEksemplar::Hilang),
+                'eksemplars as jumlah_stok_tersedia' => fn ($q) => $q->where('status', StatusEksemplar::Tersedia),
+                'eksemplars as jumlah_eksemplar_rusak' => fn ($q) => $q->where('status', StatusEksemplar::Rusak),
+                'eksemplars as jumlah_eksemplar_hilang' => fn ($q) => $q->where('status', StatusEksemplar::Hilang),
             ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(BukuImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Buku::class) ?? false),
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -144,22 +146,22 @@ class BukuResource extends Resource
                 // menjalankan query baru tiap baris).
                 TextColumn::make('jumlah_eksemplar_aktif')
                     ->label('Jumlah Buku')
-                    ->description(fn(Buku $record) => $record->jumlah_eksemplar_hilang > 0
+                    ->description(fn (Buku $record) => $record->jumlah_eksemplar_hilang > 0
                         ? "{$record->jumlah_eksemplar_hilang} hilang (tidak dihitung)"
                         : null)
                     ->badge()
-                    ->color(fn(Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
+                    ->color(fn (Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
                     ->sortable(),
                 TextColumn::make('jumlah_stok_tersedia')
                     ->label('Stok Tersedia')
                     ->badge()
-                    ->color(fn(Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
+                    ->color(fn (Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
                     ->sortable(),
                 TextColumn::make('eksemplar_bermasalah')
                     ->label('Rusak/Hilang')
-                    ->state(fn(Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
+                    ->state(fn (Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
                     ->badge()
-                    ->color(fn(Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
+                    ->color(fn (Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
@@ -177,7 +179,7 @@ class BukuResource extends Resource
                         $adaPeminjamanBerjalan = Eksemplar::query()
                             ->withTrashed()
                             ->where('buku_id', $record->id)
-                            ->whereHas('peminjamans', fn($q) => $q->whereIn('status', [
+                            ->whereHas('peminjamans', fn ($q) => $q->whereIn('status', [
                                 StatusPeminjaman::Aktif,
                                 StatusPeminjaman::Terlambat,
                             ]))
@@ -207,7 +209,7 @@ class BukuResource extends Resource
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label Eksemplar')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
                     ->action(function (Collection $records) {
                         $eksemplarIds = Eksemplar::query()
                             ->whereIn('buku_id', $records->pluck('id'))

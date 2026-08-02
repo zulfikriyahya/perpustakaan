@@ -254,7 +254,7 @@ class PeminjamanService
             eventCode: 'koreksi_kondisi_pengembalian',
             nomorTujuan: $peminjaman->user->no_telepon,
             variables: ['nama' => $peminjaman->user->nama, 'kondisi_lama' => $kondisiLama->value, 'kondisi_baru' => $kondisiBaru->value],
-            referenceId: "koreksi-pengembalian-{$pengembalian->id}-{$kondisiLama->value}-{$kondisiBaru->value}-" . now()->format('YmdHisu'),
+            referenceId: "koreksi-pengembalian-{$pengembalian->id}-{$kondisiLama->value}-{$kondisiBaru->value}-".now()->format('YmdHisu'),
         );
 
         return $pengembalian;
@@ -472,8 +472,8 @@ class PeminjamanService
             'status_lunas' => true,
             'tanggal_lunas' => now(),
             'status_refund' => $sudahTerbayar ? StatusRefund::PerluRefund : $denda->status_refund,
-            'keterangan' => trim(($denda->keterangan ? $denda->keterangan . ' | ' : '')
-                . ($sudahTerbayar
+            'keterangan' => trim(($denda->keterangan ? $denda->keterangan.' | ' : '')
+                .($sudahTerbayar
                     ? 'Dibatalkan otomatis (SUDAH TERBAYAR SEBELUM KOREKSI - perlu refund manual di luar sistem): koreksi kondisi Pengembalian.'
                     : 'Dibatalkan otomatis: koreksi kondisi Pengembalian.')),
         ]);

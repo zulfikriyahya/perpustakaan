@@ -66,10 +66,10 @@ class Eksemplar extends Model
      */
     public static function generateBarcodeUntuk(Buku $buku, int $urutan): string
     {
-        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)) . '-' . $urutan);
+        $barcode = strtoupper(($buku->isbn ?: Str::slug($buku->judul)).'-'.$urutan);
 
         if (static::query()->where('barcode', $barcode)->exists()) {
-            $barcode .= '-' . strtoupper(Str::random(4));
+            $barcode .= '-'.strtoupper(Str::random(4));
         }
 
         return $barcode;

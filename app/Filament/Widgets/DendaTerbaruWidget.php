@@ -46,13 +46,13 @@ class DendaTerbaruWidget extends TableWidget
                 TextColumn::make('tipe')
                     ->label('Tipe')
                     ->badge()
-                    ->color(fn(TipeDenda $state) => match ($state) {
+                    ->color(fn (TipeDenda $state) => match ($state) {
                         TipeDenda::Keterlambatan => 'warning',
                         TipeDenda::Kerusakan => 'danger',
                         TipeDenda::Kehilangan => 'gray',
                     }),
                 TextColumn::make('nominal')->label('Nominal')
-                    ->formatStateUsing(fn($state) => 'Rp ' . number_format((float) $state, 0, ',', '.')),
+                    ->formatStateUsing(fn ($state) => 'Rp '.number_format((float) $state, 0, ',', '.')),
                 IconColumn::make('status_refund')
                     ->label('Refund')
                     ->boolean()

@@ -72,98 +72,140 @@
 │   │   │   │   │   ├── CreateBuku.php
 │   │   │   │   │   ├── EditBuku.php
 │   │   │   │   │   └── ListBukus.php
-│   │   │   │   └── RelationManagers
-│   │   │   │       └── EksemplarsRelationManager.php
+│   │   │   │   ├── RelationManagers
+│   │   │   │   │   └── EksemplarsRelationManager.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── BukuStatsWidget.php
 │   │   │   ├── DendaResource
-│   │   │   │   └── Pages
-│   │   │   │       └── ListDendas.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   └── ListDendas.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── DendaStatsWidget.php
 │   │   │   ├── FirmwareResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreateFirmwareRelease.php
-│   │   │   │       ├── EditFirmwareRelease.php
-│   │   │   │       └── ListFirmwareReleases.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateFirmwareRelease.php
+│   │   │   │   │   ├── EditFirmwareRelease.php
+│   │   │   │   │   └── ListFirmwareReleases.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── FirmwareStatsWidget.php
 │   │   │   ├── JurusanResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreateJurusan.php
-│   │   │   │       ├── EditJurusan.php
-│   │   │   │       └── ListJurusans.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateJurusan.php
+│   │   │   │   │   ├── EditJurusan.php
+│   │   │   │   │   └── ListJurusans.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── JurusanStatsWidget.php
 │   │   │   ├── KategoriResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreateKategori.php
-│   │   │   │       ├── EditKategori.php
-│   │   │   │       └── ListKategoris.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateKategori.php
+│   │   │   │   │   ├── EditKategori.php
+│   │   │   │   │   └── ListKategoris.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── KategoriStatsWidget.php
 │   │   │   ├── KelasResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreateKelas.php
-│   │   │   │       ├── EditKelas.php
-│   │   │   │       └── ListKelas.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateKelas.php
+│   │   │   │   │   ├── EditKelas.php
+│   │   │   │   │   └── ListKelas.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── KelasStatsWidget.php
 │   │   │   ├── KelasTahunPelajaranResource
 │   │   │   │   ├── Pages
 │   │   │   │   │   ├── CreateKelasTahunPelajaran.php
 │   │   │   │   │   ├── EditKelasTahunPelajaran.php
 │   │   │   │   │   └── ListKelasTahunPelajarans.php
-│   │   │   │   └── RelationManagers
-│   │   │   │       └── SiswaAktifRelationManager.php
+│   │   │   │   ├── RelationManagers
+│   │   │   │   │   └── SiswaAktifRelationManager.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── KelasTahunPelajaranStatsWidget.php
 │   │   │   ├── KunjunganResource
-│   │   │   │   └── Pages
-│   │   │   │       └── ListKunjungans.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   └── ListKunjungans.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── KunjunganStatsWidget.php
 │   │   │   ├── LevelBadgeLogResource
-│   │   │   │   └── Pages
-│   │   │   │       └── ListLevelBadgeLogs.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   └── ListLevelBadgeLogs.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── LevelBadgeLogStatsWidget.php
 │   │   │   ├── LevelBadgeResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreateLevelBadge.php
-│   │   │   │       ├── EditLevelBadge.php
-│   │   │   │       └── ListLevelBadges.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateLevelBadge.php
+│   │   │   │   │   ├── EditLevelBadge.php
+│   │   │   │   │   └── ListLevelBadges.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── LevelBadgeStatsWidget.php
 │   │   │   ├── PeminjamanResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreatePeminjaman.php
-│   │   │   │       └── ListPeminjamans.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreatePeminjaman.php
+│   │   │   │   │   └── ListPeminjamans.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── PeminjamanOverviewWidget.php
 │   │   │   ├── PengembalianResource
-│   │   │   │   └── Pages
-│   │   │   │       └── ListPengembalians.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   └── ListPengembalians.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── PengembalianStatsWidget.php
 │   │   │   ├── PunishmentLogResource
-│   │   │   │   └── Pages
-│   │   │   │       └── ListPunishmentLogs.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   └── ListPunishmentLogs.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── PunishmentLogStatsWidget.php
 │   │   │   ├── PunishmentResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreatePunishment.php
-│   │   │   │       ├── EditPunishment.php
-│   │   │   │       └── ListPunishments.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreatePunishment.php
+│   │   │   │   │   ├── EditPunishment.php
+│   │   │   │   │   └── ListPunishments.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── PunishmentStatsWidget.php
 │   │   │   ├── RakResource
 │   │   │   │   ├── Pages
 │   │   │   │   │   ├── CreateRak.php
 │   │   │   │   │   ├── EditRak.php
 │   │   │   │   │   └── ListRaks.php
-│   │   │   │   └── RelationManagers
-│   │   │   │       └── EksemplarsRelationManager.php
+│   │   │   │   ├── RelationManagers
+│   │   │   │   │   └── EksemplarsRelationManager.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── RakStatsWidget.php
 │   │   │   ├── RewardLogResource
-│   │   │   │   └── Pages
-│   │   │   │       └── ListRewardLogs.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   └── ListRewardLogs.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── RewardLogStatsWidget.php
 │   │   │   ├── RewardResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreateReward.php
-│   │   │   │       ├── EditReward.php
-│   │   │   │       └── ListRewards.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateReward.php
+│   │   │   │   │   ├── EditReward.php
+│   │   │   │   │   └── ListRewards.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── RewardStatsWidget.php
 │   │   │   ├── RiwayatKelasSiswaResource
-│   │   │   │   └── Pages
-│   │   │   │       └── ListRiwayatKelasSiswas.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   └── ListRiwayatKelasSiswas.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── RiwayatKelasSiswaStatsWidget.php
 │   │   │   ├── TahunPelajaranResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreateTahunPelajaran.php
-│   │   │   │       ├── EditTahunPelajaran.php
-│   │   │   │       └── ListTahunPelajarans.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateTahunPelajaran.php
+│   │   │   │   │   ├── EditTahunPelajaran.php
+│   │   │   │   │   └── ListTahunPelajarans.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── TahunPelajaranStatsWidget.php
 │   │   │   ├── TransaksiResource
 │   │   │   │   ├── Pages
 │   │   │   │   │   ├── ListTransaksis.php
 │   │   │   │   │   └── ViewTransaksi.php
-│   │   │   │   └── RelationManagers
-│   │   │   │       └── PeminjamansRelationManager.php
+│   │   │   │   ├── RelationManagers
+│   │   │   │   │   └── PeminjamansRelationManager.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── TransaksiStatsWidget.php
 │   │   │   ├── UserResource
-│   │   │   │   └── Pages
-│   │   │   │       ├── CreateUser.php
-│   │   │   │       ├── EditUser.php
-│   │   │   │       └── ListUsers.php
+│   │   │   │   ├── Pages
+│   │   │   │   │   ├── CreateUser.php
+│   │   │   │   │   ├── EditUser.php
+│   │   │   │   │   └── ListUsers.php
+│   │   │   │   └── Widgets
+│   │   │   │       └── UserStatsWidget.php
 │   │   │   ├── BukuResource.php
 │   │   │   ├── DendaResource.php
 │   │   │   ├── FirmwareResource.php
@@ -438,4 +480,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-95 directories, 344 files
+116 directories, 365 files

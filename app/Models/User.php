@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\JenisKelamin;
 use App\Enums\RoleUser;
 use App\Enums\StatusAkademik;
 use Filament\Models\Contracts\FilamentUser;
@@ -23,6 +24,7 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
     protected $fillable = [
         'avatar',
         'nama',
+        'jenis_kelamin',
         'role',
         'nisn',
         'nip',
@@ -46,6 +48,7 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
         return [
             'id' => 'integer',
             'role' => RoleUser::class,
+            'jenis_kelamin' => JenisKelamin::class,
             'status_akademik' => StatusAkademik::class,
             'status_suspend' => 'boolean',
             'password' => 'hashed',
@@ -57,18 +60,6 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
         return $this->nama;
     }
 
-    /**
-     * Konfirmasi Aturan: SATU panel untuk semua role, pembatasan akses
-     * dilakukan lewat Policy per Resource (bukan di sini). Semua role yang
-     * berhasil login (termasuk yang status_suspend = true, karena mereka
-     * tetap perlu melihat Denda/Punishment miliknya sendiri untuk tahu
-     * alasan suspend) lolos ke panel. Guard sesungguhnya (Siswa tidak bisa
-     * CRUD Buku, Pustakawan tidak bisa ubah Setting, dst.) ditulis di
-     * masing-masing app/Policies/*Policy.php, di-enforce via Shield.
-     *
-     * status_akademik = Lulus TETAP bisa akses panel (dikonfirmasi Aturan
-     * - akun tidak dinonaktifkan saat lulus).
-     */
     public function canAccessPanel(Panel $panel): bool
     {
         return true;

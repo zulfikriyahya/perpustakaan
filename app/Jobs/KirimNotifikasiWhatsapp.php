@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Exceptions\WhatsappGatewayException;
+use App\Models\WhatsappLog;
 use App\Services\WhatsappService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -29,42 +30,28 @@ use Illuminate\Support\Facades\Log;
  * sama dan mengembalikan 200 (bukan mengirim ulang WA), sesuai kontrak API
  * §2.2 & §9 (idempotency window 24 jam). Retry di sini hanya menghitung
  * ulang signature/timestamp, TIDAK pernah mengirim signature lama.
+ *
+ * LOGGING (baru, iterasi ini): setiap eksekusi handle() (termasuk retry)
+ * melakukan UPSERT ke whatsapp_logs berdasarkan reference_id - BUKAN
+ * insert baru per percobaan, supaya satu event tetap satu baris log
+ * dengan status/keterangan TERBARU dan counter percobaan_ke bertambah.
+ * TODO: GAP-SPEC - reference_id null (constructor mengizinkan ?string,
+ * meski kirimEvent() di WhatsappService selalu mengisi fallback UUID)
+ * akan selalu INSERT baris baru (tidak bisa di-upsert tanpa key unik) -
+ * skenario ini seharusnya tidak pernah terjadi lewat kirimEvent(), tapi
+ * dijaga agar job tidak fatal error jika suatu saat dipanggil manual
+ * dengan referenceId null.
  */
 class KirimNotifikasiWhatsapp implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * Konsisten dengan --tries=3 pada supervisor worker queue 'whatsapp'
-     * (lihat conf.d/*.conf, program *-whatsapp).
-     */
     public int $tries = 3;
 
-    /**
-     * Konsisten dengan --timeout=30 pada supervisor worker queue 'whatsapp'.
-     * Job tidak boleh berjalan lebih lama dari timeout worker.
-     */
     public int $timeout = 25;
 
-    /**
-     * Backoff singkat karena kegagalan WA umumnya transient (rate limit,
-     * sesi belum ready) - lihat dok kontrak API §9 Guard Rail.
-     */
     public array $backoff = [5, 15, 30];
 
-    /**
-     * Status code gateway yang bersifat PERMANEN (retry tidak akan mengubah
-     * hasil, sesuai kontrak API §2.2):
-     * - 400: body/media/variabel tidak valid - kesalahan payload yang kita
-     *   kirim sendiri, tidak berubah walau di-retry.
-     * - 403: template_code tidak ditemukan/tidak terkait ke API key -
-     *   kesalahan konfigurasi Admin di panel gateway, bukan transient.
-     * - 409: reference_id sudah dipakai dengan payload BERBEDA - retry
-     *   dengan payload sama akan 409 lagi terus (lihat kontrak API §2.2).
-     *
-     * Di luar daftar ini (401 HMAC, 429 guard rail, 500 internal) dianggap
-     * transient dan tetap mengikuti siklus retry/backoff normal.
-     */
     private const STATUS_PERMANEN = [400, 403, 409];
 
     public function __construct(
@@ -76,6 +63,8 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
 
     public function handle(WhatsappService $whatsappService): void
     {
+        $percobaanKe = $this->attempts();
+
         try {
             $whatsappService->kirimPesan(
                 templateCode: $this->templateCode,
@@ -83,13 +72,14 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
                 variables: $this->variables,
                 referenceId: $this->referenceId,
             );
+
+            $this->catatLog('terkirim', null, $percobaanKe);
         } catch (WhatsappGatewayException $e) {
             if (in_array($e->statusCode, self::STATUS_PERMANEN, true)) {
                 Log::error("KirimNotifikasiWhatsapp: kegagalan permanen (status {$e->statusCode}), tidak di-retry. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$e->getMessage()}");
 
-                // fail() langsung memindahkan job ke failed_jobs tanpa
-                // menghabiskan sisa percobaan $tries - retry dipastikan
-                // sia-sia untuk status di STATUS_PERMANEN.
+                $this->catatLog('gagal_permanen', $e->getMessage(), $percobaanKe);
+
                 $this->fail($e);
 
                 return;
@@ -97,16 +87,60 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
 
             Log::error("KirimNotifikasiWhatsapp: gagal mengirim template '{$this->templateCode}' ke {$this->nomorTujuan}: {$e->getMessage()}");
 
-            // Transient (401/429/500 dsb.) - lempar ulang supaya queue
-            // worker retry sesuai $tries/$backoff.
+            $this->catatLog('gagal_transient', $e->getMessage(), $percobaanKe);
+
             throw $e;
         }
     }
 
     /**
-     * Dipanggil otomatis oleh queue setelah seluruh percobaan ($tries) habis
-     * ATAU setelah $this->fail() dipanggil eksplisit di handle().
+     * Daftar nama variable yang dianggap sensitif dan WAJIB di-redact
+     * sebelum disimpan ke whatsapp_logs (dikonfirmasi eksplisit - OTP
+     * tidak boleh tersimpan plaintext permanen di log, beda dengan
+     * login_otps/password_reset_otps yang sudah hashed by design).
+     * TODO: GAP-SPEC - daftar ini match case-insensitive terhadap NAMA
+     * key variable, bukan terhadap eventCode - kalau suatu saat ada
+     * variable baru yang juga sensitif (mis. 'password_sementara'),
+     * WAJIB ditambahkan di sini, satu tempat, bukan di tiap pemanggil.
      */
+    private const VARIABLE_SENSITIF = ['otp', 'password', 'password_baru', 'password_sementara'];
+
+    protected function catatLog(string $status, ?string $keterangan, int $percobaanKe): void
+    {
+        $atribut = [
+            'template_code' => $this->templateCode,
+            'nomor_tujuan' => $this->nomorTujuan,
+            'variables' => $this->redactVariabelSensitif($this->variables),
+            'status' => $status,
+            'keterangan' => $keterangan,
+            'percobaan_ke' => $percobaanKe,
+        ];
+
+        if ($this->referenceId === null) {
+            WhatsappLog::create(['reference_id' => null, ...$atribut]);
+
+            return;
+        }
+
+        WhatsappLog::updateOrCreate(
+            ['reference_id' => $this->referenceId],
+            $atribut,
+        );
+    }
+
+    protected function redactVariabelSensitif(array $variables): array
+    {
+        $hasil = [];
+
+        foreach ($variables as $key => $value) {
+            $hasil[$key] = in_array(strtolower((string) $key), self::VARIABLE_SENSITIF, true)
+                ? '***'
+                : $value;
+        }
+
+        return $hasil;
+    }
+
     public function failed(\Throwable $exception): void
     {
         Log::error("KirimNotifikasiWhatsapp: job gagal permanen. Template '{$this->templateCode}' ke {$this->nomorTujuan}: {$exception->getMessage()}");

@@ -3,21 +3,67 @@
 namespace App\Filament\Pages\Auth;
 
 use App\Models\User;
+use App\Services\LoginOtpService;
+use Filament\Actions\Action;
+use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\RenderHook;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\HtmlString;
 
-// TODO: verifikasi signature terhadap versi package yang terpasang (filament/filament ^5.7).
-// Nama namespace parent (Filament\Auth\Pages\Login vs Filament\Pages\Auth\Login) dan
-// method getCredentialsFromFormData() perlu dicek ulang terhadap source filament/filament
-// versi 5.7 yang ter-install - saya tidak bisa memverifikasi langsung dari sini.
+/**
+ * TODO: verifikasi signature terhadap versi package yang terpasang
+ * (filament/filament ^5.7). Override content() dan getFormActions() di
+ * bawah didasarkan pada pembacaan langsung source
+ * vendor/filament/filament/src/Auth/Pages/Login.php yang diberikan
+ * pengguna - lebih terverifikasi dari upaya sebelumnya, tapi authenticate()
+ * override TOTAL (bukan extend logic rate-limit/timebox/multi-factor
+ * bawaan) tetap ASUMSI BESAR untuk cabang mode 'otp': rate-limit(5),
+ * Timebox, dan multi-factor challenge bawaan SEMUA di-skip untuk mode
+ * OTP. Risiko diterima sadar sesuai konfirmasi (setara reset password),
+ * tapi WAJIB diuji end-to-end (poin 12).
+ */
 class Login extends BaseLogin
 {
+    public string $mode = 'password';
+
+    public bool $otpTerkirim = false;
+
     public function form(Schema $schema): Schema
     {
         return $schema->components([
             $this->getLoginFormComponent(),
-            $this->getPasswordFormComponent(),
+            TextInput::make('password')
+                ->label('Password')
+                ->hint(filament()->hasPasswordReset()
+                    ? new HtmlString(Blade::render(
+                        '<x-filament::link :href="filament()->getRequestPasswordResetUrl()" tabindex="-1">Lupa kata sandi?</x-filament::link>'
+                    ))
+                    : null)
+                ->password()
+                ->revealable()
+                ->required()
+                ->visible(fn () => $this->mode === 'password')
+                ->dehydrated(fn () => $this->mode === 'password'),
+            TextInput::make('otp')
+                ->label('Kode OTP')
+                ->minLength(6)
+                ->maxLength(6)
+                ->required()
+                ->visible(fn () => $this->mode === 'otp' && $this->otpTerkirim)
+                ->dehydrated(fn () => $this->mode === 'otp'),
+            Text::make('Kode OTP berlaku 5 menit. Tidak menerima? Klik "Password" lalu "OTP WhatsApp" lagi untuk kirim ulang.')
+                ->size('xs')
+                ->color('gray')
+                ->visible(fn () => $this->mode === 'otp' && $this->otpTerkirim),
             $this->getRememberFormComponent(),
         ]);
     }
@@ -28,17 +74,53 @@ class Login extends BaseLogin
             ->label('NISN / NIP / No. Telepon')
             ->required()
             ->autofocus()
+            ->disabled(fn () => $this->mode === 'otp' && $this->otpTerkirim)
             ->extraInputAttributes(['tabindex' => 1]);
     }
 
-    /**
-     * Resolusi identifier login ke kolom yang sesuai (Aturan: NISN untuk
-     * Siswa, NIP untuk Pegawai/Pustakawan/Admin, atau no_telepon sebagai
-     * fallback universal). TODO: GAP-SPEC - jika suatu saat NISN dan NIP
-     * bisa bentrok nilai (kemungkinan kecil, belum ada constraint silang),
-     * urutan pengecekan di bawah (nisn -> nip -> no_telepon) menentukan
-     * prioritas resolusi.
-     */
+    public function gantiMode(string $mode): void
+    {
+        $this->mode = $mode;
+        $this->otpTerkirim = false;
+    }
+
+    protected function resolveUser(string $login): ?User
+    {
+        return User::query()
+            ->where('nisn', $login)
+            ->orWhere('nip', $login)
+            ->orWhere('no_telepon', $login)
+            ->first();
+    }
+
+    public function kirimOtpLogin(): void
+    {
+        $login = (string) ($this->form->getState()['login'] ?? '');
+        $user = $this->resolveUser($login);
+
+        if (! $user) {
+            Notification::make()
+                ->title('Akun tidak ditemukan')
+                ->body('Pastikan NISN, NIP, atau No. Telepon sesuai yang terdaftar.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        try {
+            app(LoginOtpService::class)->kirimOtp($user);
+        } catch (\RuntimeException $e) {
+            Notification::make()->title('Belum bisa mengirim OTP')->body($e->getMessage())->warning()->send();
+
+            return;
+        }
+
+        $this->otpTerkirim = true;
+
+        Notification::make()->title('Kode OTP terkirim ke WhatsApp terdaftar.')->success()->send();
+    }
+
     protected function getCredentialsFromFormData(array $data): array
     {
         $login = $data['login'];
@@ -52,6 +134,103 @@ class Login extends BaseLogin
         return [
             $field => $login,
             'password' => $data['password'],
+        ];
+    }
+
+    public function authenticate(): ?LoginResponse
+    {
+        if ($this->mode === 'password') {
+            return parent::authenticate();
+        }
+
+        $data = $this->form->getState();
+
+        try {
+            $user = app(LoginOtpService::class)->verifikasiUntukLogin((string) $data['login'], (string) $data['otp']);
+        } catch (\RuntimeException $e) {
+            Notification::make()->title($e->getMessage())->danger()->send();
+
+            return null;
+        }
+
+        Auth::login($user, $data['remember'] ?? false);
+        session()->regenerate();
+
+        return app(LoginResponse::class);
+    }
+
+    /**
+     * Override TOTAL dari content() bawaan - menyisipkan baris toggle mode
+     * (Actions link) SEBELUM form, memakai Schema Component API asli
+     * (bukan Blade custom) supaya konsisten dengan cara Filament merender
+     * halaman ini. Struktur RenderHook before/after dipertahankan sama
+     * seperti base class.
+     */
+    public function content(Schema $schema): Schema
+    {
+        return $schema->components([
+            RenderHook::make(PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE),
+            $this->getModeSwitcherComponent(),
+            $this->getFormContentComponent(),
+            RenderHook::make(PanelsRenderHook::AUTH_LOGIN_FORM_AFTER),
+        ]);
+    }
+
+    /**
+     * Segmented control (pil) untuk toggle mode - dibangun dari Actions API
+     * asli (bukan Blade custom, konsisten dengan pelajaran dari percobaan
+     * sebelumnya), diberi extraAttributes untuk tampilan pil dengan latar
+     * abu-abu gelap dan indikator aktif, tanpa menyentuh warna primary/tema
+     * panel.
+     */
+    protected function getModeSwitcherComponent(): Component
+    {
+        return Actions::make([
+            Action::make('mode_password')
+                ->label('Password')
+                ->action(fn () => $this->gantiMode('password'))
+                ->extraAttributes([
+                    'class' => 'flex-1 !justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors '
+                        .($this->mode === 'password'
+                            ? 'bg-white text-gray-950 dark:bg-gray-700 dark:text-white'
+                            : 'bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'),
+                ])
+                ->color('gray'),
+            Action::make('mode_otp')
+                ->label('OTP WhatsApp')
+                ->action(fn () => $this->gantiMode('otp'))
+                ->extraAttributes([
+                    'class' => 'flex-1 !justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors '
+                        .($this->mode === 'otp'
+                            ? 'bg-white text-gray-950 dark:bg-gray-700 dark:text-white'
+                            : 'bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'),
+                ])
+                ->color('gray'),
+        ])
+            ->fullWidth()
+            ->extraAttributes([
+                'class' => 'mb-6 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800/60',
+            ]);
+    }
+
+    /**
+     * Override tombol submit - tombol berubah fungsi/label sesuai mode
+     * (dikonfirmasi): mode 'otp' belum kirim -> tombol jadi "Kirim OTP"
+     * (action method, bukan submit form). Setelah OTP terkirim atau mode
+     * 'password' -> tombol submit biasa, label "Verifikasi & Masuk" di
+     * mode OTP, "Masuk" di mode password.
+     */
+    protected function getFormActions(): array
+    {
+        return [
+            Action::make('kirim_otp')
+                ->label('Kirim OTP')
+                ->action('kirimOtpLogin')
+                ->visible(fn () => $this->mode === 'otp' && ! $this->otpTerkirim),
+            Action::make('authenticate')
+                ->label(fn () => $this->mode === 'otp' ? 'Verifikasi & Masuk' : 'Masuk')
+                ->submit('authenticate')
+                ->visible(fn () => $this->mode === 'password' || $this->otpTerkirim),
         ];
     }
 }

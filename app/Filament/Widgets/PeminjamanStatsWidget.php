@@ -2,22 +2,21 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\RoleUser;
 use App\Enums\StatusPeminjaman;
+use App\Models\Buku;
 use App\Models\Denda;
 use App\Models\Kunjungan;
 use App\Models\Peminjaman;
+use App\Models\User;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
-/**
- * Ringkasan operasional harian - untuk Admin & Pustakawan.
- * TODO: verifikasi signature terhadap versi package yang terpasang
- * (filament/filament ^5.7) - namespace Filament\Widgets\StatsOverviewWidget
- * diasumsikan stabil sejak v3, belum dicek ulang untuk v5.
- */
 class PeminjamanStatsWidget extends StatsOverviewWidget
 {
     protected static ?int $sort = 1;
+
+    protected int|string|array $columnSpan = 'full';
 
     public static function canView(): bool
     {
@@ -35,19 +34,38 @@ class PeminjamanStatsWidget extends StatsOverviewWidget
 
         $kunjunganHariIni = Kunjungan::query()->whereDate('tanggal', now()->toDateString())->count();
 
+        $totalJudulBuku = Buku::query()->count();
+        $totalAnggotaAktif = User::query()
+            ->where('status_suspend', false)
+            ->whereNotIn('role', [RoleUser::Admin, RoleUser::Pustakawan])
+            ->count();
+
         return [
             Stat::make('Peminjaman Aktif', (string) $aktif)
+                ->icon('heroicon-o-book-open')
                 ->color('success'),
 
             Stat::make('Peminjaman Terlambat', (string) $terlambat)
+                ->icon('heroicon-o-clock')
                 ->color($terlambat > 0 ? 'danger' : 'gray'),
 
             Stat::make('Denda Belum Lunas', $jumlahDendaBelumLunas.' transaksi')
+                ->icon('heroicon-o-banknotes')
                 ->description('Rp '.number_format((float) $nominalDendaBelumLunas, 0, ',', '.'))
+                ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->color($jumlahDendaBelumLunas > 0 ? 'warning' : 'gray'),
 
             Stat::make('Kunjungan Hari Ini', (string) $kunjunganHariIni)
+                ->icon('heroicon-o-arrow-right-end-on-rectangle')
                 ->color('info'),
+
+            Stat::make('Total Judul Buku', (string) $totalJudulBuku)
+                ->icon('heroicon-o-book-open')
+                ->color('gray'),
+
+            Stat::make('Total Anggota Aktif', (string) $totalAnggotaAktif)
+                ->icon('heroicon-o-users')
+                ->color('gray'),
         ];
     }
 }

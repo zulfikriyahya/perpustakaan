@@ -24,6 +24,8 @@ class PeminjamanJatuhTempoWidget extends TableWidget
 {
     protected static ?int $sort = 3;
 
+    protected int|string|array $columnSpan = 1;
+
     public static function canView(): bool
     {
         return auth()->user()?->hasAnyRole(['super_admin', 'pustakawan']) ?? false;
@@ -47,6 +49,11 @@ class PeminjamanJatuhTempoWidget extends TableWidget
                 TextColumn::make('user.nama')->label('Peminjam'),
                 TextColumn::make('eksemplar.buku.judul')->label('Buku'),
                 TextColumn::make('tanggal_jatuh_tempo')->label('Jatuh Tempo')->date('d M Y'),
+                TextColumn::make('sisa_hari')
+                    ->label('Sisa Hari')
+                    ->state(fn (Peminjaman $record) => $record->tanggal_jatuh_tempo->diffInDays(now(), true) * ($record->tanggal_jatuh_tempo->isPast() ? -1 : 1))
+                    ->badge()
+                    ->color(fn ($state) => $state < 0 ? 'danger' : ($state <= 1 ? 'warning' : 'success')),
                 TextColumn::make('status')->label('Status')->badge()
                     ->color(fn (StatusPeminjaman $state) => match ($state) {
                         StatusPeminjaman::Terlambat => 'danger',

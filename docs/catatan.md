@@ -17,13 +17,17 @@
 - unggah .mp3 atau .wav di daftar audio-book
 - unggah .epub atau .pdf di daftar e-book
 - fitur baca buku pdf di landing page (kalau bisa menggunakan seperti fliphtml5)
-- fitur avatar dan import user
 - fitur generate label ke queue
 - deploy dengan octane + frankenphp
 - fitur pesan whatsapp
 - Logo
-- fitur insransi dan multi instansi
-- fitur login dengan phone + otp
-- upgrade widget agar lebih baik dan indah juga informatif
+- fitur instansi dan multi instansi
 - perbaikan UI Resource dan page
 - ujicoba perangkat visitor counter
+
+
+- tambahkan widget kunjungan, peminjaman, dan pengembalian perbulan.
+- tambahkan widget kunjungan, peminjaman, dan pengembalian per jenis kelamin.
+- tambahkan Bagde, Reward, dan punishment perbulan.
+- tambahkan widget buku perkategori.
+- upgrade widget yang sudah ada agar lebih baik dan indah juga informatif.

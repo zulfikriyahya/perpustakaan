@@ -43,7 +43,7 @@ dev:
 	@$(MAKE) -j2 serve vite-dev
 
 serve:
-	$(ARTISAN) serve --host=$(HOST) --port=$(PORT)
+	$(ARTISAN) octane:start --host=$(HOST) --port=$(PORT)
 
 vite-dev:
 	$(YARN) dev

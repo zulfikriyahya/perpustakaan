@@ -2,7 +2,9 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\TipeDenda;
 use App\Models\Denda;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
@@ -12,7 +14,9 @@ use Filament\Widgets\TableWidget;
  */
 class DendaTerbaruWidget extends TableWidget
 {
-    protected static ?int $sort = 4;
+    protected static ?int $sort = 2;
+
+    protected int|string|array $columnSpan = 2;
 
     public static function canView(): bool
     {
@@ -34,9 +38,20 @@ class DendaTerbaruWidget extends TableWidget
             )
             ->columns([
                 TextColumn::make('user.nama')->label('User'),
-                TextColumn::make('tipe')->label('Tipe')->badge(),
+                TextColumn::make('tipe')
+                    ->label('Tipe')
+                    ->badge()
+                    ->color(fn (TipeDenda $state) => match ($state) {
+                        TipeDenda::Keterlambatan => 'warning',
+                        TipeDenda::Kerusakan => 'danger',
+                        TipeDenda::Kehilangan => 'gray',
+                    }),
                 TextColumn::make('nominal')->label('Nominal')
                     ->formatStateUsing(fn ($state) => 'Rp '.number_format((float) $state, 0, ',', '.')),
+                IconColumn::make('status_refund')
+                    ->label('Refund')
+                    ->boolean()
+                    ->toggleable(),
                 TextColumn::make('created_at')->label('Tanggal')->dateTime('d M Y H:i'),
             ])
             ->paginated([5, 10])

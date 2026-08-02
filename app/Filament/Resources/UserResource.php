@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Enums\JenisKelamin;
 use App\Enums\RoleUser;
 use App\Enums\StatusAkademik;
 use App\Filament\Exports\UserExporter;
@@ -65,6 +66,10 @@ class UserResource extends Resource
                 ->label('NIP')
                 ->unique(ignoreRecord: true)
                 ->maxLength(255),
+            Select::make('jenis_kelamin')
+                ->label('Jenis Kelamin')
+                ->options(collect(JenisKelamin::cases())->mapWithKeys(fn ($j) => [$j->value => $j->label()]))
+                ->native(false),
             // Kolom 'kelas' (string bebas) sudah di-drop dari tabel users
             // (migration 2026_08_01_000006), diganti relasi
             // kelas_tahun_pelajaran_id. Ditampilkan read-only di sini -
@@ -132,6 +137,7 @@ class UserResource extends Resource
                 ->helperText('Kosongkan jika tidak ingin mengubah password.'),
             FileUpload::make('avatar')
                 ->image()
+                ->disk('public')
                 ->directory('user-avatar'),
         ]);
     }
@@ -149,6 +155,7 @@ class UserResource extends Resource
             ])
             ->columns([
                 ImageColumn::make('avatar')
+                    ->disk('public')
                     ->circular(),
                 TextColumn::make('nama')
                     ->searchable()

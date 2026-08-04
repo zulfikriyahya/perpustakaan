@@ -51,8 +51,8 @@ class DashboardPanelProvider extends PanelProvider
              * terhadap filament/filament ^5.7 di composer.lock proyek ini.
              */
             ->brandLogo(new HtmlString(
-                '<img src="' . asset('images/brand-lightmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />' .
-                    '<img src="' . asset('images/brand-darkmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
+                '<img src="'.asset('images/brand-lightmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />'.
+                    '<img src="'.asset('images/brand-darkmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
             ))
             ->brandLogoHeight('2.5rem')
             ->spa(hasPrefetching: true)
@@ -61,8 +61,8 @@ class DashboardPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn(): string => view('filament.partials.global-logo-style')->render()
-                    . view('filament.partials.global-footer-style')->render(),
+                fn (): string => view('filament.partials.global-logo-style')->render()
+                    .view('filament.partials.global-footer-style')->render(),
             )
             /**
              * FITUR BARU - footer di BAWAH body, HANYA untuk halaman
@@ -86,13 +86,13 @@ class DashboardPanelProvider extends PanelProvider
              */
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): string => request()->routeIs('filament.dashboard.auth.*')
+                fn (): string => request()->routeIs('filament.dashboard.auth.*')
                     ? ''
                     : view('filament.partials.app-footer')->render(),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): string => view('filament.partials.chart-export-script')->render(),
+                fn (): string => view('filament.partials.chart-export-script')->render(),
             )
             ->passwordReset(
                 RequestPasswordReset::class,

@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\KelasTahunPelajaran;
 use App\Models\Jurusan;
 use App\Models\Kelas;
+use App\Models\KelasTahunPelajaran;
 use App\Models\TahunPelajaran;
 use App\Models\User;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
@@ -70,7 +70,7 @@ class UserImportResolverService
 
         $dipakaiUserLain = User::query()
             ->where('no_kartu_rfid', $nomorBaru)
-            ->when($user->exists, fn($q) => $q->whereKeyNot($user->id))
+            ->when($user->exists, fn ($q) => $q->whereKeyNot($user->id))
             ->exists();
 
         if ($dipakaiUserLain) {
@@ -150,7 +150,7 @@ class UserImportResolverService
     {
         $ekstensi = pathinfo(parse_url($sumber, PHP_URL_PATH) ?? $sumber, PATHINFO_EXTENSION) ?: 'jpg';
 
-        return 'user-avatar/' . $identitas . '.' . $ekstensi;
+        return 'user-avatar/'.$identitas.'.'.$ekstensi;
     }
 
     /**

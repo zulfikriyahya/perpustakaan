@@ -57,7 +57,7 @@ class ProcessMasterImportJob implements ShouldQueue
         $job->update(['status' => StatusBulkJob::Diproses]);
 
         try {
-            $absolutePath = storage_path('app/' . $job->file_path);
+            $absolutePath = storage_path('app/'.$job->file_path);
             $registry = MasterDataRegistry::items();
 
             // BARU (iterasi ini) - validasi struktur file SEBELUM baris
@@ -109,14 +109,14 @@ class ProcessMasterImportJob implements ShouldQueue
     protected function validasiUrutanSheet(string $absolutePath, array $registry): void
     {
         $namaSheetFile = IOFactory::load($absolutePath)->getSheetNames();
-        $namaSheetDiharapkan = array_map(fn(array $item) => $item['label'], $registry);
+        $namaSheetDiharapkan = array_map(fn (array $item) => $item['label'], $registry);
 
         if ($namaSheetFile !== $namaSheetDiharapkan) {
             throw new RuntimeException(
                 'File tidak sesuai format hasil "Export Semua" terbaru - urutan atau nama sheet tidak cocok. '
-                    . 'Sheet ditemukan di file: [' . implode(', ', $namaSheetFile) . ']. '
-                    . 'Sheet yang diharapkan sistem: [' . implode(', ', $namaSheetDiharapkan) . ']. '
-                    . 'Silakan export ulang lewat "Mulai Export Semua" di halaman ini, lalu gunakan file hasilnya (tanpa diedit strukturnya) untuk Import Semua.'
+                    .'Sheet ditemukan di file: ['.implode(', ', $namaSheetFile).']. '
+                    .'Sheet yang diharapkan sistem: ['.implode(', ', $namaSheetDiharapkan).']. '
+                    .'Silakan export ulang lewat "Mulai Export Semua" di halaman ini, lalu gunakan file hasilnya (tanpa diedit strukturnya) untuk Import Semua.'
             );
         }
     }
@@ -130,13 +130,13 @@ class ProcessMasterImportJob implements ShouldQueue
             return ['total' => 0, 'sukses' => 0, 'gagal' => 0, 'errors' => [], 'meta' => []];
         }
 
-        $headings = array_map(fn($h) => Str::slug((string) $h, '_'), array_shift($rawRows));
+        $headings = array_map(fn ($h) => Str::slug((string) $h, '_'), array_shift($rawRows));
         $sukses = 0;
         $errors = [];
         $meta = [];
 
         foreach ($rawRows as $nomorBaris => $rawRow) {
-            if (empty(array_filter($rawRow, fn($v) => $v !== null && $v !== ''))) {
+            if (empty(array_filter($rawRow, fn ($v) => $v !== null && $v !== ''))) {
                 continue; // baris kosong - dilewati, tidak dihitung total
             }
 
@@ -157,9 +157,9 @@ class ProcessMasterImportJob implements ShouldQueue
 
                 $sukses++;
             } catch (RowImportFailedException $e) {
-                $errors[] = 'Baris ' . ($nomorBaris + 2) . ": {$e->getMessage()}"; // +2: heading + index 0-based
+                $errors[] = 'Baris '.($nomorBaris + 2).": {$e->getMessage()}"; // +2: heading + index 0-based
             } catch (Throwable $e) {
-                $errors[] = 'Baris ' . ($nomorBaris + 2) . ": Gagal tidak terduga - {$e->getMessage()}";
+                $errors[] = 'Baris '.($nomorBaris + 2).": Gagal tidak terduga - {$e->getMessage()}";
             }
         }
 

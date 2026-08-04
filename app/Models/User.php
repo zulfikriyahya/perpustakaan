@@ -18,7 +18,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasName, HasAvatar
+class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasAvatar, HasName
 {
     use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
@@ -81,7 +81,7 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
         return $this->hasMany(RiwayatKelasSiswa::class);
     }
 
-        public function getFilamentAvatarUrl(): ?string
+    public function getFilamentAvatarUrl(): ?string
     {
         return $this->avatar
             ? asset('storage/'.($this->avatar))

@@ -45,7 +45,7 @@ class BukuImportResolverService
 
     /**
      * @return array<int, string>|null null berarti kolom kategori kosong
-     *                                  (tidak ada perubahan relasi).
+     *                                 (tidak ada perubahan relasi).
      *
      * @throws RowImportFailedException jika ada nama kategori yang tidak ditemukan.
      */
@@ -61,7 +61,7 @@ class BukuImportResolverService
         $namaTidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
 
         if (! empty($namaTidakDitemukan)) {
-            throw new RowImportFailedException('Kategori tidak ditemukan: "' . implode('", "', $namaTidakDitemukan) . '". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
+            throw new RowImportFailedException('Kategori tidak ditemukan: "'.implode('", "', $namaTidakDitemukan).'". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
         }
 
         return $kategoris->pluck('id')->all();

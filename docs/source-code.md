@@ -1517,13 +1517,13 @@ class BukuImporter extends Importer
                 ->helperText('Isi persis sesuai nama Rak yang sudah ada di Master Data > Rak. Jika tidak ditemukan, buku diimport tanpa lokasi rak (bukan dibuatkan Rak baru otomatis).')
                 ->rules(['nullable', 'string'])
                 ->example('Rak A')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
                 ->helperText('Isi persis sesuai nama Kategori yang sudah ada di Master Data > Kategori. Contoh 2 kategori: "Fiksi;Sains". Kategori yang tidak ditemukan namanya akan membuat baris GAGAL.')
                 ->rules(['nullable', 'string'])
                 ->example('Fiksi;Sastra Indonesia')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('harga_ganti')
                 ->label('Harga Ganti')
                 ->helperText('WAJIB diisi manual - dipakai sebagai basis perhitungan Denda kerusakan/kehilangan. Baris tanpa nilai ini akan GAGAL, tidak ada default otomatis.')
@@ -1535,7 +1535,7 @@ class BukuImporter extends Importer
                 ->numeric()
                 ->rules(['required', 'integer', 'min:0'])
                 ->example('3')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('deskripsi')
                 ->rules(['nullable', 'string'])
                 ->example('Novel tentang perjuangan anak-anak Belitung mengejar pendidikan.'),
@@ -1570,10 +1570,10 @@ class BukuImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Buku selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Buku selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;
@@ -2485,7 +2485,6 @@ use App\Models\User;
 use App\Rules\FormatKartuRfid;
 use App\Services\KenaikanKelasService;
 use App\Services\UserImportResolverService;
-use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -2560,18 +2559,18 @@ class UserImporter extends Importer
                 ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('VII A')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan (wajib jika kelas_nama diisi)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('Non_Jurusan')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('2026/2027')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example(''),
@@ -2595,7 +2594,7 @@ class UserImporter extends Importer
                 ->helperText('Isi URL gambar (https://...) atau path file yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
                 ->rules(['nullable', 'string', 'max:2048'])
                 ->example('https://contoh-sekolah.id/foto/siswa1.jpg')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -2647,10 +2646,10 @@ class UserImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import User selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         $kartuDihapus = (int) Cache::get("import-{$import->id}-kartu-dihapus", 0);
@@ -3456,7 +3455,7 @@ class LaporanBulanan extends Page
                                 ->native(false)
                                 ->options(
                                     collect(range((int) now()->format('Y'), 2024))
-                                        ->mapWithKeys(fn($y) => [$y => $y])
+                                        ->mapWithKeys(fn ($y) => [$y => $y])
                                 )
                                 ->required(),
                         ]),
@@ -3474,7 +3473,7 @@ class LaporanBulanan extends Page
             ->setPaper('a4', 'portrait');
 
         return response()->streamDownload(
-            fn() => print($pdf->output()),
+            fn () => print ($pdf->output()),
             "laporan-bulanan-{$data['tahun']}-{$data['bulan']}.pdf",
             ['Content-Type' => 'application/pdf'],
         );
@@ -3686,7 +3685,7 @@ class PengaturanSistem extends Page
                                         'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
                                         'wa_template_buku_ditemukan_kembali' => 'Buku Ditemukan Kembali',
                                     ])->map(
-                                        fn(string $label, string $key) => TextInput::make($key)
+                                        fn (string $label, string $key) => TextInput::make($key)
                                             ->label($label)
                                             ->required()
                                             ->helperText('Wajib sama persis dengan template_code di panel gateway.')
@@ -3698,7 +3697,7 @@ class PengaturanSistem extends Page
                         ->schema([
                             Placeholder::make('rfid_db_ver')
                                 ->label('Versi Daftar Kartu RFID (otomatis)')
-                                ->content(fn() => (string) Setting::get('rfid_db_ver', 0))
+                                ->content(fn () => (string) Setting::get('rfid_db_ver', 0))
                                 ->columnSpanFull(),
                             Grid::make(self::GRID_KOLOM_STANDAR)
                                 ->schema([
@@ -10339,7 +10338,7 @@ class GenericExportSheet implements FromCollection, ShouldAutoSize, ShouldQueue,
 
     public function map($record): array
     {
-        return array_map(fn($callback) => (string) ($callback($record) ?? ''), array_values($this->item['columns']));
+        return array_map(fn ($callback) => (string) ($callback($record) ?? ''), array_values($this->item['columns']));
     }
 
     public function headings(): array
@@ -11421,6 +11420,23 @@ class PerpustakaanDeviceController extends Controller
      * Firmware menolak baris yang bukan persis 10 digit angka (lihat parsing
      * di downloadRfidDb: isdigit check, len == 10).
      *
+     * KONTRAK BARU (v2.3.2, GAP-SPEC lama soal Content-Length ditutup) - baris
+     * TERAKHIR body SEKARANG SELALU "EOF" (persis, tanpa newline trailing
+     * setelahnya). Ini WAJIB ada karena server berjalan di belakang Cloudflare
+     * dengan HTTP/2 - tidak ada header Content-Length yang dikirim ke device,
+     * dan koneksi tidak ditutup segera setelah body selesai (keep-alive), jadi
+     * device (ESP32/HTTPClient) tidak punya cara lain yang andal untuk tahu
+     * transfer sudah selesai vs baru stall/putus di tengah jalan. Firmware
+     * v2.3.2 ke atas menunggu baris "EOF" sebagai satu-satunya penanda sukses
+     * sebelum menimpa rfid_db.txt lama dan menaikkan versi lokal (lihat
+     * downloadRfidDb() di firmware) - TANPA baris ini, device v2.3.2+ akan
+     * SELALU menganggap transfer gagal/terpotong dan retry terus setiap
+     * siklus RFID_DB_CHECK_INTERVAL.
+     *
+     * Endpoint ini HANYA dipakai device Attendance Machine perpustakaan ini
+     * (dikonfirmasi) - aman mengubah format body tanpa memengaruhi konsumen
+     * lain.
+     *
      * TODO: GAP-SPEC - hanya user dengan no_kartu_rfid berformat 10 digit
      * numeric yang akan ikut ter-generate ke daftar ini; kartu format lain
      * (mis. seeder lama 'RFID58354503') otomatis TIDAK akan muncul di device
@@ -11436,7 +11452,10 @@ class PerpustakaanDeviceController extends Controller
             ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
             ->pluck('no_kartu_rfid');
 
-        $body = "ver:{$ver}\n" . $kartuList->implode("\n");
+        // BARU: baris "EOF" wajib jadi baris TERAKHIR - lihat docblock method
+        // ini. implode("\n") tidak menyertakan newline trailing, sehingga
+        // "EOF" persis jadi baris terakhir tanpa baris kosong setelahnya.
+        $body = "ver:{$ver}\n".$kartuList->implode("\n")."\nEOF";
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -11448,13 +11467,49 @@ class PerpustakaanDeviceController extends Controller
      * karena firmware membaca field "status" per item untuk logging kegagalan
      * (appendFailedLogToSD) - status HTTP selalu 200 selama body valid JSON,
      * kegagalan per-record dilaporkan lewat "status" per item, bukan HTTP code.
+     *
+     * KONTRAK BARU (v2.3.4, menutup celah silent data loss) - sebelumnya
+     * $request->input('data', []) diam-diam jatuh ke array kosong jika body
+     * bukan JSON valid/field 'data' tidak ada, lalu tetap membalas HTTP 200
+     * dengan {"data":[]} - firmware lama menganggap ini SUKSES (kode 200) dan
+     * MENGHAPUS file antrian, padahal NOL record tersimpan - silent data loss
+     * tanpa jejak di server maupun perangkat. SEKARANG: body yang tidak
+     * memuat array 'data' non-kosong yang valid akan ditolak HTTP 422 (bukan
+     * 200) - firmware v2.3.4+ menangani ini sebagai kegagalan yang di-retry
+     * (lihat syncQueueFileWithRetry()), TIDAK menghapus file.
+     *
+     * Firmware v2.3.4+ JUGA memvalidasi jumlah item di response 'data' sama
+     * dengan jumlah yang dikirim SEBELUM menghapus file antrian (lihat
+     * syncQueueFile()) - lapisan pertahanan kedua kalau body rusak sebagian
+     * (bukan kosong total, tapi item hilang di tengah jalan).
      */
     public function syncBulk(Request $request): JsonResponse
     {
-        $items = $request->input('data', []);
+        $items = $request->input('data');
+
+        if (! is_array($items) || count($items) === 0) {
+            // BARU: body tidak valid/field 'data' tidak ada/kosong - TOLAK
+            // tegas, jangan diam-diam balas 200 dengan data kosong (itu yang
+            // menyebabkan device menghapus antrian tanpa satu pun record
+            // benar-benar tersimpan).
+            return response()->json([
+                'error' => 'field "data" wajib berupa array berisi minimal 1 item',
+            ], 422);
+        }
+
         $hasil = [];
 
         foreach ($items as $item) {
+            if (! is_array($item)) {
+                // BARU: item individual yang bukan object/array valid - catat
+                // sebagai error per-item, bukan diabaikan diam-diam (supaya
+                // count response tetap sama dengan count request, lihat
+                // validasi count di firmware).
+                $hasil[] = ['rfid' => '', 'timestamp' => '', 'status' => 'error', 'message' => 'item tidak valid'];
+
+                continue;
+            }
+
             $rfid = (string) ($item['rfid'] ?? '');
             $timestamp = (string) ($item['timestamp'] ?? '');
             $deviceId = (string) ($item['device_id'] ?? '');
@@ -11570,7 +11625,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {
@@ -12386,7 +12441,7 @@ class ProcessMasterImportJob implements ShouldQueue
         $job->update(['status' => StatusBulkJob::Diproses]);
 
         try {
-            $absolutePath = storage_path('app/' . $job->file_path);
+            $absolutePath = storage_path('app/'.$job->file_path);
             $registry = MasterDataRegistry::items();
 
             // BARU (iterasi ini) - validasi struktur file SEBELUM baris
@@ -12438,14 +12493,14 @@ class ProcessMasterImportJob implements ShouldQueue
     protected function validasiUrutanSheet(string $absolutePath, array $registry): void
     {
         $namaSheetFile = IOFactory::load($absolutePath)->getSheetNames();
-        $namaSheetDiharapkan = array_map(fn(array $item) => $item['label'], $registry);
+        $namaSheetDiharapkan = array_map(fn (array $item) => $item['label'], $registry);
 
         if ($namaSheetFile !== $namaSheetDiharapkan) {
             throw new RuntimeException(
                 'File tidak sesuai format hasil "Export Semua" terbaru - urutan atau nama sheet tidak cocok. '
-                    . 'Sheet ditemukan di file: [' . implode(', ', $namaSheetFile) . ']. '
-                    . 'Sheet yang diharapkan sistem: [' . implode(', ', $namaSheetDiharapkan) . ']. '
-                    . 'Silakan export ulang lewat "Mulai Export Semua" di halaman ini, lalu gunakan file hasilnya (tanpa diedit strukturnya) untuk Import Semua.'
+                    .'Sheet ditemukan di file: ['.implode(', ', $namaSheetFile).']. '
+                    .'Sheet yang diharapkan sistem: ['.implode(', ', $namaSheetDiharapkan).']. '
+                    .'Silakan export ulang lewat "Mulai Export Semua" di halaman ini, lalu gunakan file hasilnya (tanpa diedit strukturnya) untuk Import Semua.'
             );
         }
     }
@@ -12459,13 +12514,13 @@ class ProcessMasterImportJob implements ShouldQueue
             return ['total' => 0, 'sukses' => 0, 'gagal' => 0, 'errors' => [], 'meta' => []];
         }
 
-        $headings = array_map(fn($h) => Str::slug((string) $h, '_'), array_shift($rawRows));
+        $headings = array_map(fn ($h) => Str::slug((string) $h, '_'), array_shift($rawRows));
         $sukses = 0;
         $errors = [];
         $meta = [];
 
         foreach ($rawRows as $nomorBaris => $rawRow) {
-            if (empty(array_filter($rawRow, fn($v) => $v !== null && $v !== ''))) {
+            if (empty(array_filter($rawRow, fn ($v) => $v !== null && $v !== ''))) {
                 continue; // baris kosong - dilewati, tidak dihitung total
             }
 
@@ -12486,9 +12541,9 @@ class ProcessMasterImportJob implements ShouldQueue
 
                 $sukses++;
             } catch (RowImportFailedException $e) {
-                $errors[] = 'Baris ' . ($nomorBaris + 2) . ": {$e->getMessage()}"; // +2: heading + index 0-based
+                $errors[] = 'Baris '.($nomorBaris + 2).": {$e->getMessage()}"; // +2: heading + index 0-based
             } catch (Throwable $e) {
-                $errors[] = 'Baris ' . ($nomorBaris + 2) . ": Gagal tidak terduga - {$e->getMessage()}";
+                $errors[] = 'Baris '.($nomorBaris + 2).": Gagal tidak terduga - {$e->getMessage()}";
             }
         }
 
@@ -13993,7 +14048,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasName, HasAvatar
+class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasAvatar, HasName
 {
     use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
@@ -14056,7 +14111,7 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
         return $this->hasMany(RiwayatKelasSiswa::class);
     }
 
-        public function getFilamentAvatarUrl(): ?string
+    public function getFilamentAvatarUrl(): ?string
     {
         return $this->avatar
             ? asset('storage/'.($this->avatar))
@@ -14308,14 +14363,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -14375,8 +14430,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-
 }
+
 ```
 ---
 
@@ -14388,14 +14443,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -14455,8 +14510,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-
 }
+
 ```
 ---
 
@@ -14556,14 +14611,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\FirmwareRelease;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class FirmwareReleasePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:FirmwareRelease');
@@ -14623,8 +14678,8 @@ class FirmwareReleasePolicy
     {
         return $authUser->can('Reorder:FirmwareRelease');
     }
-
 }
+
 ```
 ---
 
@@ -14636,14 +14691,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -14703,8 +14758,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-
 }
+
 ```
 ---
 
@@ -14716,14 +14771,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -14783,8 +14838,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-
 }
+
 ```
 ---
 
@@ -14796,14 +14851,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -14863,8 +14918,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-
 }
+
 ```
 ---
 
@@ -14876,14 +14931,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -14943,8 +14998,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -14956,14 +15011,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -15023,8 +15078,8 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-
 }
+
 ```
 ---
 
@@ -15036,14 +15091,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadgeLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgeLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadgeLog');
@@ -15103,8 +15158,8 @@ class LevelBadgeLogPolicy
     {
         return $authUser->can('Reorder:LevelBadgeLog');
     }
-
 }
+
 ```
 ---
 
@@ -15116,14 +15171,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -15183,8 +15238,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-
 }
+
 ```
 ---
 
@@ -15196,14 +15251,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -15263,8 +15318,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-
 }
+
 ```
 ---
 
@@ -15276,14 +15331,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -15343,8 +15398,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-
 }
+
 ```
 ---
 
@@ -15356,14 +15411,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -15423,8 +15478,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-
 }
+
 ```
 ---
 
@@ -15436,14 +15491,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -15503,8 +15558,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-
 }
+
 ```
 ---
 
@@ -15516,14 +15571,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -15583,8 +15638,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-
 }
+
 ```
 ---
 
@@ -15596,14 +15651,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -15663,8 +15718,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-
 }
+
 ```
 ---
 
@@ -15676,14 +15731,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -15743,8 +15798,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-
 }
+
 ```
 ---
 
@@ -15756,14 +15811,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -15823,8 +15878,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-
 }
+
 ```
 ---
 
@@ -15836,14 +15891,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
-use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -15903,8 +15958,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-
 }
+
 ```
 ---
 
@@ -15916,14 +15971,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -15983,8 +16038,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -15996,14 +16051,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -16063,8 +16118,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-
 }
+
 ```
 ---
 
@@ -16074,13 +16129,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -16140,8 +16195,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-
 }
+
 ```
 ---
 
@@ -16158,6 +16213,9 @@ use App\Observers\DendaObserver;
 use App\Observers\SettingObserver;
 use App\Observers\UserObserver;
 use BezhanSalleh\FilamentShield\Facades\FilamentShield;
+use Carbon\Carbon;
+use Filament\Support\Colors\Color;
+use Filament\Support\Facades\FilamentColor;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -16194,6 +16252,18 @@ class AppServiceProvider extends ServiceProvider
         Denda::observe(DendaObserver::class);
         User::observe(UserObserver::class);
         Setting::observe(SettingObserver::class); // invalidasi cache Setting::get()
+
+        setlocale(LC_TIME, 'id_ID.utf8');
+        Carbon::setLocale('id');
+
+        FilamentColor::register([
+            'primary' => Color::hex('#0f766e'),
+            // 'gray' => Color::hex('#1e293b'),
+            'info' => Color::hex('#6366f1'),
+            'success' => Color::hex('#10b981'),
+            'warning' => Color::hex('#f59e0b'),
+            'danger' => Color::hex('#ef4444'),
+        ]);
     }
 }
 
@@ -16234,6 +16304,10 @@ class DashboardPanelProvider extends PanelProvider
     {
         return $panel
             ->topNavigation()
+            // ->profile()
+            ->unsavedChangesAlerts()
+            ->favicon(asset('images/favicon.ico'))
+            ->simplePageMaxContentWidth(Width::Medium)
             ->maxContentWidth(Width::Full)
             ->globalSearch(false)
             ->default()
@@ -16255,7 +16329,7 @@ class DashboardPanelProvider extends PanelProvider
                     '<img src="'.asset('images/brand-darkmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
             ))
             ->brandLogoHeight('2.5rem')
-            ->spa()
+            ->spa(hasPrefetching: true)
             ->pages([
                 Dashboard::class,
             ])
@@ -16427,7 +16501,7 @@ class BukuImportResolverService
 
     /**
      * @return array<int, string>|null null berarti kolom kategori kosong
-     *                                  (tidak ada perubahan relasi).
+     *                                 (tidak ada perubahan relasi).
      *
      * @throws RowImportFailedException jika ada nama kategori yang tidak ditemukan.
      */
@@ -16443,7 +16517,7 @@ class BukuImportResolverService
         $namaTidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
 
         if (! empty($namaTidakDitemukan)) {
-            throw new RowImportFailedException('Kategori tidak ditemukan: "' . implode('", "', $namaTidakDitemukan) . '". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
+            throw new RowImportFailedException('Kategori tidak ditemukan: "'.implode('", "', $namaTidakDitemukan).'". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
         }
 
         return $kategoris->pluck('id')->all();
@@ -18018,9 +18092,9 @@ class SnapshotHarianService
 
 namespace App\Services;
 
-use App\Models\KelasTahunPelajaran;
 use App\Models\Jurusan;
 use App\Models\Kelas;
+use App\Models\KelasTahunPelajaran;
 use App\Models\TahunPelajaran;
 use App\Models\User;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
@@ -18086,7 +18160,7 @@ class UserImportResolverService
 
         $dipakaiUserLain = User::query()
             ->where('no_kartu_rfid', $nomorBaru)
-            ->when($user->exists, fn($q) => $q->whereKeyNot($user->id))
+            ->when($user->exists, fn ($q) => $q->whereKeyNot($user->id))
             ->exists();
 
         if ($dipakaiUserLain) {
@@ -18166,7 +18240,7 @@ class UserImportResolverService
     {
         $ekstensi = pathinfo(parse_url($sumber, PHP_URL_PATH) ?? $sumber, PATHINFO_EXTENSION) ?: 'jpg';
 
-        return 'user-avatar/' . $identitas . '.' . $ekstensi;
+        return 'user-avatar/'.$identitas.'.'.$ekstensi;
     }
 
     /**
@@ -18445,8 +18519,8 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => [],
                 'columns' => [
-                    'nama' => fn($r) => $r->nama,
-                    'kode' => fn($r) => $r->kode,
+                    'nama' => fn ($r) => $r->nama,
+                    'kode' => fn ($r) => $r->kode,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['kode'])) {
@@ -18462,10 +18536,10 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => [],
                 'columns' => [
-                    'nama' => fn($r) => $r->nama,
-                    'tanggal_mulai' => fn($r) => $r->tanggal_mulai,
-                    'tanggal_selesai' => fn($r) => $r->tanggal_selesai,
-                    'aktif' => fn($r) => $r->aktif ? 'ya' : 'tidak',
+                    'nama' => fn ($r) => $r->nama,
+                    'tanggal_mulai' => fn ($r) => $r->tanggal_mulai,
+                    'tanggal_selesai' => fn ($r) => $r->tanggal_selesai,
+                    'aktif' => fn ($r) => $r->aktif ? 'ya' : 'tidak',
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['tanggal_mulai']) || empty($row['tanggal_selesai'])) {
@@ -18489,9 +18563,9 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => ['jurusan'],
                 'columns' => [
-                    'nama' => fn($r) => $r->nama,
-                    'tingkat' => fn($r) => $r->tingkat,
-                    'jurusan' => fn($r) => $r->jurusan?->nama,
+                    'nama' => fn ($r) => $r->nama,
+                    'tingkat' => fn ($r) => $r->tingkat,
+                    'jurusan' => fn ($r) => $r->jurusan?->nama,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['tingkat']) || empty($row['jurusan'])) {
@@ -18514,9 +18588,9 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => ['kelas', 'tahunPelajaran', 'waliKelas'],
                 'columns' => [
-                    'kelas' => fn($r) => $r->kelas?->nama,
-                    'tahun_pelajaran' => fn($r) => $r->tahunPelajaran?->nama,
-                    'wali_kelas_nip' => fn($r) => $r->waliKelas?->nip,
+                    'kelas' => fn ($r) => $r->kelas?->nama,
+                    'tahun_pelajaran' => fn ($r) => $r->tahunPelajaran?->nama,
+                    'wali_kelas_nip' => fn ($r) => $r->waliKelas?->nip,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['kelas']) || empty($row['tahun_pelajaran'])) {
@@ -18551,8 +18625,8 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => [],
                 'columns' => [
-                    'nama' => fn($r) => $r->nama,
-                    'lokasi' => fn($r) => $r->lokasi,
+                    'nama' => fn ($r) => $r->nama,
+                    'lokasi' => fn ($r) => $r->lokasi,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama'])) {
@@ -18568,8 +18642,8 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => [],
                 'columns' => [
-                    'nama' => fn($r) => $r->nama,
-                    'deskripsi' => fn($r) => $r->deskripsi,
+                    'nama' => fn ($r) => $r->nama,
+                    'deskripsi' => fn ($r) => $r->deskripsi,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama'])) {
@@ -18585,10 +18659,10 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => [],
                 'columns' => [
-                    'nama_badge' => fn($r) => $r->nama_badge,
-                    'min_point' => fn($r) => $r->min_point,
-                    'max_point' => fn($r) => $r->max_point,
-                    'urutan' => fn($r) => $r->urutan,
+                    'nama_badge' => fn ($r) => $r->nama_badge,
+                    'min_point' => fn ($r) => $r->min_point,
+                    'max_point' => fn ($r) => $r->max_point,
+                    'urutan' => fn ($r) => $r->urutan,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama_badge']) || ! isset($row['min_point'])) {
@@ -18611,9 +18685,9 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => [],
                 'columns' => [
-                    'nama' => fn($r) => $r->nama,
-                    'threshold_point' => fn($r) => $r->threshold_point,
-                    'aktif' => fn($r) => $r->aktif ? 'ya' : 'tidak',
+                    'nama' => fn ($r) => $r->nama,
+                    'threshold_point' => fn ($r) => $r->threshold_point,
+                    'aktif' => fn ($r) => $r->aktif ? 'ya' : 'tidak',
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['threshold_point'])) {
@@ -18635,10 +18709,10 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => [],
                 'columns' => [
-                    'nama' => fn($r) => $r->nama,
-                    'threshold_point_minus' => fn($r) => $r->threshold_point_minus,
-                    'durasi_suspend_hari' => fn($r) => $r->durasi_suspend_hari,
-                    'aktif' => fn($r) => $r->aktif ? 'ya' : 'tidak',
+                    'nama' => fn ($r) => $r->nama,
+                    'threshold_point_minus' => fn ($r) => $r->threshold_point_minus,
+                    'durasi_suspend_hari' => fn ($r) => $r->durasi_suspend_hari,
+                    'aktif' => fn ($r) => $r->aktif ? 'ya' : 'tidak',
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || ! isset($row['threshold_point_minus'])) {
@@ -18661,17 +18735,17 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => ['kelasTahunPelajaran.kelas.jurusan', 'kelasTahunPelajaran.tahunPelajaran'],
                 'columns' => [
-                    'nama' => fn($r) => $r->nama,
-                    'role' => fn($r) => $r->role?->value,
-                    'jenis_kelamin' => fn($r) => $r->jenis_kelamin?->value,
-                    'nisn' => fn($r) => $r->nisn,
-                    'nip' => fn($r) => $r->nip,
-                    'no_telepon' => fn($r) => $r->no_telepon,
-                    'no_kartu_rfid' => fn($r) => $r->no_kartu_rfid,
-                    'avatar' => fn($r) => $r->avatar,
-                    'kelas' => fn($r) => $r->kelasTahunPelajaran?->kelas?->nama,
-                    'jurusan_kode' => fn($r) => $r->kelasTahunPelajaran?->kelas?->jurusan?->kode,
-                    'tahun_pelajaran' => fn($r) => $r->kelasTahunPelajaran?->tahunPelajaran?->nama,
+                    'nama' => fn ($r) => $r->nama,
+                    'role' => fn ($r) => $r->role?->value,
+                    'jenis_kelamin' => fn ($r) => $r->jenis_kelamin?->value,
+                    'nisn' => fn ($r) => $r->nisn,
+                    'nip' => fn ($r) => $r->nip,
+                    'no_telepon' => fn ($r) => $r->no_telepon,
+                    'no_kartu_rfid' => fn ($r) => $r->no_kartu_rfid,
+                    'avatar' => fn ($r) => $r->avatar,
+                    'kelas' => fn ($r) => $r->kelasTahunPelajaran?->kelas?->nama,
+                    'jurusan_kode' => fn ($r) => $r->kelasTahunPelajaran?->kelas?->jurusan?->kode,
+                    'tahun_pelajaran' => fn ($r) => $r->kelasTahunPelajaran?->tahunPelajaran?->nama,
                     // 'password' SENGAJA tidak diexport (hash tidak berguna
                     // untuk reimport) - hanya diterima saat import di bawah.
                 ],
@@ -18682,7 +18756,7 @@ class MasterDataRegistry
 
                     $role = RoleUser::tryFrom(trim($row['role']));
                     if (! $role) {
-                        throw new RowImportFailedException("Role \"{$row['role']}\" tidak valid. Gunakan salah satu: " . implode(', ', array_column(RoleUser::cases(), 'value')));
+                        throw new RowImportFailedException("Role \"{$row['role']}\" tidak valid. Gunakan salah satu: ".implode(', ', array_column(RoleUser::cases(), 'value')));
                     }
 
                     $identitas = $role === RoleUser::Siswa
@@ -18750,13 +18824,13 @@ class MasterDataRegistry
                 'importable' => true,
                 'eager' => ['eksemplars.rak', 'kategoris'],
                 'columns' => [
-                    'judul' => fn($r) => $r->judul,
-                    'penulis' => fn($r) => $r->penulis,
-                    'isbn' => fn($r) => $r->isbn,
-                    'harga_ganti' => fn($r) => $r->harga_ganti,
-                    'stok' => fn($r) => $r->eksemplars->count(),
-                    'rak' => fn($r) => $r->eksemplars->pluck('rak.nama')->filter()->unique()->implode('; '),
-                    'kategori' => fn($r) => $r->kategoris->pluck('nama')->implode('; '),
+                    'judul' => fn ($r) => $r->judul,
+                    'penulis' => fn ($r) => $r->penulis,
+                    'isbn' => fn ($r) => $r->isbn,
+                    'harga_ganti' => fn ($r) => $r->harga_ganti,
+                    'stok' => fn ($r) => $r->eksemplars->count(),
+                    'rak' => fn ($r) => $r->eksemplars->pluck('rak.nama')->filter()->unique()->implode('; '),
+                    'kategori' => fn ($r) => $r->kategoris->pluck('nama')->implode('; '),
                 ],
                 // GAP-SPEC ditutup (iterasi ini): sebelumnya closure ini
                 // menduplikasi manual logic resolusi kategori/rak/akumulasi
@@ -18794,52 +18868,52 @@ class MasterDataRegistry
 
             // --- READ-ONLY (export saja, TIDAK diproses saat import) ---
             ['key' => 'denda', 'label' => 'Denda', 'model' => Denda::class, 'importable' => false, 'eager' => ['user'], 'columns' => [
-                'user' => fn($r) => $r->user?->nama,
-                'tipe' => fn($r) => $r->tipe?->value,
-                'nominal' => fn($r) => $r->nominal,
-                'status_lunas' => fn($r) => $r->status_lunas ? 'lunas' : 'belum lunas',
+                'user' => fn ($r) => $r->user?->nama,
+                'tipe' => fn ($r) => $r->tipe?->value,
+                'nominal' => fn ($r) => $r->nominal,
+                'status_lunas' => fn ($r) => $r->status_lunas ? 'lunas' : 'belum lunas',
             ]],
             ['key' => 'peminjaman', 'label' => 'Peminjaman', 'model' => Peminjaman::class, 'importable' => false, 'eager' => ['user', 'eksemplar.buku'], 'columns' => [
-                'user' => fn($r) => $r->user?->nama,
-                'buku' => fn($r) => $r->eksemplar?->buku?->judul,
-                'tanggal_pinjam' => fn($r) => $r->tanggal_pinjam,
-                'status' => fn($r) => $r->status?->value,
+                'user' => fn ($r) => $r->user?->nama,
+                'buku' => fn ($r) => $r->eksemplar?->buku?->judul,
+                'tanggal_pinjam' => fn ($r) => $r->tanggal_pinjam,
+                'status' => fn ($r) => $r->status?->value,
             ]],
             ['key' => 'pengembalian', 'label' => 'Pengembalian', 'model' => Pengembalian::class, 'importable' => false, 'eager' => [], 'columns' => [
-                'tanggal_kembali' => fn($r) => $r->tanggal_kembali,
-                'kondisi' => fn($r) => $r->kondisi?->value,
+                'tanggal_kembali' => fn ($r) => $r->tanggal_kembali,
+                'kondisi' => fn ($r) => $r->kondisi?->value,
             ]],
             ['key' => 'transaksi', 'label' => 'Transaksi', 'model' => Transaksi::class, 'importable' => false, 'eager' => ['user'], 'columns' => [
-                'user' => fn($r) => $r->user?->nama,
-                'jenis' => fn($r) => $r->jenis?->value,
-                'tanggal' => fn($r) => $r->tanggal,
+                'user' => fn ($r) => $r->user?->nama,
+                'jenis' => fn ($r) => $r->jenis?->value,
+                'tanggal' => fn ($r) => $r->tanggal,
             ]],
             ['key' => 'kunjungan', 'label' => 'Kunjungan', 'model' => Kunjungan::class, 'importable' => false, 'eager' => ['user'], 'columns' => [
-                'user' => fn($r) => $r->user?->nama,
-                'tanggal' => fn($r) => $r->tanggal,
+                'user' => fn ($r) => $r->user?->nama,
+                'tanggal' => fn ($r) => $r->tanggal,
             ]],
             ['key' => 'level_badge_log', 'label' => 'RiwayatBadge', 'model' => LevelBadgeLog::class, 'importable' => false, 'eager' => ['user', 'levelBadge'], 'columns' => [
-                'user' => fn($r) => $r->user?->nama,
-                'badge' => fn($r) => $r->levelBadge?->nama_badge,
-                'tanggal_didapat' => fn($r) => $r->tanggal_didapat,
+                'user' => fn ($r) => $r->user?->nama,
+                'badge' => fn ($r) => $r->levelBadge?->nama_badge,
+                'tanggal_didapat' => fn ($r) => $r->tanggal_didapat,
             ]],
             ['key' => 'reward_log', 'label' => 'RiwayatReward', 'model' => RewardLog::class, 'importable' => false, 'eager' => ['user', 'reward'], 'columns' => [
-                'user' => fn($r) => $r->user?->nama,
-                'reward' => fn($r) => $r->reward?->nama,
-                'tanggal_didapat' => fn($r) => $r->tanggal_didapat,
+                'user' => fn ($r) => $r->user?->nama,
+                'reward' => fn ($r) => $r->reward?->nama,
+                'tanggal_didapat' => fn ($r) => $r->tanggal_didapat,
             ]],
             ['key' => 'punishment_log', 'label' => 'RiwayatPunishment', 'model' => PunishmentLog::class, 'importable' => false, 'eager' => ['user', 'punishment'], 'columns' => [
-                'user' => fn($r) => $r->user?->nama,
-                'punishment' => fn($r) => $r->punishment?->nama,
-                'tanggal_diterapkan' => fn($r) => $r->tanggal_diterapkan,
+                'user' => fn ($r) => $r->user?->nama,
+                'punishment' => fn ($r) => $r->punishment?->nama,
+                'tanggal_diterapkan' => fn ($r) => $r->tanggal_diterapkan,
             ]],
             ['key' => 'riwayat_kelas_siswa', 'label' => 'RiwayatKelasSiswa', 'model' => RiwayatKelasSiswa::class, 'importable' => false, 'eager' => ['user'], 'columns' => [
-                'user' => fn($r) => $r->user?->nama,
-                'status' => fn($r) => $r->status?->value,
+                'user' => fn ($r) => $r->user?->nama,
+                'status' => fn ($r) => $r->status?->value,
             ]],
             ['key' => 'firmware', 'label' => 'FirmwareOTA', 'model' => FirmwareRelease::class, 'importable' => false, 'eager' => [], 'columns' => [
-                'version' => fn($r) => $r->version,
-                'aktif' => fn($r) => $r->aktif ? 'ya' : 'tidak',
+                'version' => fn ($r) => $r->version,
+                'aktif' => fn ($r) => $r->aktif ? 'ya' : 'tidak',
             ]],
         ];
     }
@@ -24877,6 +24951,20 @@ return Application::configure(basePath: dirname(__DIR__))
       0 => 'Laravel\\Octane\\OctaneServiceProvider',
     ),
   ),
+  'laravel/pail' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'Laravel\\Pail\\PailServiceProvider',
+    ),
+  ),
+  'laravel/pao' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
+    ),
+  ),
   'laravel/tinker' => 
   array (
     'providers' => 
@@ -24911,6 +24999,13 @@ return Application::configure(basePath: dirname(__DIR__))
     'providers' => 
     array (
       0 => 'Carbon\\Laravel\\ServiceProvider',
+    ),
+  ),
+  'nunomaduro/collision' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     ),
   ),
   'nunomaduro/termwind' => 
@@ -24989,15 +25084,18 @@ return Application::configure(basePath: dirname(__DIR__))
     39 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
     40 => 'Blueprint\\BlueprintServiceProvider',
     41 => 'Laravel\\Octane\\OctaneServiceProvider',
-    42 => 'Laravel\\Tinker\\TinkerServiceProvider',
-    43 => 'Livewire\\LivewireServiceProvider',
-    44 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
-    45 => 'Carbon\\Laravel\\ServiceProvider',
-    46 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    47 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
-    48 => 'Spatie\\Permission\\PermissionServiceProvider',
-    49 => 'App\\Providers\\AppServiceProvider',
-    50 => 'App\\Providers\\Filament\\DashboardPanelProvider',
+    42 => 'Laravel\\Pail\\PailServiceProvider',
+    43 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
+    44 => 'Laravel\\Tinker\\TinkerServiceProvider',
+    45 => 'Livewire\\LivewireServiceProvider',
+    46 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
+    47 => 'Carbon\\Laravel\\ServiceProvider',
+    48 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
+    49 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    50 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
+    51 => 'Spatie\\Permission\\PermissionServiceProvider',
+    52 => 'App\\Providers\\AppServiceProvider',
+    53 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
   'eager' => 
   array (
@@ -25028,14 +25126,17 @@ return Application::configure(basePath: dirname(__DIR__))
     24 => 'Filament\\Widgets\\WidgetsServiceProvider',
     25 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
     26 => 'Laravel\\Octane\\OctaneServiceProvider',
-    27 => 'Livewire\\LivewireServiceProvider',
-    28 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
-    29 => 'Carbon\\Laravel\\ServiceProvider',
-    30 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    31 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
-    32 => 'Spatie\\Permission\\PermissionServiceProvider',
-    33 => 'App\\Providers\\AppServiceProvider',
-    34 => 'App\\Providers\\Filament\\DashboardPanelProvider',
+    27 => 'Laravel\\Pail\\PailServiceProvider',
+    28 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
+    29 => 'Livewire\\LivewireServiceProvider',
+    30 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
+    31 => 'Carbon\\Laravel\\ServiceProvider',
+    32 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
+    33 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    34 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
+    35 => 'Spatie\\Permission\\PermissionServiceProvider',
+    36 => 'App\\Providers\\AppServiceProvider',
+    37 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
   'deferred' => 
   array (

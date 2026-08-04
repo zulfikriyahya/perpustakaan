@@ -100,7 +100,18 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- review snapshoot dengan tugas lain, khawatir mengirimkan pesan per 15 menit.
+- unggah .mp3 atau .wav di daftar audio-book
+- unggah .epub atau .pdf di daftar e-book
+- fitur baca buku pdf di landing page (kalau bisa menggunakan seperti fliphtml5)
+
+- membuat UI Landing Page
+- halaman FAQ
+- Halaman Tentang Perpustakaan
+- Halaman Authors
+- Metadata LLMS.txt | robots.txt
+- Install PWA
+- SEO Google
+- halaman daftar buku pdf / e-book / audio-book
 
 ---
 

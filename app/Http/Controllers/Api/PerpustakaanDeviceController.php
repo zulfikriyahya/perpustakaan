@@ -125,7 +125,7 @@ class PerpustakaanDeviceController extends Controller
         // BARU: baris "EOF" wajib jadi baris TERAKHIR - lihat docblock method
         // ini. implode("\n") tidak menyertakan newline trailing, sehingga
         // "EOF" persis jadi baris terakhir tanpa baris kosong setelahnya.
-        $body = "ver:{$ver}\n" . $kartuList->implode("\n") . "\nEOF";
+        $body = "ver:{$ver}\n".$kartuList->implode("\n")."\nEOF";
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -176,6 +176,7 @@ class PerpustakaanDeviceController extends Controller
                 // count response tetap sama dengan count request, lihat
                 // validasi count di firmware).
                 $hasil[] = ['rfid' => '', 'timestamp' => '', 'status' => 'error', 'message' => 'item tidak valid'];
+
                 continue;
             }
 
@@ -294,7 +295,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {

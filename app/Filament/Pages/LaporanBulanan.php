@@ -78,7 +78,7 @@ class LaporanBulanan extends Page
                                 ->native(false)
                                 ->options(
                                     collect(range((int) now()->format('Y'), 2024))
-                                        ->mapWithKeys(fn($y) => [$y => $y])
+                                        ->mapWithKeys(fn ($y) => [$y => $y])
                                 )
                                 ->required(),
                         ]),
@@ -96,7 +96,7 @@ class LaporanBulanan extends Page
             ->setPaper('a4', 'portrait');
 
         return response()->streamDownload(
-            fn() => print($pdf->output()),
+            fn () => print ($pdf->output()),
             "laporan-bulanan-{$data['tahun']}-{$data['bulan']}.pdf",
             ['Content-Type' => 'application/pdf'],
         );

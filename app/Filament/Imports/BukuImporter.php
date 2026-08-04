@@ -69,13 +69,13 @@ class BukuImporter extends Importer
                 ->helperText('Isi persis sesuai nama Rak yang sudah ada di Master Data > Rak. Jika tidak ditemukan, buku diimport tanpa lokasi rak (bukan dibuatkan Rak baru otomatis).')
                 ->rules(['nullable', 'string'])
                 ->example('Rak A')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
                 ->helperText('Isi persis sesuai nama Kategori yang sudah ada di Master Data > Kategori. Contoh 2 kategori: "Fiksi;Sains". Kategori yang tidak ditemukan namanya akan membuat baris GAGAL.')
                 ->rules(['nullable', 'string'])
                 ->example('Fiksi;Sastra Indonesia')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('harga_ganti')
                 ->label('Harga Ganti')
                 ->helperText('WAJIB diisi manual - dipakai sebagai basis perhitungan Denda kerusakan/kehilangan. Baris tanpa nilai ini akan GAGAL, tidak ada default otomatis.')
@@ -87,7 +87,7 @@ class BukuImporter extends Importer
                 ->numeric()
                 ->rules(['required', 'integer', 'min:0'])
                 ->example('3')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('deskripsi')
                 ->rules(['nullable', 'string'])
                 ->example('Novel tentang perjuangan anak-anak Belitung mengejar pendidikan.'),
@@ -122,10 +122,10 @@ class BukuImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Buku selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import Buku selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;

@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Rules\FormatKartuRfid;
 use App\Services\KenaikanKelasService;
 use App\Services\UserImportResolverService;
-use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -83,18 +82,18 @@ class UserImporter extends Importer
                 ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('VII A')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan (wajib jika kelas_nama diisi)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('Non_Jurusan')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('2026/2027')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example(''),
@@ -118,7 +117,7 @@ class UserImporter extends Importer
                 ->helperText('Isi URL gambar (https://...) atau path file yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
                 ->rules(['nullable', 'string', 'max:2048'])
                 ->example('https://contoh-sekolah.id/foto/siswa1.jpg')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -170,10 +169,10 @@ class UserImporter extends Importer
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
+        $body = 'Import User selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' '.number_format($failedRowsCount).' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         $kartuDihapus = (int) Cache::get("import-{$import->id}-kartu-dihapus", 0);

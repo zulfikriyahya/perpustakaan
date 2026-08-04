@@ -36,7 +36,7 @@ class GenericExportSheet implements FromCollection, ShouldAutoSize, ShouldQueue,
 
     public function map($record): array
     {
-        return array_map(fn($callback) => (string) ($callback($record) ?? ''), array_values($this->item['columns']));
+        return array_map(fn ($callback) => (string) ($callback($record) ?? ''), array_values($this->item['columns']));
     }
 
     public function headings(): array

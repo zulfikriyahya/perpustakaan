@@ -7,7 +7,7 @@
  * Author           : Yahya Zulfikri
  * Created          : Juli 2025
  * Updated          : Juli 2026
- * Version          : 2.3.1
+ * Version          : 2.3.3
  */
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -116,7 +116,7 @@
 #define GMT_OFFSET_SEC 25200L
 #define SIGNAL_THRESHOLD_WEAK -85
 #define SIGNAL_THRESHOLD_CRITICAL -90
-#define FIRMWARE_VERSION "2.3.1"
+#define FIRMWARE_VERSION "2.3.3"
 #define PROV_AP_SSID "ATTENDANCE MACHINE"
 #define PROV_DNS_PORT 53
 #define CRC8_POLY 0x07
@@ -1611,6 +1611,30 @@ unsigned long checkRfidDbVersion() {
   return doc["ver"] | 0UL;
 }
 
+/**
+ * PATCH v2.3.3 (revisi 2 - FINAL) - server berjalan di belakang Cloudflare
+ * dengan HTTP/2: TIDAK ADA header Content-Length yang dikirim, dan koneksi
+ * TIDAK ditutup segera setelah body selesai (keep-alive) - sehingga baik
+ * "Content-Length" maupun "http.connected() == false" TIDAK BISA dipakai
+ * untuk mendeteksi transfer selesai (revisi 1 SALAH karena mengandalkan ini,
+ * lihat riwayat diskusi - dibuang, jangan dipakai).
+ *
+ * KONTRAK BARU: backend (PerpustakaanDeviceController::rfidList()) sekarang
+ * SELALU mengirim baris "EOF" sebagai baris TERAKHIR body. Baris "EOF"
+ * adalah SATU-SATUNYA penanda sukses yang dipakai di sini.
+ *
+ * - Baris "EOF" ditemukan sebelum loop berhenti: transfer LENGKAP - file
+ *   tmp difinalisasi, RFID_DB_FILE lama ditimpa, versi lokal di-update.
+ * - Loop berhenti (disconnect/timeout 15 detik) SEBELUM "EOF" ditemukan:
+ *   transfer GAGAL/TERPOTONG - file tmp dibuang, RFID_DB_FILE lama TIDAK
+ *   disentuh, cache RAM TIDAK di-reload, nvsSetRfidDbVer() TIDAK dipanggil
+ *   - siklus checkAndUpdateRfidDb() berikutnya (60 detik lagi) otomatis
+ *   retry dari awal (server tidak mendukung range request, jadi bukan
+ *   resume).
+ *
+ * Endpoint ini HANYA dipakai device Attendance Machine perpustakaan ini
+ * (dikonfirmasi) - perubahan kontrak body aman, tidak ada konsumen lain.
+ */
 bool downloadRfidDb() {
   if (isSignalWeak() || !sdCardAvailable) {
     return false;
@@ -1650,7 +1674,6 @@ bool downloadRfidDb() {
     return false;
   }
   WiFiClient *stream = http.getStreamPtr();
-  int total = http.getSize();
   int written = 0;
   long bytesRead = 0;
   unsigned long lastDataAt = millis();
@@ -1662,13 +1685,16 @@ bool downloadRfidDb() {
   int truncatedLineCount = 0;
   uint8_t chunk[256];
 
-  while (http.connected() && (total <= 0 || bytesRead < total)) {
+  // Satu-satunya penanda sukses - baris "EOF" ditemukan.
+  bool eofMarkerFound = false;
+
+  while (http.connected() && !eofMarkerFound) {
     esp_task_wdt_reset();
     taskYIELD();
     int avail = stream->available();
     if (!avail) {
       if (millis() - lastDataAt > 15000UL) {
-        break;
+        break;  // stall - keluar tanpa eofMarkerFound -> ditangani sebagai gagal di bawah.
       }
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
@@ -1676,7 +1702,7 @@ bool downloadRfidDb() {
     lastDataAt = millis();
     int rd = stream->readBytes(chunk, min(avail, (int)sizeof(chunk)));
     bytesRead += rd;
-    for (int i = 0; i < rd; i++) {
+    for (int i = 0; i < rd && !eofMarkerFound; i++) {
       char c = (char)chunk[i];
       if (c == '\r')
         continue;
@@ -1693,6 +1719,12 @@ bool downloadRfidDb() {
             serverVer = strtoul(lineBuf + 4, nullptr, 10);
             continue;
           }
+        }
+        // Cek penanda EOF SEBELUM validasi 10-digit, supaya "EOF" tidak
+        // salah dicoba divalidasi sebagai kartu.
+        if (strcmp(lineBuf, "EOF") == 0) {
+          eofMarkerFound = true;
+          break;
         }
         int ll = strlen(lineBuf);
         if (ll == 10) {
@@ -1712,10 +1744,29 @@ bool downloadRfidDb() {
           lineTruncated = true;
       }
     }
+    // Tangani kasus body TIDAK diakhiri newline setelah "EOF" (mis. server
+    // kirim "...EOF" tanpa \n final) - cek sisa buffer di lineBuf juga.
+    if (!eofMarkerFound && lbPos == 3 && lineBuf[0] == 'E' && lineBuf[1] == 'O' && lineBuf[2] == 'F') {
+      eofMarkerFound = true;
+    }
   }
+
   http.end();
   dbf.sync();
   dbf.close();
+
+  if (!eofMarkerFound) {
+    // Transfer terpotong - buang tmp, JANGAN sentuh RFID_DB_FILE lama,
+    // JANGAN reload cache RAM, JANGAN update versi lokal.
+    sd.remove(tmpPath);
+    deselectSD();
+    releaseSD();
+    showOLED(F("RFID DB"), "TRANSFER TERPUTUS");
+    playToneError();
+    delay(800);
+    return false;
+  }
+
   if (sd.exists(RFID_DB_FILE))
     sd.remove(RFID_DB_FILE);
   sd.rename(tmpPath, RFID_DB_FILE);
@@ -1736,6 +1787,13 @@ bool downloadRfidDb() {
   delay(800);
   return true;
 }
+
+
+
+
+
+
+
 
 void checkAndUpdateRfidDb() {
   if (!sdCardAvailable || isSignalWeak())

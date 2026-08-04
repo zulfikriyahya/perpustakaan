@@ -70,6 +70,7 @@ class SettingSeeder extends Seeder
             ['key' => 'wa_template_denda_dibatalkan_perlu_refund', 'value' => 'denda_dibatalkan_perlu_refund', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat Denda yang SUDAH TERBAYAR dibatalkan akibat koreksi kondisi - Admin wajib menindaklanjuti refund manual (lihat Denda.status_refund).'],
             ['key' => 'wa_template_login_otp', 'value' => 'login_otp', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat user login via OTP WhatsApp (setara reset password, tapi TIDAK mengubah password).'],
             ['key' => 'wa_template_buku_ditemukan_kembali', 'value' => 'buku_ditemukan_kembali', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat buku yang dilaporkan hilang (via laporkanHilang(), belum pernah punya Pengembalian) ditemukan kembali.'],
+            ['key' => 'wa_template_kunjungan_tercatat', 'value' => 'kunjungan_tercatat', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. BELUM ada di dokumen Template WhatsApp - wajib dibuat manual di panel gateway zedlabs (variabel: nama, jam_tap, device). Dikirim setiap kali Kunjungan RFID tercatat, berlaku semua role.'],
         ];
 
         foreach ($settings as $setting) {

@@ -100,10 +100,7 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- review dan finalkan fitur import/export masing-masing
-- review dan finalkan fitur full master import/export
-- percantik dan informatif untuk ui dan ux untuk setiap halaman/pages
-- gunakan css dan js custom untuk resources
+- kenapa setiap perubahan rfid user tidak mengupdate mesin?
 
 ---
 

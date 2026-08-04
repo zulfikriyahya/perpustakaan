@@ -186,6 +186,7 @@ class PengaturanSistem extends Page
                                         'wa_template_reminder_h1' => 'Reminder H-1',
                                         'wa_template_jadi_terlambat' => 'Jadi Terlambat',
                                         'wa_template_pengembalian_diproses' => 'Pengembalian Diproses',
+                                        'wa_template_kunjungan_tercatat' => 'Kunjungan Tercatat',
                                         'wa_template_denda_dibuat' => 'Denda Dibuat',
                                         'wa_template_denda_lunas' => 'Denda Lunas',
                                         'wa_template_badge_naik' => 'Badge Naik',
@@ -197,7 +198,7 @@ class PengaturanSistem extends Page
                                         'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
                                         'wa_template_buku_ditemukan_kembali' => 'Buku Ditemukan Kembali',
                                     ])->map(
-                                        fn (string $label, string $key) => TextInput::make($key)
+                                        fn(string $label, string $key) => TextInput::make($key)
                                             ->label($label)
                                             ->required()
                                             ->helperText('Wajib sama persis dengan template_code di panel gateway.')
@@ -209,7 +210,7 @@ class PengaturanSistem extends Page
                         ->schema([
                             Placeholder::make('rfid_db_ver')
                                 ->label('Versi Daftar Kartu RFID (otomatis)')
-                                ->content(fn () => (string) Setting::get('rfid_db_ver', 0))
+                                ->content(fn() => (string) Setting::get('rfid_db_ver', 0))
                                 ->columnSpanFull(),
                             Grid::make(self::GRID_KOLOM_STANDAR)
                                 ->schema([

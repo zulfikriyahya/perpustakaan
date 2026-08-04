@@ -1450,12 +1450,8 @@ class UserExporter extends Exporter
 
 namespace App\Filament\Imports;
 
-use App\Enums\StatusEksemplar;
 use App\Models\Buku;
-use App\Models\Eksemplar;
-use App\Models\Kategori;
-use App\Models\Rak;
-use Filament\Actions\Imports\Exceptions\RowImportFailedException;
+use App\Services\BukuImportResolverService;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -1465,39 +1461,34 @@ use Filament\Actions\Imports\Models\Import;
  * bukan per judul buku - lihat migration 2026_08_02_000003/000004).
  * Baris tanpa ISBN selalu jadi Buku baru.
  *
- * BUG FIX (iterasi ini): kolom 'barcode' SEBELUMNYA requiredMapping tanpa
- * fillRecordUsing no-op, padahal kolom 'barcode' sudah di-drop dari tabel
- * bukus - Filament akan mencoba assign $record->barcode sebelum save()
- * dan menyebabkan SQL error "Unknown column". Kolom 'barcode' dihapus
- * total dari sini; barcode eksemplar HANYA digenerate otomatis di
- * afterSave() (lihat TODO: GAP-SPEC di bawah), tidak lagi diambil dari
- * file import.
+ * REFACTOR (iterasi ini): seluruh resolusi Buku/Kategori/Eksemplar
+ * dipindah ke BukuImportResolverService (Aturan poin 3, DRY) -
+ * sebelumnya logic ini terduplikasi manual di closure 'buku'
+ * MasterDataRegistry (ditemukan saat review), berisiko drift kalau
+ * salah satu diperbaiki tapi yang lain tidak. Kontrak
+ * kolom/rules/pesan/perilaku dari sisi pengguna TIDAK berubah sama
+ * sekali dibanding versi sebelumnya.
  *
- * BUG FIX (pola sama, ditemukan sebelumnya): kolom 'rak' dan 'kategori'
- * adalah lookup-only (bukan kolom asli tabel 'bukus') - tetap pakai
- * ->fillRecordUsing() no-op supaya tidak di-assign ke $record sebelum
- * save().
- *
- * KEPUTUSAN dikonfirmasi:
- * - harga_ganti WAJIB diisi manual di file - baris kosong GAGAL TOTAL
- *   (bukan default 0).
- * - Duplikasi ISBN antar baris/antar import: STOK diakumulasi (tambah
- *   eksemplar baru sejumlah selisih), eksemplar existing tidak dikurangi
- *   meski stok di file diturunkan.
+ * KEPUTUSAN dikonfirmasi (tetap berlaku, lihat detail di
+ * BukuImportResolverService):
+ * - harga_ganti WAJIB diisi manual - baris kosong GAGAL TOTAL.
+ * - Duplikasi ISBN: STOK diakumulasi, eksemplar existing tidak
+ *   pernah dikurangi meski stok di file diturunkan.
  */
 class BukuImporter extends Importer
 {
     protected static ?string $model = Buku::class;
 
     /**
-     * @var array<int, string>|null ID Kategori hasil resolve nama di
-     *                              beforeSave() - null berarti kolom 'kategori' kosong (tidak
-     *                              ada perubahan relasi). Divalidasi SEBELUM save() supaya baris
-     *                              dengan nama kategori typo/tidak ditemukan GAGAL TOTAL
-     *                              (dikonfirmasi) - bukan tersimpan sebagian dengan kategori
-     *                              yang salah/hilang diam-diam.
+     * @var array<int, string>|null Hasil resolve nama kategori di
+     *                              beforeSave() - null berarti kolom 'kategori' kosong.
      */
     protected ?array $kategoriIdsTerresolve = null;
+
+    protected function resolver(): BukuImportResolverService
+    {
+        return app(BukuImportResolverService::class);
+    }
 
     public static function getColumns(): array
     {
@@ -1523,18 +1514,16 @@ class BukuImporter extends Importer
                 ->example('2008'),
             ImportColumn::make('rak')
                 ->label('Rak (nama, opsional)')
-                ->helperText('Isi persis sesuai nama Rak yang sudah ada diMaster Data > Rak. Jika tidak ditemukan, buku diimpor tanpa lokasi rak (bukan dibuatkan Rak baru otomatis).')
+                ->helperText('Isi persis sesuai nama Rak yang sudah ada di Master Data > Rak. Jika tidak ditemukan, buku diimport tanpa lokasi rak (bukan dibuatkan Rak baru otomatis).')
                 ->rules(['nullable', 'string'])
                 ->example('Rak A')
-                // BUG FIX - lookup-only, lihat docblock class.
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('kategori')
                 ->label('Kategori (nama, pisah titik-koma jika lebih dari satu)')
                 ->helperText('Isi persis sesuai nama Kategori yang sudah ada di Master Data > Kategori. Contoh 2 kategori: "Fiksi;Sains". Kategori yang tidak ditemukan namanya akan membuat baris GAGAL.')
                 ->rules(['nullable', 'string'])
                 ->example('Fiksi;Sastra Indonesia')
-                // BUG FIX - lookup-only, lihat docblock class.
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('harga_ganti')
                 ->label('Harga Ganti')
                 ->helperText('WAJIB diisi manual - dipakai sebagai basis perhitungan Denda kerusakan/kehilangan. Baris tanpa nilai ini akan GAGAL, tidak ada default otomatis.')
@@ -1546,15 +1535,7 @@ class BukuImporter extends Importer
                 ->numeric()
                 ->rules(['required', 'integer', 'min:0'])
                 ->example('3')
-                // BUG FIX (ditemukan iterasi ini, PENYEBAB ERROR "Unknown
-                // column 'stok'"): kolom 'stok' bukan kolom asli tabel
-                // 'bukus' (di-drop migration 2026_08_02_000003) - ini
-                // murni input agregat yang dikonsumsi manual di afterSave()
-                // untuk menghitung selisih eksemplar. Sama pola dengan
-                // 'rak'/'kategori' - HARUS lookup-only, kalau tidak
-                // Filament mencoba assign $record->stok sebelum save() dan
-                // memicu SQL error "Unknown column 'stok' in 'INSERT INTO'".
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('deskripsi')
                 ->rules(['nullable', 'string'])
                 ->example('Novel tentang perjuangan anak-anak Belitung mengejar pendidikan.'),
@@ -1563,68 +1544,36 @@ class BukuImporter extends Importer
 
     public function resolveRecord(): ?Buku
     {
-        if (empty($this->data['isbn'])) {
-            return new Buku;
-        }
-
-        return Buku::query()->firstOrNew(['isbn' => $this->data['isbn']]);
+        return $this->resolver()->resolveOrCreateBuku($this->data['isbn'] ?? null);
     }
 
     /**
      * Dipanggil setelah field kolom dasar di-assign, sebelum save() -
-     * dipakai untuk resolusi 'rak'/'kategori' by nama (bukan foreign key
+     * dipakai untuk resolusi 'kategori' by nama (bukan foreign key
      * mentah), karena kolom ini bukan field langsung di tabel bukus.
      */
     protected function beforeSave(): void
     {
-        if (! empty($this->data['kategori'])) {
-            $namaKategoris = array_values(array_filter(array_map('trim', explode(';', $this->data['kategori']))));
-            $kategoris = Kategori::query()->whereIn('nama', $namaKategoris)->get(['id', 'nama']);
-
-            $namaTidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
-
-            if (! empty($namaTidakDitemukan)) {
-                throw new RowImportFailedException('Kategori tidak ditemukan: "'.implode('", "', $namaTidakDitemukan).'". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
-            }
-
-            $this->kategoriIdsTerresolve = $kategoris->pluck('id')->all();
-        }
+        $this->kategoriIdsTerresolve = $this->resolver()->resolveKategoriIds($this->data['kategori'] ?? null);
     }
 
     protected function afterSave(): void
     {
-        if ($this->kategoriIdsTerresolve !== null) {
-            $this->record->kategoris()->sync($this->kategoriIdsTerresolve);
-        }
+        $this->resolver()->syncKategori($this->record, $this->kategoriIdsTerresolve);
 
-        // GAP-SPEC ditutup: format barcode auto-generate FINAL, kini
-        // terpusat di Eksemplar::generateBarcodeUntuk() (Aturan poin 3).
-        // Konfirmasi sebelumnya: stok diakumulasi (tambah eksemplar
-        // sejumlah selisih), tidak pernah mengurangi eksemplar existing
-        // meski stok di file diturunkan.
-        $rak = ! empty($this->data['rak'])
-            ? Rak::query()->where('nama', trim($this->data['rak']))->first()
-            : null;
-
-        $stokDiminta = (int) ($this->data['stok'] ?? 0);
-        $eksemplarSaatIni = $this->record->eksemplars()->count();
-        $selisih = $stokDiminta - $eksemplarSaatIni;
-
-        for ($i = 0; $i < $selisih; $i++) {
-            $this->record->eksemplars()->create([
-                'barcode' => Eksemplar::generateBarcodeUntuk($this->record, $eksemplarSaatIni + $i + 1),
-                'rak_id' => $rak?->id,
-                'status' => StatusEksemplar::Tersedia,
-            ]);
-        }
+        $this->resolver()->sinkronEksemplarDariSelisihStok(
+            $this->record,
+            (int) ($this->data['stok'] ?? 0),
+            $this->data['rak'] ?? null,
+        );
     }
 
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import Buku selesai, '.number_format($import->successful_rows).' / '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import Buku selesai, ' . number_format($import->successful_rows) . ' / ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal, cek riwayat import untuk detail.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal, cek riwayat import untuk detail.';
         }
 
         return $body;
@@ -3725,6 +3674,7 @@ class PengaturanSistem extends Page
                                         'wa_template_reminder_h1' => 'Reminder H-1',
                                         'wa_template_jadi_terlambat' => 'Jadi Terlambat',
                                         'wa_template_pengembalian_diproses' => 'Pengembalian Diproses',
+                                        'wa_template_kunjungan_tercatat' => 'Kunjungan Tercatat',
                                         'wa_template_denda_dibuat' => 'Denda Dibuat',
                                         'wa_template_denda_lunas' => 'Denda Lunas',
                                         'wa_template_badge_naik' => 'Badge Naik',
@@ -3736,7 +3686,7 @@ class PengaturanSistem extends Page
                                         'wa_template_denda_dibatalkan_perlu_refund' => 'Denda Dibatalkan (Perlu Refund)',
                                         'wa_template_buku_ditemukan_kembali' => 'Buku Ditemukan Kembali',
                                     ])->map(
-                                        fn (string $label, string $key) => TextInput::make($key)
+                                        fn(string $label, string $key) => TextInput::make($key)
                                             ->label($label)
                                             ->required()
                                             ->helperText('Wajib sama persis dengan template_code di panel gateway.')
@@ -3748,7 +3698,7 @@ class PengaturanSistem extends Page
                         ->schema([
                             Placeholder::make('rfid_db_ver')
                                 ->label('Versi Daftar Kartu RFID (otomatis)')
-                                ->content(fn () => (string) Setting::get('rfid_db_ver', 0))
+                                ->content(fn() => (string) Setting::get('rfid_db_ver', 0))
                                 ->columnSpanFull(),
                             Grid::make(self::GRID_KOLOM_STANDAR)
                                 ->schema([
@@ -11396,6 +11346,7 @@ use App\Models\Transaksi;
 use App\Models\User;
 use App\Services\PointService;
 use App\Services\RfidResolverService;
+use App\Services\WhatsappService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11407,24 +11358,48 @@ use Illuminate\Http\Response;
  * response shape di sini WAJIB dicek ulang terhadap parsing firmware
  * (mis. downloadRfidDb() parsing baris per baris plain text, BUKAN JSON).
  *
- * FITUR BARU (iterasi ini): setiap Kunjungan yang berhasil tercatat (baik
- * lewat syncBulk() maupun kirimLangsung()) sekarang JUGA membuat 1
- * Transaksi (jenis: kunjungan) - lihat catatTransaksiKunjungan(). Ini
- * TIDAK mengubah response/HTTP status yang dikirim ke device sama sekali
- * (kontrak firmware poin 17 Aturan tetap utuh) - murni penambahan log di
- * sisi server setelah Kunjungan berhasil dibuat.
+ * FITUR: setiap Kunjungan yang berhasil tercatat (baik lewat syncBulk()
+ * maupun kirimLangsung()) membuat 1 Transaksi (jenis: kunjungan) - lihat
+ * catatTransaksiKunjungan(). Ini TIDAK mengubah response/HTTP status yang
+ * dikirim ke device sama sekali (kontrak firmware poin 17 Aturan tetap
+ * utuh) - murni penambahan log di sisi server setelah Kunjungan berhasil
+ * dibuat.
  *
  * TODO: GAP-SPEC - Transaksi hasil ini TIDAK menyimpan FK balik ke
  * Kunjungan (tabel kunjungans tidak punya kolom transaksi_id, sengaja
  * tidak ditambah migration baru - lihat diskusi terkait). Transaksi
  * murni log independen, keterangan berisi ringkasan (jam tap + device_id)
  * untuk audit manual.
+ *
+ * FITUR BARU (iterasi ini): setiap Kunjungan yang berhasil tercatat JUGA
+ * mengirim notifikasi WhatsApp ke user bersangkutan (berlaku SEMUA role -
+ * dikonfirmasi eksplisit), lewat kirimNotifikasiKunjungan() - dipanggil
+ * dari prosesSatuTap() (batch) dan kirimLangsung() (real-time), satu
+ * sumber kebenaran (Aturan poin 3). TIDAK mengubah response ke device.
+ *
+ * TODO: ASUMSI - eventCode 'kunjungan_tercatat' dan variabel
+ * nama/jam_tap/device BELUM terdaftar di panel gateway zedlabs pada saat
+ * penulisan kode ini (tidak ada di dokumen Template WhatsApp - Perpustakaan
+ * yang tersedia). WAJIB didaftarkan manual di panel gateway dengan
+ * template_code PERSIS 'kunjungan_tercatat' dan variabel dengan nama yang
+ * sama, sebelum notifikasi ini benar-benar terkirim dengan isi yang benar.
+ * Setting 'wa_template_kunjungan_tercatat' (lihat SettingSeeder/
+ * PengaturanSistem) menyimpan template_code yang dipakai - ubah di panel
+ * Pengaturan Sistem jika template_code di gateway berbeda dari default.
+ *
+ * PERINGATAN VOLUME (dikonfirmasi, risiko diterima sadar) - setiap tap
+ * RFID sekarang mengirim 1 WA ke SEMUA role (siswa/pegawai/pustakawan/
+ * admin) tanpa throttle/rate-limit tambahan. Job tetap lewat queue
+ * 'whatsapp' (tidak blocking request device) - tapi volume kirim harian
+ * bisa signifikan tergantung jumlah user aktif; pastikan kuota/limit di
+ * sisi gateway WhatsApp mencukupi.
  */
 class PerpustakaanDeviceController extends Controller
 {
     public function __construct(
         protected RfidResolverService $rfidResolver,
         protected PointService $pointService,
+        protected WhatsappService $whatsappService,
     ) {}
 
     public function ping(): JsonResponse
@@ -11461,7 +11436,7 @@ class PerpustakaanDeviceController extends Controller
             ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
             ->pluck('no_kartu_rfid');
 
-        $body = "ver:{$ver}\n".$kartuList->implode("\n");
+        $body = "ver:{$ver}\n" . $kartuList->implode("\n");
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -11540,6 +11515,7 @@ class PerpustakaanDeviceController extends Controller
         );
 
         $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
+        $this->kirimNotifikasiKunjungan($user, $kunjungan, $deviceId);
 
         return response()->json(['status' => 'ok'], 200);
     }
@@ -11594,7 +11570,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {
@@ -11651,6 +11627,7 @@ class PerpustakaanDeviceController extends Controller
         );
 
         $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
+        $this->kirimNotifikasiKunjungan($user, $kunjungan, $deviceId);
 
         return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'ok'];
     }
@@ -11670,6 +11647,32 @@ class PerpustakaanDeviceController extends Controller
             'tanggal' => now(),
             'keterangan' => "Kunjungan RFID jam {$kunjungan->jam_tap} via device '{$deviceId}'.",
         ]);
+    }
+
+    /**
+     * Satu sumber kebenaran notifikasi WhatsApp untuk event Kunjungan -
+     * dipanggil dari prosesSatuTap() (batch) maupun kirimLangsung()
+     * (real-time), jangan duplikasi pemanggilan WhatsappService di tempat
+     * lain (Aturan poin 3). Berlaku SEMUA role (dikonfirmasi eksplisit) -
+     * tidak ada filter berdasarkan User.role di sini.
+     *
+     * TODO: ASUMSI - template_code 'kunjungan_tercatat' dan variabel
+     * nama/jam_tap/device belum terdaftar di dokumen Template WhatsApp
+     * yang tersedia saat penulisan kode ini - WAJIB didaftarkan manual di
+     * panel gateway zedlabs sebelum notifikasi ini terkirim dengan benar.
+     */
+    protected function kirimNotifikasiKunjungan(User $user, Kunjungan $kunjungan, string $deviceId): void
+    {
+        $this->whatsappService->kirimEvent(
+            eventCode: 'kunjungan_tercatat',
+            nomorTujuan: $user->no_telepon,
+            variables: [
+                'nama' => $user->nama,
+                'jam_tap' => (string) $kunjungan->jam_tap,
+                'device' => $deviceId,
+            ],
+            referenceId: "kunjungan-{$kunjungan->id}",
+        );
     }
 
     protected function parseTanggalDariTimestamp(string $timestamp): string
@@ -11697,7 +11700,7 @@ class PerpustakaanDeviceController extends Controller
 
     /**
      * Kontrak BARU: firmware lapor hasil OTA setelah proses update/reboot.
-     * Request: { "device_id": string, "version": string, "status": "success"|"failed", "error"?: string }
+     * Request: { "device_id": string, "version": string, "status": "success"|"failed","error"?: string }
      * Response selalu { "status": "ok" } dengan HTTP 200 selama device_id
      * terisi - device tidak perlu retry berdasarkan response ini (best
      * effort logging, bukan bagian kritis alur OTA).
@@ -12342,25 +12345,32 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use RuntimeException;
 use Throwable;
 
 /**
- * TODO: ASUMSI (WAJIB DIKONFIRMASI, belum berubah dari sebelumnya) -
- * sheet dipetakan ke model berdasarkan POSISI/URUTAN fisik di file,
- * SAMA PERSIS dengan urutan MasterDataRegistry::items(). File yang
- * diupload WAJIB berasal dari hasil "Export Semua" TERBARU (setelah
- * perubahan kontrak sheet 'user'/'kelas_tahun_pelajaran' iterasi ini) -
- * file export lama sebelum perubahan ini TIDAK KOMPATIBEL.
+ * Sheet dipetakan ke model berdasarkan POSISI/URUTAN fisik di file, SAMA
+ * PERSIS dengan urutan MasterDataRegistry::items() - SEKARANG (iterasi
+ * ini) divalidasi eksplisit lewat validasiUrutanSheet() SEBELUM baris
+ * manapun diproses (Aturan poin 8/12 - sebelumnya hanya TODO: ASUMSI
+ * tanpa pengecekan nyata, berisiko baris ter-import diam-diam ke model
+ * yang salah kalau urutan/sheet tidak sesuai).
  *
- * Kegagalan SATU baris tidak membatalkan baris lain (partial success) -
- * setiap baris dibungkus DB::transaction sendiri.
+ * File yang diupload WAJIB berasal dari hasil "Export Semua" TERBARU
+ * (setelah perubahan kontrak sheet 'user'/'kelas_tahun_pelajaran') - file
+ * export lama sebelum perubahan itu TIDAK KOMPATIBEL dan sekarang akan
+ * GAGAL TOTAL di validasiUrutanSheet() dengan pesan jelas (bukan diproses
+ * diam-diam dengan pemetaan yang salah).
  *
- * BARU (iterasi ini): closure 'import' di registry BOLEH mengembalikan
- * array meta (mis. ['kartu_dihapus' => 1]) - dijumlahkan per key ke
- * dalam laporan['<sheet>']['meta'], dipakai untuk notifikasi kartu RFID
- * terhapus pada sheet 'user' (jalur ini tidak lewat model Import
- * Filament, jadi tidak bisa pakai pola Cache "import-{id}-..." seperti
- * UserImporter).
+ * Kegagalan SATU baris (setelah validasi struktur lolos) tidak
+ * membatalkan baris lain (partial success) - setiap baris dibungkus
+ * DB::transaction sendiri.
+ *
+ * closure 'import' di registry BOLEH mengembalikan array meta (mis.
+ * ['kartu_dihapus' => 1]) - dijumlahkan per key ke dalam
+ * laporan['<sheet>']['meta'], dipakai untuk notifikasi kartu RFID
+ * terhapus pada sheet 'user'.
  */
 class ProcessMasterImportJob implements ShouldQueue
 {
@@ -12376,8 +12386,17 @@ class ProcessMasterImportJob implements ShouldQueue
         $job->update(['status' => StatusBulkJob::Diproses]);
 
         try {
-            $rawSheets = Excel::toArray(new class {}, storage_path('app/' . $job->file_path));
+            $absolutePath = storage_path('app/' . $job->file_path);
             $registry = MasterDataRegistry::items();
+
+            // BARU (iterasi ini) - validasi struktur file SEBELUM baris
+            // manapun diproses. Jika nama/urutan sheet tidak cocok,
+            // seluruh job GAGAL TOTAL dengan pesan jelas - mencegah baris
+            // ter-import diam-diam ke model yang salah karena pemetaan
+            // by-index posisi.
+            $this->validasiUrutanSheet($absolutePath, $registry);
+
+            $rawSheets = Excel::toArray(new class {}, $absolutePath);
             $laporan = [];
 
             foreach ($registry as $index => $item) {
@@ -12398,6 +12417,36 @@ class ProcessMasterImportJob implements ShouldQueue
                 'laporan' => ['error' => $e->getMessage()],
             ]);
             $this->notifikasi($job, success: false, pesan: $e->getMessage());
+        }
+    }
+
+    /**
+     * Membandingkan nama sheet FISIK di file (dibaca langsung dari
+     * workbook, bukan ditebak dari heading kolom) terhadap urutan 'label'
+     * di MasterDataRegistry::items() - HARUS identik urutan dan nama,
+     * karena ProcessMasterImportJob memetakan sheet berikutnya by index
+     * posisi, bukan nama.
+     *
+     * TODO: verifikasi signature terhadap versi phpoffice/phpspreadsheet
+     * yang benar-benar terpasang (dependency dari maatwebsite/excel
+     * ^3.1 di composer.json, versi pasti belum diverifikasi terhadap
+     * composer.lock) - IOFactory::load()->getSheetNames() diasumsikan
+     * stabil di rilis phpspreadsheet yang umum dipakai versi ini.
+     *
+     * @throws RuntimeException jika nama/urutan sheet tidak cocok.
+     */
+    protected function validasiUrutanSheet(string $absolutePath, array $registry): void
+    {
+        $namaSheetFile = IOFactory::load($absolutePath)->getSheetNames();
+        $namaSheetDiharapkan = array_map(fn(array $item) => $item['label'], $registry);
+
+        if ($namaSheetFile !== $namaSheetDiharapkan) {
+            throw new RuntimeException(
+                'File tidak sesuai format hasil "Export Semua" terbaru - urutan atau nama sheet tidak cocok. '
+                    . 'Sheet ditemukan di file: [' . implode(', ', $namaSheetFile) . ']. '
+                    . 'Sheet yang diharapkan sistem: [' . implode(', ', $namaSheetDiharapkan) . ']. '
+                    . 'Silakan export ulang lewat "Mulai Export Semua" di halaman ini, lalu gunakan file hasilnya (tanpa diedit strukturnya) untuk Import Semua.'
+            );
         }
     }
 
@@ -12452,6 +12501,16 @@ class ProcessMasterImportJob implements ShouldQueue
         ];
     }
 
+    /**
+     * REFACTOR (iterasi ini): logika warna notifikasi sebelumnya
+     * mengandalkan urutan short-circuit dua baris terpisah
+     * ($success && $totalGagal === 0 ? ... ; $success || $notif->danger();)
+     * - "bekerja" tapi rapuh, gampang salah kalau di-refactor tanpa sadar
+     * urutannya penting. Diganti match() eksplisit, perilaku IDENTIK:
+     * - gagal total -> danger
+     * - sukses tapi ada baris gagal -> warning
+     * - sukses semua -> success
+     */
     protected function notifikasi(BulkDataJob $job, bool $success, ?string $pesan = null): void
     {
         $user = User::find($job->diproses_oleh);
@@ -12459,7 +12518,7 @@ class ProcessMasterImportJob implements ShouldQueue
             return;
         }
 
-        $totalGagal = $success ? collect($job->laporan)->sum('gagal') : null;
+        $totalGagal = $success ? (int) collect($job->laporan)->sum('gagal') : null;
         $kartuDihapus = $success ? (int) (collect($job->laporan)->pluck('meta.kartu_dihapus')->filter()->sum()) : 0;
 
         $bodyParts = [];
@@ -12472,12 +12531,21 @@ class ProcessMasterImportJob implements ShouldQueue
             }
         }
 
+        $warna = match (true) {
+            ! $success => 'danger',
+            $totalGagal > 0 => 'warning',
+            default => 'success',
+        };
+
         $notif = Notification::make()
             ->title($success ? 'Import Master Data selesai' : 'Import Master Data gagal')
             ->body($success ? implode(' ', $bodyParts) : $pesan);
 
-        $success && $totalGagal === 0 ? $notif->success() : $notif->warning();
-        $success || $notif->danger();
+        match ($warna) {
+            'danger' => $notif->danger(),
+            'warning' => $notif->warning(),
+            'success' => $notif->success(),
+        };
 
         $notif->sendToDatabase($user);
     }
@@ -13913,6 +13981,7 @@ use App\Enums\JenisKelamin;
 use App\Enums\RoleUser;
 use App\Enums\StatusAkademik;
 use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasAvatar;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
@@ -13924,7 +13993,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasName
+class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasName, HasAvatar
 {
     use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
@@ -13985,6 +14054,13 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
     public function riwayatKelas(): HasMany
     {
         return $this->hasMany(RiwayatKelasSiswa::class);
+    }
+
+        public function getFilamentAvatarUrl(): ?string
+    {
+        return $this->avatar
+            ? asset('storage/'.($this->avatar))
+            : null;
     }
 }
 
@@ -16302,6 +16378,111 @@ class FormatKartuRfid implements ValidationRule
 ```
 ---
 
+## app/Services/BukuImportResolverService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Enums\StatusEksemplar;
+use App\Models\Buku;
+use App\Models\Eksemplar;
+use App\Models\Kategori;
+use App\Models\Rak;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
+
+/**
+ * SATU SUMBER KEBENARAN (Aturan poin 3) untuk resolusi Buku saat import -
+ * dipakai BukuImporter (per-Resource, halaman Buku) DAN MasterDataRegistry
+ * (jalur "Import Semua"). Sebelumnya logic ini terduplikasi manual di dua
+ * tempat (ditemukan saat review iterasi ini) - berisiko drift diam-diam
+ * kalau salah satu diperbaiki tapi yang lain tidak, sehingga dua jalur
+ * import Buku bisa berbeda perilaku tanpa terdeteksi.
+ *
+ * Method di sini SENGAJA menerima primitive (string/int/null), bukan
+ * $this->data dari konteks Filament\Actions\Imports\Importer - supaya bisa
+ * dipanggil juga dari closure MasterDataRegistry yang tidak sepenuhnya
+ * punya konteks Importer.
+ *
+ * KEPUTUSAN dikonfirmasi (tetap berlaku, dipindah dari BukuImporter lama):
+ * - harga_ganti WAJIB diisi manual di file - baris kosong GAGAL TOTAL
+ *   (bukan default 0) - divalidasi di ImportColumn/closure pemanggil,
+ *   BUKAN di service ini (service tidak menyentuh harga_ganti).
+ * - Duplikasi ISBN antar baris/antar import: STOK diakumulasi (tambah
+ *   eksemplar baru sejumlah selisih), eksemplar existing tidak pernah
+ *   dikurangi meski stok di file diturunkan.
+ * - Kategori tidak ditemukan by nama -> baris GAGAL TOTAL (tidak
+ *   tersimpan sebagian dengan kategori salah/hilang diam-diam).
+ */
+class BukuImportResolverService
+{
+    public function resolveOrCreateBuku(?string $isbn): Buku
+    {
+        $isbn = trim((string) $isbn);
+
+        return $isbn !== ''
+            ? Buku::query()->firstOrNew(['isbn' => $isbn])
+            : new Buku;
+    }
+
+    /**
+     * @return array<int, string>|null null berarti kolom kategori kosong
+     *                                  (tidak ada perubahan relasi).
+     *
+     * @throws RowImportFailedException jika ada nama kategori yang tidak ditemukan.
+     */
+    public function resolveKategoriIds(?string $namaKategoriGabungan): ?array
+    {
+        if (empty($namaKategoriGabungan)) {
+            return null;
+        }
+
+        $namaKategoris = array_values(array_filter(array_map('trim', explode(';', $namaKategoriGabungan))));
+        $kategoris = Kategori::query()->whereIn('nama', $namaKategoris)->get(['id', 'nama']);
+
+        $namaTidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
+
+        if (! empty($namaTidakDitemukan)) {
+            throw new RowImportFailedException('Kategori tidak ditemukan: "' . implode('", "', $namaTidakDitemukan) . '". Cek ejaan atau tambahkan Kategori-nya dulu di Master Data > Kategori.');
+        }
+
+        return $kategoris->pluck('id')->all();
+    }
+
+    public function syncKategori(Buku $buku, ?array $kategoriIds): void
+    {
+        if ($kategoriIds !== null) {
+            $buku->kategoris()->sync($kategoriIds);
+        }
+    }
+
+    /**
+     * Menambah eksemplar baru sejumlah selisih (stokDiminta - existing),
+     * TIDAK PERNAH mengurangi eksemplar existing (keputusan dikonfirmasi).
+     * barcode digenerate otomatis via Eksemplar::generateBarcodeUntuk().
+     */
+    public function sinkronEksemplarDariSelisihStok(Buku $buku, int $stokDiminta, ?string $namaRak): void
+    {
+        $rak = ! empty($namaRak)
+            ? Rak::query()->where('nama', trim($namaRak))->first()
+            : null;
+
+        $eksemplarSaatIni = $buku->eksemplars()->count();
+        $selisih = $stokDiminta - $eksemplarSaatIni;
+
+        for ($i = 0; $i < $selisih; $i++) {
+            $buku->eksemplars()->create([
+                'barcode' => Eksemplar::generateBarcodeUntuk($buku, $eksemplarSaatIni + $i + 1),
+                'rak_id' => $rak?->id,
+                'status' => StatusEksemplar::Tersedia,
+            ]);
+        }
+    }
+}
+
+```
+---
+
 ## app/Services/KenaikanKelasService.php
 ```php
 <?php
@@ -18189,10 +18370,8 @@ class WhatsappService
 namespace App\Support;
 
 use App\Enums\RoleUser;
-use App\Enums\StatusEksemplar;
 use App\Models\Buku;
 use App\Models\Denda;
-use App\Models\Eksemplar;
 use App\Models\FirmwareRelease;
 use App\Models\Jurusan;
 use App\Models\Kategori;
@@ -18213,6 +18392,7 @@ use App\Models\TahunPelajaran;
 use App\Models\Transaksi;
 use App\Models\User;
 use App\Rules\FormatKartuRfid;
+use App\Services\BukuImportResolverService;
 use App\Services\KenaikanKelasService;
 use App\Services\UserImportResolverService;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
@@ -18223,7 +18403,9 @@ use Illuminate\Support\Facades\Validator;
  * (Aturan poin 3, DRY). Urutan array ini MENGIKAT dua hal:
  * 1. Urutan sheet fisik di file hasil "Export Semua".
  * 2. Urutan proses saat "Import Semua" - dipetakan BY INDEX POSISI
- *    (bukan nama sheet) di ProcessMasterImportJob.
+ *    (bukan nama sheet) di ProcessMasterImportJob, DIVALIDASI terhadap
+ *    'label' di bawah sebelum diproses (lihat
+ *    ProcessMasterImportJob::validasiUrutanSheet(), BARU iterasi ini).
  *
  * 'importable' => false berarti model ini read-only/log otomatis
  * (dihasilkan Service - PeminjamanService/PointService/KenaikanKelasService/
@@ -18235,9 +18417,15 @@ use Illuminate\Support\Facades\Validator;
  * kolom (bug lama: whitelist heuristik tidak match banyak sheet,
  * lihat riwayat review sebelumnya).
  *
- * PERUBAHAN KONTRAK (iterasi ini, WAJIB diberi tahu ke pengguna -
- * lihat ringkasan balasan): file hasil "Export Semua" LAMA (sebelum
- * perubahan ini) TIDAK KOMPATIBEL untuk Import Semua lagi:
+ * REFACTOR (iterasi ini): entri 'buku' sekarang delegasi penuh ke
+ * BukuImportResolverService (Aturan poin 3, DRY) - sebelumnya
+ * logic resolusi kategori/rak/akumulasi-stok terduplikasi manual di
+ * sini dan di BukuImporter, berisiko drift diam-diam. Perilaku
+ * (pesan error, aturan akumulasi stok, dst.) TIDAK berubah.
+ *
+ * PERUBAHAN KONTRAK (dari iterasi sebelumnya, tetap berlaku - file
+ * hasil "Export Semua" LAMA sebelum perubahan ini TIDAK KOMPATIBEL
+ * untuk Import Semua lagi):
  * - Sheet 'user': kolom 'kelas' polos diganti 'kelas'+'jurusan_kode'+
  *   'tahun_pelajaran' (identik kontrak UserImporter, karena Kelas.nama
  *   tidak unik secara global). Ditambah 'jenis_kelamin', 'avatar',
@@ -18487,10 +18675,6 @@ class MasterDataRegistry
                     // 'password' SENGAJA tidak diexport (hash tidak berguna
                     // untuk reimport) - hanya diterima saat import di bawah.
                 ],
-                // Delegasi penuh ke UserImportResolverService (Aturan poin
-                // 3) - satu sumber kebenaran yang sama dipakai UserImporter,
-                // menutup bug double-hashing password & duplikasi resolusi
-                // kartu/avatar/KTP yang ditemukan pada review sebelumnya.
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['role']) || empty($row['no_telepon'])) {
                         throw new RowImportFailedException('Nama, role, dan no_telepon wajib diisi.');
@@ -18556,9 +18740,6 @@ class MasterDataRegistry
                         app(KenaikanKelasService::class)->assignKelas($user, $ktp);
                     }
 
-                    // Dikembalikan ke ProcessMasterImportJob::prosesSheet()
-                    // untuk direkap sebagai meta 'kartu_dihapus' di laporan
-                    // sheet ini (lihat file job).
                     return $kartuDihapus ? ['kartu_dihapus' => 1] : [];
                 },
             ],
@@ -18577,19 +18758,22 @@ class MasterDataRegistry
                     'rak' => fn($r) => $r->eksemplars->pluck('rak.nama')->filter()->unique()->implode('; '),
                     'kategori' => fn($r) => $r->kategoris->pluck('nama')->implode('; '),
                 ],
-                // TODO: GAP-SPEC - porting BukuImporter (resolusi kategori/rak
-                // by nama, akumulasi stok, generate barcode). Perilaku SAMA
-                // dengan BukuImporter asli - belum diuji end-to-end di jalur
-                // Master Import (Aturan poin 12).
+                // GAP-SPEC ditutup (iterasi ini): sebelumnya closure ini
+                // menduplikasi manual logic resolusi kategori/rak/akumulasi
+                // stok dari BukuImporter - sekarang delegasi penuh ke
+                // BukuImportResolverService (SATU sumber kebenaran, Aturan
+                // poin 3). Perilaku identik dengan BukuImporter. MASIH
+                // BELUM diuji end-to-end lewat jalur nyata "Import Semua"
+                // (Aturan poin 12) - baru diverifikasi statis konsisten
+                // dengan BukuImporter.
                 'import' => function (array $row) {
                     if (empty($row['judul']) || ! isset($row['harga_ganti'])) {
                         throw new RowImportFailedException('Judul dan harga_ganti wajib diisi.');
                     }
 
-                    $buku = ! empty($row['isbn'])
-                        ? Buku::query()->firstOrNew(['isbn' => $row['isbn']])
-                        : new Buku;
+                    $resolver = app(BukuImportResolverService::class);
 
+                    $buku = $resolver->resolveOrCreateBuku($row['isbn'] ?? null);
                     $buku->fill([
                         'judul' => $row['judul'],
                         'penulis' => $row['penulis'] ?? null,
@@ -18597,28 +18781,14 @@ class MasterDataRegistry
                         'harga_ganti' => (float) $row['harga_ganti'],
                     ])->save();
 
-                    if (! empty($row['kategori'])) {
-                        $namaKategoris = array_values(array_filter(array_map('trim', explode(';', $row['kategori']))));
-                        $kategoris = Kategori::query()->whereIn('nama', $namaKategoris)->get(['id', 'nama']);
-                        $tidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
-                        if (! empty($tidakDitemukan)) {
-                            throw new RowImportFailedException('Kategori tidak ditemukan: ' . implode(', ', $tidakDitemukan));
-                        }
-                        $buku->kategoris()->sync($kategoris->pluck('id')->all());
-                    }
+                    $kategoriIds = $resolver->resolveKategoriIds($row['kategori'] ?? null);
+                    $resolver->syncKategori($buku, $kategoriIds);
 
-                    $rak = ! empty($row['rak']) ? Rak::query()->where('nama', trim($row['rak']))->first() : null;
-                    $stokDiminta = (int) ($row['stok'] ?? 0);
-                    $eksemplarSaatIni = $buku->eksemplars()->count();
-                    $selisih = $stokDiminta - $eksemplarSaatIni;
-
-                    for ($i = 0; $i < $selisih; $i++) {
-                        $buku->eksemplars()->create([
-                            'barcode' => Eksemplar::generateBarcodeUntuk($buku, $eksemplarSaatIni + $i + 1),
-                            'rak_id' => $rak?->id,
-                            'status' => StatusEksemplar::Tersedia,
-                        ]);
-                    }
+                    $resolver->sinkronEksemplarDariSelisihStok(
+                        $buku,
+                        (int) ($row['stok'] ?? 0),
+                        $row['rak'] ?? null,
+                    );
                 },
             ],
 
@@ -24225,6 +24395,7 @@ class SettingSeeder extends Seeder
             ['key' => 'wa_template_denda_dibatalkan_perlu_refund', 'value' => 'denda_dibatalkan_perlu_refund', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat Denda yang SUDAH TERBAYAR dibatalkan akibat koreksi kondisi - Admin wajib menindaklanjuti refund manual (lihat Denda.status_refund).'],
             ['key' => 'wa_template_login_otp', 'value' => 'login_otp', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat user login via OTP WhatsApp (setara reset password, tapi TIDAK mengubah password).'],
             ['key' => 'wa_template_buku_ditemukan_kembali', 'value' => 'buku_ditemukan_kembali', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. Dikirim saat buku yang dilaporkan hilang (via laporkanHilang(), belum pernah punya Pengembalian) ditemukan kembali.'],
+            ['key' => 'wa_template_kunjungan_tercatat', 'value' => 'kunjungan_tercatat', 'group' => GroupSetting::Whatsapp, 'keterangan' => 'TODO: ASUMSI - cocokkan dengan template_code di panel gateway. BELUM ada di dokumen Template WhatsApp - wajib dibuat manual di panel gateway zedlabs (variabel: nama, jam_tap, device). Dikirim setiap kali Kunjungan RFID tercatat, berlaku semua role.'],
         ];
 
         foreach ($settings as $setting) {

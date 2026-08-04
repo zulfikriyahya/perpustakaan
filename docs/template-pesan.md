@@ -1131,3 +1131,79 @@ Halo {{nama}}, buku yang kamu laporkan hilang sudah kami terima kembali. Denda k
 *Kabar Baik - Buku Ditemukan!*
 {{nama}}, buku yang sempat hilang sudah ditemukan dan dikembalikan ke rak. Terima kasih atas kejujurannya.
 ```
+
+---
+
+## 16. Kunjungan Tercatat
+
+**Kode Template:** `kunjungan_tercatat`
+**Kategori:** `Kunjungan`
+**Prioritas:** `Low`
+**Variabel Wajib:** `nama,jam_tap,device`
+
+```
+1.
+*Perpustakaan*
+
+*Kunjungan Tercatat*
+Nama: {{nama}}
+Jam Tap: {{jam_tap}}
+Perangkat: {{device}}
+
+2.
+*Perpustakaan*
+
+*Konfirmasi Kunjungan*
+Halo {{nama}}, kunjunganmu ke perpustakaan tercatat pukul {{jam_tap}} via {{device}}.
+
+3.
+*Perpustakaan*
+
+*Info Kunjungan*
+Nama       : {{nama}}
+Jam Tap    : {{jam_tap}}
+Perangkat  : {{device}}
+
+4.
+*Perpustakaan*
+
+Halo {{nama}}, terima kasih sudah berkunjung! Tap tercatat pukul {{jam_tap}} di {{device}}.
+
+5.
+*Perpustakaan*
+
+*Kunjungan Perpustakaan*
+{{nama}} - {{jam_tap}}
+Perangkat: {{device}}
+
+6.
+*Perpustakaan*
+
+*Konfirmasi Tap Kartu*
+Kunjungan atas nama {{nama}} tercatat pukul {{jam_tap}} melalui {{device}}.
+
+7.
+*Perpustakaan*
+
+*Kunjungan Tercatat*
+Nama: {{nama}}
+Jam: {{jam_tap}}
+Device: {{device}}
+
+8.
+*Perpustakaan*
+
+Info: {{nama}} tap kartu pukul {{jam_tap}} di {{device}}.
+
+9.
+*Perpustakaan*
+
+*Terima Kasih Berkunjung!*
+Halo {{nama}}, kehadiranmu di perpustakaan sudah tercatat pukul {{jam_tap}} ({{device}}). Terus rajin membaca!
+
+10.
+*Perpustakaan*
+
+*Kunjungan Tercatat*
+{{nama}}, tap kartu berhasil pukul {{jam_tap}} via {{device}}. Sampai jumpa lagi!
+```

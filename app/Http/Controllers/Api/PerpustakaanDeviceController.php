@@ -15,6 +15,7 @@ use App\Models\Transaksi;
 use App\Models\User;
 use App\Services\PointService;
 use App\Services\RfidResolverService;
+use App\Services\WhatsappService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,24 +27,48 @@ use Illuminate\Http\Response;
  * response shape di sini WAJIB dicek ulang terhadap parsing firmware
  * (mis. downloadRfidDb() parsing baris per baris plain text, BUKAN JSON).
  *
- * FITUR BARU (iterasi ini): setiap Kunjungan yang berhasil tercatat (baik
- * lewat syncBulk() maupun kirimLangsung()) sekarang JUGA membuat 1
- * Transaksi (jenis: kunjungan) - lihat catatTransaksiKunjungan(). Ini
- * TIDAK mengubah response/HTTP status yang dikirim ke device sama sekali
- * (kontrak firmware poin 17 Aturan tetap utuh) - murni penambahan log di
- * sisi server setelah Kunjungan berhasil dibuat.
+ * FITUR: setiap Kunjungan yang berhasil tercatat (baik lewat syncBulk()
+ * maupun kirimLangsung()) membuat 1 Transaksi (jenis: kunjungan) - lihat
+ * catatTransaksiKunjungan(). Ini TIDAK mengubah response/HTTP status yang
+ * dikirim ke device sama sekali (kontrak firmware poin 17 Aturan tetap
+ * utuh) - murni penambahan log di sisi server setelah Kunjungan berhasil
+ * dibuat.
  *
  * TODO: GAP-SPEC - Transaksi hasil ini TIDAK menyimpan FK balik ke
  * Kunjungan (tabel kunjungans tidak punya kolom transaksi_id, sengaja
  * tidak ditambah migration baru - lihat diskusi terkait). Transaksi
  * murni log independen, keterangan berisi ringkasan (jam tap + device_id)
  * untuk audit manual.
+ *
+ * FITUR BARU (iterasi ini): setiap Kunjungan yang berhasil tercatat JUGA
+ * mengirim notifikasi WhatsApp ke user bersangkutan (berlaku SEMUA role -
+ * dikonfirmasi eksplisit), lewat kirimNotifikasiKunjungan() - dipanggil
+ * dari prosesSatuTap() (batch) dan kirimLangsung() (real-time), satu
+ * sumber kebenaran (Aturan poin 3). TIDAK mengubah response ke device.
+ *
+ * TODO: ASUMSI - eventCode 'kunjungan_tercatat' dan variabel
+ * nama/jam_tap/device BELUM terdaftar di panel gateway zedlabs pada saat
+ * penulisan kode ini (tidak ada di dokumen Template WhatsApp - Perpustakaan
+ * yang tersedia). WAJIB didaftarkan manual di panel gateway dengan
+ * template_code PERSIS 'kunjungan_tercatat' dan variabel dengan nama yang
+ * sama, sebelum notifikasi ini benar-benar terkirim dengan isi yang benar.
+ * Setting 'wa_template_kunjungan_tercatat' (lihat SettingSeeder/
+ * PengaturanSistem) menyimpan template_code yang dipakai - ubah di panel
+ * Pengaturan Sistem jika template_code di gateway berbeda dari default.
+ *
+ * PERINGATAN VOLUME (dikonfirmasi, risiko diterima sadar) - setiap tap
+ * RFID sekarang mengirim 1 WA ke SEMUA role (siswa/pegawai/pustakawan/
+ * admin) tanpa throttle/rate-limit tambahan. Job tetap lewat queue
+ * 'whatsapp' (tidak blocking request device) - tapi volume kirim harian
+ * bisa signifikan tergantung jumlah user aktif; pastikan kuota/limit di
+ * sisi gateway WhatsApp mencukupi.
  */
 class PerpustakaanDeviceController extends Controller
 {
     public function __construct(
         protected RfidResolverService $rfidResolver,
         protected PointService $pointService,
+        protected WhatsappService $whatsappService,
     ) {}
 
     public function ping(): JsonResponse
@@ -65,6 +90,23 @@ class PerpustakaanDeviceController extends Controller
      * Firmware menolak baris yang bukan persis 10 digit angka (lihat parsing
      * di downloadRfidDb: isdigit check, len == 10).
      *
+     * KONTRAK BARU (v2.3.2, GAP-SPEC lama soal Content-Length ditutup) - baris
+     * TERAKHIR body SEKARANG SELALU "EOF" (persis, tanpa newline trailing
+     * setelahnya). Ini WAJIB ada karena server berjalan di belakang Cloudflare
+     * dengan HTTP/2 - tidak ada header Content-Length yang dikirim ke device,
+     * dan koneksi tidak ditutup segera setelah body selesai (keep-alive), jadi
+     * device (ESP32/HTTPClient) tidak punya cara lain yang andal untuk tahu
+     * transfer sudah selesai vs baru stall/putus di tengah jalan. Firmware
+     * v2.3.2 ke atas menunggu baris "EOF" sebagai satu-satunya penanda sukses
+     * sebelum menimpa rfid_db.txt lama dan menaikkan versi lokal (lihat
+     * downloadRfidDb() di firmware) - TANPA baris ini, device v2.3.2+ akan
+     * SELALU menganggap transfer gagal/terpotong dan retry terus setiap
+     * siklus RFID_DB_CHECK_INTERVAL.
+     *
+     * Endpoint ini HANYA dipakai device Attendance Machine perpustakaan ini
+     * (dikonfirmasi) - aman mengubah format body tanpa memengaruhi konsumen
+     * lain.
+     *
      * TODO: GAP-SPEC - hanya user dengan no_kartu_rfid berformat 10 digit
      * numeric yang akan ikut ter-generate ke daftar ini; kartu format lain
      * (mis. seeder lama 'RFID58354503') otomatis TIDAK akan muncul di device
@@ -80,7 +122,10 @@ class PerpustakaanDeviceController extends Controller
             ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
             ->pluck('no_kartu_rfid');
 
-        $body = "ver:{$ver}\n".$kartuList->implode("\n");
+        // BARU: baris "EOF" wajib jadi baris TERAKHIR - lihat docblock method
+        // ini. implode("\n") tidak menyertakan newline trailing, sehingga
+        // "EOF" persis jadi baris terakhir tanpa baris kosong setelahnya.
+        $body = "ver:{$ver}\n" . $kartuList->implode("\n") . "\nEOF";
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -159,6 +204,7 @@ class PerpustakaanDeviceController extends Controller
         );
 
         $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
+        $this->kirimNotifikasiKunjungan($user, $kunjungan, $deviceId);
 
         return response()->json(['status' => 'ok'], 200);
     }
@@ -213,7 +259,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {
@@ -270,6 +316,7 @@ class PerpustakaanDeviceController extends Controller
         );
 
         $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
+        $this->kirimNotifikasiKunjungan($user, $kunjungan, $deviceId);
 
         return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'ok'];
     }
@@ -289,6 +336,32 @@ class PerpustakaanDeviceController extends Controller
             'tanggal' => now(),
             'keterangan' => "Kunjungan RFID jam {$kunjungan->jam_tap} via device '{$deviceId}'.",
         ]);
+    }
+
+    /**
+     * Satu sumber kebenaran notifikasi WhatsApp untuk event Kunjungan -
+     * dipanggil dari prosesSatuTap() (batch) maupun kirimLangsung()
+     * (real-time), jangan duplikasi pemanggilan WhatsappService di tempat
+     * lain (Aturan poin 3). Berlaku SEMUA role (dikonfirmasi eksplisit) -
+     * tidak ada filter berdasarkan User.role di sini.
+     *
+     * TODO: ASUMSI - template_code 'kunjungan_tercatat' dan variabel
+     * nama/jam_tap/device belum terdaftar di dokumen Template WhatsApp
+     * yang tersedia saat penulisan kode ini - WAJIB didaftarkan manual di
+     * panel gateway zedlabs sebelum notifikasi ini terkirim dengan benar.
+     */
+    protected function kirimNotifikasiKunjungan(User $user, Kunjungan $kunjungan, string $deviceId): void
+    {
+        $this->whatsappService->kirimEvent(
+            eventCode: 'kunjungan_tercatat',
+            nomorTujuan: $user->no_telepon,
+            variables: [
+                'nama' => $user->nama,
+                'jam_tap' => (string) $kunjungan->jam_tap,
+                'device' => $deviceId,
+            ],
+            referenceId: "kunjungan-{$kunjungan->id}",
+        );
     }
 
     protected function parseTanggalDariTimestamp(string $timestamp): string
@@ -316,7 +389,7 @@ class PerpustakaanDeviceController extends Controller
 
     /**
      * Kontrak BARU: firmware lapor hasil OTA setelah proses update/reboot.
-     * Request: { "device_id": string, "version": string, "status": "success"|"failed", "error"?: string }
+     * Request: { "device_id": string, "version": string, "status": "success"|"failed","error"?: string }
      * Response selalu { "status": "ok" } dengan HTTP 200 selama device_id
      * terisi - device tidak perlu retry berdasarkan response ini (best
      * effort logging, bukan bagian kritis alur OTA).

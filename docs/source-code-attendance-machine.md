@@ -7,7 +7,7 @@
  * Author           : Yahya Zulfikri
  * Created          : Juli 2025
  * Updated          : Juli 2026
- * Version          : 2.3.3
+ * Version          : 2.3.4
  */
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -116,7 +116,7 @@
 #define GMT_OFFSET_SEC 25200L
 #define SIGNAL_THRESHOLD_WEAK -85
 #define SIGNAL_THRESHOLD_CRITICAL -90
-#define FIRMWARE_VERSION "2.3.3"
+#define FIRMWARE_VERSION "2.3.4"
 #define PROV_AP_SSID "ATTENDANCE MACHINE"
 #define PROV_DNS_PORT 53
 #define CRC8_POLY 0x07
@@ -1526,6 +1526,25 @@ SaveResult saveToQueue(const char *rfid, const char *ts, unsigned long t) {
   return SAVE_OK;
 }
 
+/**
+ * PATCH v2.3.4 (lanjutan) - celah silent data loss yang sama seperti
+ * syncQueueFile() berlaku juga di sini: sebelumnya hanya mengecek HTTP
+ * code == 200 sebelum menghapus SEMUA record NVS (nvsSetCount(0) +
+ * nvsDeleteRecord() untuk tiap record) - kalau server membalas 200 dengan
+ * "data" kosong/lebih pendek dari yang dikirim, seluruh buffer NVS
+ * terhapus permanen tanpa jejak, padahal sebagian/semua TIDAK tersimpan
+ * di server. Buffer NVS ini dipakai saat sdCardAvailable == false, jadi
+ * TIDAK ADA salinan cadangan di SD - kalau NVS terhapus keliru, data
+ * BENAR-BENAR hilang (beda dengan syncQueueFile() yang filenya masih ada
+ * di SD sampai divalidasi).
+ *
+ * SEKARANG: SETELAH decode JSON respons, jumlah item di response["data"]
+ * WAJIB SAMA PERSIS dengan cnt (jumlah item yang dikirim). Jika tidak
+ * cocok, penghapusan NVS DIBATALKAN SELURUHNYA - fungsi mengembalikan
+ * false, buffer tetap utuh, akan dicoba lagi di siklus taskSync()
+ * berikutnya (dipanggil ulang otomatis tiap syncIntervalMs selama
+ * nvsGetCount() > 0 - lihat taskSync()).
+ */
 bool nvsSyncToServer() {
   int cnt = nvsGetCount();
   if (cnt == 0) {
@@ -1569,14 +1588,32 @@ bool nvsSyncToServer() {
     String body = http.getString();
     esp_task_wdt_reset();
     http.end();
+
     DynamicJsonDocument res(512 + (size_t)cnt * 128);
-    if (deserializeJson(res, body) == DeserializationError::Ok)
-      for (JsonObject item : res["data"].as<JsonArray>()) {
-        const char *st = item["status"] | "error";
-        if (strcmp(st, "error") == 0) {
-          appendFailedLogToSD(item["rfid"] | "unknown", item["timestamp"] | "unknown", item["message"] | "UNKNOWN");
-        }
+    DeserializationError parseErr = deserializeJson(res, body);
+
+    // BARU: validasi struktur DAN jumlah item, SEBELUM menghapus buffer
+    // NVS - beda dari syncQueueFile(), di sini kegagalan validasi berarti
+    // BATALKAN SELURUH proses hapus, karena tidak ada salinan cadangan.
+    bool responseValid = false;
+    int responseCount = 0;
+    if (parseErr == DeserializationError::Ok && res["data"].is<JsonArray>()) {
+      responseCount = res["data"].as<JsonArray>().size();
+      responseValid = (responseCount == cnt);
+    }
+
+    if (!responseValid) {
+      // Respons tidak cocok jumlahnya - JANGAN hapus satu pun record NVS.
+      // Buffer tetap utuh, akan dicoba lagi otomatis di siklus berikutnya.
+      return false;
+    }
+
+    for (JsonObject item : res["data"].as<JsonArray>()) {
+      const char *st = item["status"] | "error";
+      if (strcmp(st, "error") == 0) {
+        appendFailedLogToSD(item["rfid"] | "unknown", item["timestamp"] | "unknown", item["message"] | "UNKNOWN");
       }
+    }
     nvsSetCount(0);
     for (int i = 0; i < cnt; i++)
       nvsDeleteRecord(i);
@@ -1612,7 +1649,7 @@ unsigned long checkRfidDbVersion() {
 }
 
 /**
- * PATCH v2.3.3 (revisi 2 - FINAL) - server berjalan di belakang Cloudflare
+ * PATCH v2.3.4 (revisi 2 - FINAL) - server berjalan di belakang Cloudflare
  * dengan HTTP/2: TIDAK ADA header Content-Length yang dikirim, dan koneksi
  * TIDAK ditutup segera setelah body selesai (keep-alive) - sehingga baik
  * "Content-Length" maupun "http.connected() == false" TIDAK BISA dipakai
@@ -2150,6 +2187,23 @@ bool readQueueFileLocked(const char *fn, OfflineRecord *recs, int *cnt, int maxC
   return *cnt > 0;
 }
 
+/**
+ * PATCH v2.3.4 - menutup celah silent data loss: sebelumnya HANYA
+ * mengecek HTTP code == 200 sebelum menghapus file antrian - kalau server
+ * membalas 200 dengan array "data" kosong atau lebih pendek dari yang
+ * dikirim (body corrupt di tengah jalan, atau backend gagal parsing
+ * sebagian), device tetap menghapus file dan menganggap SEMUA record
+ * sinkron, padahal sebagian/semua TIDAK tersimpan di server. TIDAK ADA
+ * jejak di mana pun setelah file dihapus.
+ *
+ * SEKARANG: SETELAH decode JSON respons, jumlah item di response["data"]
+ * WAJIB SAMA PERSIS dengan validCnt (jumlah item yang dikirim). Jika tidak
+ * cocok, seluruh sinkronisasi file ini dianggap GAGAL - file TIDAK
+ * dihapus, akan di-retry oleh syncQueueFileWithRetry() dan siklus
+ * chunkedSync() berikutnya. Backend (syncBulk()) juga diperbaiki
+ * bersamaan: body tanpa field "data" valid sekarang ditolak HTTP 422,
+ * bukan diam-diam dibalas 200 dengan data kosong.
+ */
 SyncFileResult syncQueueFile(const char *fn) {
   if (!sdCardAvailable || !isWifiConnected()) {
     return SYNC_FILE_NO_WIFI;
@@ -2202,14 +2256,33 @@ SyncFileResult syncQueueFile(const char *fn) {
     String body = http.getString();
     esp_task_wdt_reset();
     http.end();
+
     DynamicJsonDocument res(512 + (size_t)validCnt * 128);
-    if (deserializeJson(res, body) == DeserializationError::Ok)
-      for (JsonObject item : res["data"].as<JsonArray>()) {
-        const char *st = item["status"] | "error";
-        if (strcmp(st, "error") == 0) {
-          appendFailedLogToSD(item["rfid"] | "unknown", item["timestamp"] | "unknown", item["message"] | "UNKNOWN");
-        }
+    DeserializationError parseErr = deserializeJson(res, body);
+
+    // BARU: validasi struktur respons DAN jumlah item, SEBELUM menghapus
+    // file. Kalau parsing gagal, field "data" tidak ada, atau jumlahnya
+    // tidak cocok - anggap sinkronisasi GAGAL, jangan hapus file.
+    bool responseValid = false;
+    int responseCount = 0;
+    if (parseErr == DeserializationError::Ok && res["data"].is<JsonArray>()) {
+      responseCount = res["data"].as<JsonArray>().size();
+      responseValid = (responseCount == validCnt);
+    }
+
+    if (!responseValid) {
+      // Respons tidak cocok jumlahnya dengan yang dikirim - kemungkinan
+      // body corrupt/terpotong atau server menolak sebagian diam-diam.
+      // JANGAN hapus file - biarkan retry di siklus berikutnya.
+      return SYNC_FILE_HTTP_FAIL;
+    }
+
+    for (JsonObject item : res["data"].as<JsonArray>()) {
+      const char *st = item["status"] | "error";
+      if (strcmp(st, "error") == 0) {
+        appendFailedLogToSD(item["rfid"] | "unknown", item["timestamp"] | "unknown", item["message"] | "UNKNOWN");
       }
+    }
     if (!acquireSD())
       return SYNC_FILE_HTTP_FAIL;
     selectSD();

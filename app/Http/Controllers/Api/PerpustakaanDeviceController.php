@@ -137,13 +137,48 @@ class PerpustakaanDeviceController extends Controller
      * karena firmware membaca field "status" per item untuk logging kegagalan
      * (appendFailedLogToSD) - status HTTP selalu 200 selama body valid JSON,
      * kegagalan per-record dilaporkan lewat "status" per item, bukan HTTP code.
+     *
+     * KONTRAK BARU (v2.3.4, menutup celah silent data loss) - sebelumnya
+     * $request->input('data', []) diam-diam jatuh ke array kosong jika body
+     * bukan JSON valid/field 'data' tidak ada, lalu tetap membalas HTTP 200
+     * dengan {"data":[]} - firmware lama menganggap ini SUKSES (kode 200) dan
+     * MENGHAPUS file antrian, padahal NOL record tersimpan - silent data loss
+     * tanpa jejak di server maupun perangkat. SEKARANG: body yang tidak
+     * memuat array 'data' non-kosong yang valid akan ditolak HTTP 422 (bukan
+     * 200) - firmware v2.3.4+ menangani ini sebagai kegagalan yang di-retry
+     * (lihat syncQueueFileWithRetry()), TIDAK menghapus file.
+     *
+     * Firmware v2.3.4+ JUGA memvalidasi jumlah item di response 'data' sama
+     * dengan jumlah yang dikirim SEBELUM menghapus file antrian (lihat
+     * syncQueueFile()) - lapisan pertahanan kedua kalau body rusak sebagian
+     * (bukan kosong total, tapi item hilang di tengah jalan).
      */
     public function syncBulk(Request $request): JsonResponse
     {
-        $items = $request->input('data', []);
+        $items = $request->input('data');
+
+        if (! is_array($items) || count($items) === 0) {
+            // BARU: body tidak valid/field 'data' tidak ada/kosong - TOLAK
+            // tegas, jangan diam-diam balas 200 dengan data kosong (itu yang
+            // menyebabkan device menghapus antrian tanpa satu pun record
+            // benar-benar tersimpan).
+            return response()->json([
+                'error' => 'field "data" wajib berupa array berisi minimal 1 item',
+            ], 422);
+        }
+
         $hasil = [];
 
         foreach ($items as $item) {
+            if (! is_array($item)) {
+                // BARU: item individual yang bukan object/array valid - catat
+                // sebagai error per-item, bukan diabaikan diam-diam (supaya
+                // count response tetap sama dengan count request, lihat
+                // validasi count di firmware).
+                $hasil[] = ['rfid' => '', 'timestamp' => '', 'status' => 'error', 'message' => 'item tidak valid'];
+                continue;
+            }
+
             $rfid = (string) ($item['rfid'] ?? '');
             $timestamp = (string) ($item['timestamp'] ?? '');
             $deviceId = (string) ($item['device_id'] ?? '');

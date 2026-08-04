@@ -18,6 +18,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -37,13 +38,32 @@ class TahunPelajaranResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('nama')
-                ->label('Nama (mis. 2026/2027)')
-                ->required()
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255),
-            DatePicker::make('tanggal_mulai')->required(),
-            DatePicker::make('tanggal_selesai')->required()->afterOrEqual('tanggal_mulai'),
+            Section::make('Periode Tahun Pelajaran')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('nama')
+                        ->label('Nama (mis. 2026/2027)')
+                        ->required()
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->columnSpanFull()
+                        ->validationMessages([
+                            'required' => 'Nama tahun pelajaran wajib diisi.',
+                            'unique' => 'Nama tahun pelajaran ini sudah dipakai dan masih aktif.',
+                        ]),
+                    DatePicker::make('tanggal_mulai')
+                        ->required()
+                        ->validationMessages([
+                            'required' => 'Tanggal mulai wajib diisi.',
+                        ]),
+                    DatePicker::make('tanggal_selesai')
+                        ->required()
+                        ->afterOrEqual('tanggal_mulai')
+                        ->validationMessages([
+                            'required' => 'Tanggal selesai wajib diisi.',
+                            'after_or_equal' => 'Tanggal selesai tidak boleh sebelum tanggal mulai.',
+                        ]),
+                ]),
         ]);
     }
 
@@ -78,9 +98,6 @@ class TahunPelajaranResource extends Resource
                     }),
                 DeleteAction::make()->visible(fn (TahunPelajaran $record) => ! $record->aktif),
                 RestoreAction::make(),
-                // TODO: GAP-SPEC - blokir force-delete jika sedang aktif ATAU
-                // ada KTP (termasuk trashed) di bawahnya yang masih punya
-                // siswa aktif.
                 ForceDeleteAction::make()
                     ->action(function (TahunPelajaran $record) {
                         if ($record->aktif) {

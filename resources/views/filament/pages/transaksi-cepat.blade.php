@@ -14,12 +14,122 @@
                 0 20px 50px -12px rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(6px);
         }
+
+        .transaksi-cepat-avatar-wrap {
+            position: relative;
+            width: 88px;
+            height: 88px;
+            margin-bottom: 0.75rem;
+        }
+
+        .transaksi-cepat-ring {
+            position: absolute;
+            inset: 0;
+            transform: rotate(-90deg);
+            pointer-events: none;
+        }
+
+        .transaksi-cepat-ring circle {
+    fill: none;
+    stroke-width: 3;
+    transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
+}
     </style>
+
+    {{-- Komponen Alpine idle-timer transaksi mandiri/otonom - didaftarkan
+         sebagai named component (bukan inline x-init string) supaya tidak
+         rentan bug parsing/quoting, dan supaya progress-nya bisa dipakai
+         reaktif untuk UI countdown ring di sekitar avatar. --}}
+    <script>
+        document.addEventListener('alpine:init', () => {
+    Alpine.data('transaksiCepatIdleTimer', () => ({
+        idleTimeoutMs: 10000,
+        tickMs: 100,
+        msLeft: 10000,
+        timerId: null,
+        listenersAttached: false,
+
+        init() {
+            this.resetTimer();
+
+            if (! this.listenersAttached) {
+                const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
+                this._onActivity = () => this.resetTimer();
+                activityEvents.forEach(evt => document.addEventListener(evt, this._onActivity));
+
+                document.addEventListener('livewire:navigating', () => {
+                    this.stopTimer();
+                    activityEvents.forEach(evt => document.removeEventListener(evt, this._onActivity));
+                }, { once: true });
+
+                this.listenersAttached = true;
+            }
+        },
+
+        resetTimer() {
+            this.msLeft = this.idleTimeoutMs;
+
+            if (this.timerId) {
+                clearInterval(this.timerId);
+            }
+
+            this.timerId = setInterval(() => {
+                this.msLeft -= this.tickMs;
+
+                if (this.msLeft <= 0) {
+                    this.stopTimer();
+                    this.msLeft = this.idleTimeoutMs;
+                    this.$wire.selesai();
+                }
+            }, this.tickMs);
+        },
+
+        stopTimer() {
+            if (this.timerId) {
+                clearInterval(this.timerId);
+                this.timerId = null;
+            }
+        },
+
+        get progress() {
+            return Math.max(0, Math.min(1, this.msLeft / this.idleTimeoutMs));
+        },
+
+        get secondsLeft() {
+            return Math.ceil(Math.max(0, this.msLeft) / 1000);
+        },
+
+        // circumference lingkaran r=42 -> 2 * PI * 42
+        get ringDashoffset() {
+            const circumference = 263.89;
+
+            return circumference * (1 - this.progress);
+        },
+
+        // Hijau -> kuning -> merah seiring waktu habis. Threshold dipilih
+        // supaya "kuning" (peringatan) sudah mulai terlihat saat sisa
+        // waktu tinggal 40% (4 detik dari total 10 detik), dan "merah"
+        // (mendesak) di 6 detik terakhir (20% dari total).
+        get ringColor() {
+            if (this.progress > 0.4) {
+                return '#22c55e'; // hijau (success)
+            }
+
+            if (this.progress > 0.2) {
+                return '#eab308'; // kuning (warning)
+            }
+
+            return '#ef4444'; // merah (danger)
+        },
+    }));
+});
+    </script>
 
     <div style="display: flex; justify-content: center; padding: 2rem 1rem;">
         <div
             class="transaksi-cepat-card"
             style="width: 100%; max-width: 460px; border-radius: 20px; padding: 2rem;"
+            x-data="transaksiCepatIdleTimer()"
         >
             @if (! $user)
                 {{-- Identifikasi user: satu input, auto-deteksi kartu/NISN vs nama --}}
@@ -91,28 +201,46 @@
                 >
                     {{-- Profil user --}}
                     <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
-                        <div style="position: relative; margin-bottom: 0.75rem;">
+                        <div class="transaksi-cepat-avatar-wrap">
                             @if ($user->avatar)
                                 <img
                                     src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar) }}"
                                     alt="{{ $user->nama }}"
                                     width="80"
                                     height="80"
-                                    style="display: block; width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};"
+                                    style="display: block; width: 80px; height: 80px; margin: 4px; border-radius: 50%; object-fit: cover; border: 3px solid {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};"
                                 />
                             @else
-                                <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; font-weight: 600; font-size: 22px; color: #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};">
+                                <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; margin: 4px; border-radius: 50%; font-weight: 600; font-size: 22px; color: #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};">
                                     {{ collect(explode(' ', $user->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
                                 </div>
                             @endif
 
-                            <span style="position: absolute; bottom: -2px; right: -2px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--success-500)' }};">
+                            {{-- Countdown ring: mengelilingi avatar, penuh saat user baru
+                                 dimuat, mengecil linear ke nol dalam 5 detik idle. Warna
+                                 memakai token Filament yang sama dgn border avatar supaya
+                                 konsisten dgn status suspend/aktif. --}}
+                            <svg class="transaksi-cepat-ring" viewBox="0 0 88 88">
+                                <circle
+                                    cx="44"
+                                    cy="44"
+                                    r="42"
+                                    :stroke="ringColor"
+                                    stroke-dasharray="263.89"
+                                    :stroke-dashoffset="ringDashoffset"
+                                    stroke-linecap="round"
+                                ></circle>
+                            </svg>
+
+                            <span style="position: absolute; bottom: 2px; right: 2px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--success-500)' }};">
                                 <x-filament::icon
                                     :icon="$user->status_suspend ? 'heroicon-s-lock-closed' : 'heroicon-s-check'"
                                     style="width: 14px; height: 14px; color: #fff;"
                                 />
                             </span>
                         </div>
+
+                        <p class="text-gray-400 dark:text-gray-500" style="font-size: 0.6875rem; margin: 0 0 0.25rem; font-variant-numeric: tabular-nums;" x-text="'Reset otomatis dalam ' + secondsLeft + ' detik'"></p>
 
                         <h2 class="text-gray-950 dark:text-white" style="font-size: 1.125rem; font-weight: 600; line-height: 1.3; margin: 0;">{{ $user->nama }}</h2>
                         @if ($user->nisn || $user->nip)

@@ -23,6 +23,19 @@
             >
                 Simpan Pengaturan Device
             </x-filament::button>
+
+            <x-filament::button
+                type="button"
+                color="danger"
+                icon="heroicon-o-key"
+                x-on:click.prevent="
+                    if (confirm('Perubahan kredensial ini TIDAK otomatis mengubah panel gateway WhatsApp atau firmware device RFID. Jika nilai baru belum disinkronkan di kedua sisi, notifikasi WA dan/atau autentikasi device akan GAGAL. Lanjutkan menyimpan?')) {
+                        $wire.simpanKredensial()
+                    }
+                "
+            >
+                Simpan Kredensial Sensitif
+            </x-filament::button>
         </div>
     </form>
 </x-filament-panels::page>

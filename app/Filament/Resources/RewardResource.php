@@ -18,6 +18,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -38,19 +39,34 @@ class RewardResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('nama')
-                ->required()
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255),
-            Textarea::make('deskripsi')
-                ->columnSpanFull(),
-            TextInput::make('threshold_point')
-                ->numeric()
-                ->integer()
-                ->required(),
-            Toggle::make('aktif')
-                ->default(true)
-                ->helperText('Reward nonaktif tidak akan dicek/direalisasikan lagi oleh PointService.'),
+            Section::make('Informasi Reward')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('nama')
+                        ->required()
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->columnSpanFull()
+                        ->validationMessages([
+                            'required' => 'Nama reward wajib diisi.',
+                            'unique' => 'Nama reward ini sudah dipakai dan masih aktif.',
+                        ]),
+                    Textarea::make('deskripsi')
+                        ->columnSpanFull(),
+                    TextInput::make('threshold_point')
+                        ->numeric()
+                        ->integer()
+                        ->required()
+                        ->minValue(1)
+                        ->validationMessages([
+                            'required' => 'Threshold point wajib diisi.',
+                            'integer' => 'Threshold point harus berupa bilangan bulat.',
+                            'min' => 'Threshold point minimal 1.',
+                        ]),
+                    Toggle::make('aktif')
+                        ->default(true)
+                        ->helperText('Reward nonaktif tidak akan dicek/direalisasikan lagi oleh PointService.'),
+                ]),
         ]);
     }
 

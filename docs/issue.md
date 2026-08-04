@@ -100,9 +100,7 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- perbaiki tampilan footer untuk halaman auth (&copy 2026 MTs Negeri 1 Pandeglang | built with ♥️ by <a href="https://github.com/zulfikriyahya"> Yahya Zulfikri </a>) [ini berbeda posisinya dengan semua halaman biasa/ dashboard]
-- tambahkan tombol (bukan link/inline teks) kembali ke halaman login / 'halaman login'
-- gunakan custom css jika tidak memungkinkan menggunakan bawaan tailwindcss
+- review dan finalkan fitur import/export masing-masing dan full master import/export
 
 ---
 

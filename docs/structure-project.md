@@ -13,11 +13,13 @@
 │   │   ├── RoleUser.php
 │   │   ├── SourceKunjungan.php
 │   │   ├── StatusAkademik.php
+│   │   ├── StatusBulkJob.php
 │   │   ├── StatusEksemplar.php
 │   │   ├── StatusOtaFirmware.php
 │   │   ├── StatusPeminjaman.php
 │   │   ├── StatusRefund.php
 │   │   ├── StatusRiwayatKelas.php
+│   │   ├── TipeBulkJob.php
 │   │   └── TipeDenda.php
 │   ├── Exceptions
 │   │   └── WhatsappGatewayException.php
@@ -26,6 +28,7 @@
 │   │   │   ├── BukuExporter.php
 │   │   │   ├── DendaExporter.php
 │   │   │   ├── EksemplarExporter.php
+│   │   │   ├── FirmwareReleaseExporter.php
 │   │   │   ├── JurusanExporter.php
 │   │   │   ├── KategoriExporter.php
 │   │   │   ├── KelasExporter.php
@@ -33,6 +36,7 @@
 │   │   │   ├── KunjunganExporter.php
 │   │   │   ├── LevelBadgeExporter.php
 │   │   │   ├── LevelBadgeLogExporter.php
+│   │   │   ├── MasterDataExporter.php
 │   │   │   ├── PeminjamanExporter.php
 │   │   │   ├── PengembalianExporter.php
 │   │   │   ├── PunishmentExporter.php
@@ -40,6 +44,7 @@
 │   │   │   ├── RakExporter.php
 │   │   │   ├── RewardExporter.php
 │   │   │   ├── RewardLogExporter.php
+│   │   │   ├── RiwayatKelasSiswaExporter.php
 │   │   │   ├── TahunPelajaranExporter.php
 │   │   │   ├── TransaksiExporter.php
 │   │   │   └── UserExporter.php
@@ -62,6 +67,7 @@
 │   │   │   │   ├── RequestPasswordReset.php
 │   │   │   │   └── ResetPassword.php
 │   │   │   ├── Dashboard.php
+│   │   │   ├── ImportExportMaster.php
 │   │   │   ├── LaporanBulanan.php
 │   │   │   ├── PengaturanSistem.php
 │   │   │   ├── ProsesKenaikanKelas.php
@@ -227,6 +233,8 @@
 │   │   │   ├── TahunPelajaranResource.php
 │   │   │   ├── TransaksiResource.php
 │   │   │   └── UserResource.php
+│   │   ├── Support
+│   │   │   └── GenericExportSheet.php
 │   │   └── Widgets
 │   │       ├── BukuPerKategoriWidget.php
 │   │       ├── BukuRusakHilangWidget.php
@@ -241,16 +249,20 @@
 │   │   ├── Controllers
 │   │   │   ├── Api
 │   │   │   │   └── PerpustakaanDeviceController.php
+│   │   │   ├── BulkDataJobDownloadController.php
 │   │   │   ├── ChartExportController.php
 │   │   │   └── Controller.php
 │   │   └── Middleware
 │   │       └── AuthenticateDeviceApiKey.php
 │   ├── Jobs
 │   │   ├── GenerateLabelBarcodePdfJob.php
-│   │   └── KirimNotifikasiWhatsapp.php
+│   │   ├── KirimNotifikasiWhatsapp.php
+│   │   ├── ProcessMasterExportJob.php
+│   │   └── ProcessMasterImportJob.php
 │   ├── Models
 │   │   ├── BukuKategori.php
 │   │   ├── Buku.php
+│   │   ├── BulkDataJob.php
 │   │   ├── Denda.php
 │   │   ├── DeviceLog.php
 │   │   ├── Eksemplar.php
@@ -313,21 +325,24 @@
 │   │   └── AppServiceProvider.php
 │   ├── Rules
 │   │   └── FormatKartuRfid.php
-│   └── Services
-│       ├── KenaikanKelasService.php
-│       ├── LabelBarcodeService.php
-│       ├── LaporanBulananService.php
-│       ├── LoginOtpService.php
-│       ├── PasswordResetOtpService.php
-│       ├── PeminjamanService.php
-│       ├── PointService.php
-│       ├── RfidResolverService.php
-│       ├── SnapshotHarianService.php
-│       └── WhatsappService.php
+│   ├── Services
+│   │   ├── KenaikanKelasService.php
+│   │   ├── LabelBarcodeService.php
+│   │   ├── LaporanBulananService.php
+│   │   ├── LoginOtpService.php
+│   │   ├── PasswordResetOtpService.php
+│   │   ├── PeminjamanService.php
+│   │   ├── PointService.php
+│   │   ├── RfidResolverService.php
+│   │   ├── SnapshotHarianService.php
+│   │   └── WhatsappService.php
+│   └── Support
+│       └── MasterDataRegistry.php
 ├── bootstrap
 │   ├── cache
 │   │   ├── filament
 │   │   │   └── panels
+│   │   │       └── dashboard.php
 │   │   ├── .gitignore
 │   │   ├── packages.php
 │   │   └── services.php
@@ -423,15 +438,14 @@
 │   │   ├── 2026_08_02_000012_create_snapshot_harians_table.php
 │   │   ├── 2026_08_03_000001_make_unique_constraints_soft_delete_aware.php
 │   │   ├── 2026_08_03_000002_kelas_wajib_jurusan_unique_per_jurusan.php
-│   │   └── 2026_08_03_000003_optimalkan_index_query_panas.php
+│   │   ├── 2026_08_03_000003_optimalkan_index_query_panas.php
+│   │   ├── 2026_08_04_000001_add_kredensial_ke_settings_table.php
+│   │   └── 2026_08_04_000002_create_bulk_data_jobs_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
 │   │   └── ShieldSeeder.php
 │   └── .gitignore
-├── deploy
-│   └── supervisor
-│       └── perpustakaan-worker.conf
 ├── resources
 │   ├── css
 │   │   └── app.css
@@ -444,13 +458,13 @@
 │       │   │   ├── auth
 │       │   │   │   ├── request-password-reset.blade.php
 │       │   │   │   └── reset-password.blade.php
+│       │   │   ├── import-export-master.blade.php
 │       │   │   ├── laporan-bulanan.blade.php
 │       │   │   ├── pengaturan-sistem.blade.php
 │       │   │   ├── proses-kenaikan-kelas.blade.php
 │       │   │   └── transaksi-cepat.blade.php
 │       │   └── partials
 │       │       ├── app-footer.blade.php
-│       │       ├── auth-footer.blade.php
 │       │       ├── auth-styles.blade.php
 │       │       ├── chart-export-script.blade.php
 │       │       ├── global-footer-style.blade.php
@@ -487,4 +501,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-116 directories, 372 files
+116 directories, 386 files

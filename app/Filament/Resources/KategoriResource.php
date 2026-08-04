@@ -16,6 +16,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
@@ -34,29 +35,46 @@ class KategoriResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('nama')
-                ->required()
-                ->maxLength(255),
-            Textarea::make('deskripsi')
-                ->columnSpanFull(),
-            Select::make('raks')
-                ->label('Rak Terkait')
-                ->relationship('raks', 'nama')
-                ->multiple()
-                ->preload()
-                ->searchable()
-                ->createOptionForm([
+            Section::make('Informasi Kategori')
+                ->columns(2)
+                ->schema([
                     TextInput::make('nama')
                         ->required()
-                        ->maxLength(255),
-                    TextInput::make('lokasi')
-                        ->maxLength(255),
-                    Select::make('kategoris')
-                        ->label('Kategori Terkait')
-                        ->relationship('kategoris', 'nama')
+                        ->maxLength(255)
+                        ->columnSpan(2)
+                        ->validationMessages([
+                            'required' => 'Nama kategori wajib diisi.',
+                            'max' => 'Nama kategori maksimal 255 karakter.',
+                        ]),
+                    Textarea::make('deskripsi')
+                        ->columnSpanFull(),
+                ]),
+
+            Section::make('Rak Terkait')
+                ->description('Rak tempat buku kategori ini biasanya disimpan.')
+                ->schema([
+                    Select::make('raks')
+                        ->label('Rak Terkait')
+                        ->relationship('raks', 'nama')
                         ->multiple()
                         ->preload()
-                        ->searchable(),
+                        ->searchable()
+                        ->createOptionForm([
+                            TextInput::make('nama')
+                                ->required()
+                                ->maxLength(255)
+                                ->validationMessages([
+                                    'required' => 'Nama rak wajib diisi.',
+                                ]),
+                            TextInput::make('lokasi')
+                                ->maxLength(255),
+                            Select::make('kategoris')
+                                ->label('Kategori Terkait')
+                                ->relationship('kategoris', 'nama')
+                                ->multiple()
+                                ->preload()
+                                ->searchable(),
+                        ]),
                 ]),
         ]);
     }
@@ -86,7 +104,6 @@ class KategoriResource extends Resource
             ->recordActions([
                 DeleteAction::make(),
                 RestoreAction::make(),
-                // Aman - pivot buku_kategori & kategori_rak cascadeOnDelete.
                 ForceDeleteAction::make(),
             ])
             ->toolbarActions([DeleteBulkAction::make()]);

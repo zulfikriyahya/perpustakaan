@@ -82,5 +82,43 @@ class SettingSeeder extends Seeder
                 ]
             );
         }
+
+        $kredensial = [
+            'whatsapp_gateway_base_url' => [
+                'value' => config('services.whatsapp_gateway.base_url'),
+                'terenkripsi' => false,
+            ],
+            'whatsapp_gateway_timeout' => [
+                'value' => (string) config('services.whatsapp_gateway.timeout', 15),
+                'terenkripsi' => false,
+            ],
+            'whatsapp_gateway_api_key_id' => [
+                'value' => config('services.whatsapp_gateway.api_key_id'),
+                'terenkripsi' => true,
+            ],
+            'whatsapp_gateway_secret' => [
+                'value' => config('services.whatsapp_gateway.secret'),
+                'terenkripsi' => true,
+            ],
+            'device_gateway_api_key' => [
+                'value' => config('services.device_gateway.api_key'),
+                'terenkripsi' => true,
+            ],
+        ];
+
+        foreach ($kredensial as $key => $data) {
+            if (! $data['value']) {
+                continue; // .env belum diisi - skip, fallback tetap jalan di service terkait
+            }
+
+            if ($data['terenkripsi']) {
+                Setting::setEncrypted($key, (string) $data['value'], GroupSetting::Kredensial);
+            } else {
+                Setting::query()->updateOrCreate(
+                    ['key' => $key],
+                    ['value' => (string) $data['value'], 'group' => GroupSetting::Kredensial, 'is_encrypted' => false],
+                );
+            }
+        }
     }
 }

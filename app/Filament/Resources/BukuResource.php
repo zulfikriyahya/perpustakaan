@@ -24,6 +24,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -33,6 +34,14 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
+/**
+ * TODO: ASUMSI - dipakai Section (bukan Wizard) untuk mengompakkan form,
+ * konsisten dengan alasan yang sama di UserResource: form ini dipakai untuk
+ * create DAN edit di satu halaman, dan Section "Eksemplar Awal" hanya
+ * relevan/visible saat create (->visibleOn('create')) sehingga alur Wizard
+ * bertahap kurang cocok untuk mode edit. Beri tahu jika sebenarnya
+ * diinginkan Wizard khusus create.
+ */
 class BukuResource extends Resource
 {
     protected static ?string $model = Buku::class;
@@ -46,63 +55,116 @@ class BukuResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('judul')
-                ->required()
-                ->maxLength(255)
-                ->columnSpanFull(),
-            FileUpload::make('cover')
-                ->image()
-                ->directory('buku-cover'),
-            TextInput::make('penulis')
-                ->maxLength(255),
-            TextInput::make('penerbit')
-                ->maxLength(255),
-            TextInput::make('isbn')
-                ->label('ISBN')
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255)
-                ->helperText('1 ISBN = 1 judul. Jumlah eksemplar fisik dikelola di tab Eksemplar setelah buku disimpan.'),
-            TextInput::make('tahun_terbit')
-                ->label('Tahun Terbit')
-                ->numeric()
-                ->minValue(1000)
-                ->maxValue((int) date('Y'))
-                ->maxLength(4),
-            Select::make('kategoris')
-                ->label('Kategori')
-                ->relationship('kategoris', 'nama')
-                ->multiple()
-                ->preload()
-                ->searchable(),
-            TextInput::make('harga_ganti')
-                ->label('Harga Ganti')
-                ->numeric()
-                ->prefix('Rp')
-                ->required()
-                ->helperText('Dipakai sebagai basis perhitunganDenda kerusakan/kehilangan untuk semua eksemplar judul ini.'),
-            Textarea::make('deskripsi')
-                ->columnSpanFull(),
+            Section::make('Informasi Utama')
+                ->columns(2)
+                ->columnSpanFull()
+                ->schema([
+                    TextInput::make('judul')
+                        ->required()
+                        ->maxLength(255)
+                        ->validationMessages([
+                            'required' => 'Judul buku wajib diisi.',
+                            'max' => 'Judul buku maksimal 255 karakter.',
+                        ]),
+                    FileUpload::make('cover')
+                        ->image()
+                        ->directory('buku-cover'),
+                    TextInput::make('penulis')
+                        ->maxLength(255)
+                        ->validationMessages([
+                            'max' => 'Nama penulis maksimal 255 karakter.',
+                        ]),
+                    TextInput::make('penerbit')
+                        ->maxLength(255)
+                        ->validationMessages([
+                            'max' => 'Nama penerbit maksimal 255 karakter.',
+                        ]),
+                    TextInput::make('isbn')
+                        ->label('ISBN')
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->helperText('1 ISBN = 1 judul. Jumlah eksemplar fisik dikelola di tab Eksemplar setelah buku disimpan.')
+                        ->validationMessages([
+                            'unique' => 'ISBN ini sudah dipakai judul buku lain yang masih aktif.',
+                            'max' => 'ISBN maksimal 255 karakter.',
+                        ]),
+                    TextInput::make('tahun_terbit')
+                        ->label('Tahun Terbit')
+                        ->numeric()
+                        ->minValue(1000)
+                        ->maxValue((int) date('Y'))
+                        ->maxLength(4)
+                        ->validationMessages([
+                            'numeric' => 'Tahun terbit harus berupa angka.',
+                            'min' => 'Tahun terbit tidak valid.',
+                            'max' => 'Tahun terbit tidak boleh lebih dari tahun berjalan.',
+                        ]),
+                ]),
+
+            Section::make('Klasifikasi & Harga')
+                ->columns(2)
+                ->schema([
+                    Select::make('kategoris')
+                        ->label('Kategori')
+                        ->relationship('kategoris', 'nama')
+                        ->multiple()
+                        ->preload()
+                        ->searchable()
+                        ->createOptionForm([
+                            TextInput::make('nama')
+                                ->required()
+                                ->maxLength(255)
+                                ->validationMessages([
+                                    'required' => 'Nama kategori wajib diisi.',
+                                ]),
+                            Textarea::make('deskripsi')
+                                ->columnSpanFull(),
+                        ]),
+                    TextInput::make('harga_ganti')
+                        ->label('Harga Ganti')
+                        ->numeric()
+                        ->minValue(0)
+                        ->prefix('Rp')
+                        ->required()
+                        ->helperText('Dipakai sebagai basis perhitungan Denda kerusakan/kehilangan untuk semua eksemplar judul ini.')
+                        ->validationMessages([
+                            'required' => 'Harga ganti wajib diisi.',
+                            'numeric' => 'Harga ganti harus berupa angka.',
+                            'min' => 'Harga ganti tidak boleh negatif.',
+                        ]),
+                    Textarea::make('deskripsi')
+                        ->columnSpanFull(),
+                ]),
+
             // GAP-SPEC ditutup: field non-persisten, hanya dipakai saat
             // create (lihat CreateBuku::afterCreate()) untuk sekaligus
             // membuat N Eksemplar baru - tidak ada kolom 'jumlah_eksemplar'
             // di tabel bukus, jadi dehydrated(false) dan disembunyikan di
             // context edit (Aturan poin 3 - ubah stok setelah create tetap
             // HANYA lewat tab Eksemplar/BukuImporter, bukan disini).
-            TextInput::make('jumlah_eksemplar_awal')
-                ->label('Jumlah Eksemplar Awal')
-                ->numeric()
-                ->minValue(0)
-                ->default(0)
-                ->helperText('Opsional - langsung membuat N eksemplar berstatus Tersedia. Jumlah eksemplar SETELAH buku dibuat tetap dikelola lewat tab Eksemplar atau Import Buku.')
-                ->dehydrated(false)
-                ->visibleOn('create'),
-            Select::make('rak_id_eksemplar_awal')
-                ->label('Rak untuk Eksemplar Awal')
-                ->options(fn () => Rak::query()->pluck('nama', 'id'))
-                ->searchable()
-                ->helperText('Opsional - rak yang sama dipakaikan ke semuaeksemplar awal yang dibuat.')
-                ->dehydrated(false)
-                ->visibleOn('create'),
+            Section::make('Eksemplar Awal')
+                ->description('Opsional - langsung membuat N eksemplar berstatus Tersedia saat buku dibuat.')
+                ->columns(2)
+                ->visibleOn('create')
+                ->schema([
+                    TextInput::make('jumlah_eksemplar_awal')
+                        ->label('Jumlah Eksemplar Awal')
+                        ->numeric()
+                        ->minValue(0)
+                        ->default(0)
+                        ->helperText('Jumlah eksemplar SETELAH buku dibuat tetap dikelola lewat tab Eksemplar atau Import Buku.')
+                        ->dehydrated(false)
+                        ->validationMessages([
+                            'numeric' => 'Jumlah eksemplar awal harus berupa angka.',
+                            'min' => 'Jumlah eksemplar awal tidak boleh negatif.',
+                        ]),
+                    Select::make('rak_id_eksemplar_awal')
+                        ->label('Rak untuk Eksemplar Awal')
+                        ->options(fn () => Rak::query()->pluck('nama', 'id'))
+                        ->searchable()
+                        ->helperText('Rak yang sama dipakaikan ke semua eksemplar awal yang dibuat.')
+                        ->dehydrated(false),
+                ]),
         ]);
     }
 
@@ -110,11 +172,6 @@ class BukuResource extends Resource
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->withCount([
-                // BARU (iterasi ini) - diganti dari 4x query N+1 per baris
-                // (method model dipanggil di ->state() closure) jadi 4
-                // sub-select dalam SATU query withCount, dieksekusi sekali
-                // untuk seluruh halaman (bukan per baris) - Aturan poin 3/9,
-                // penting untuk skala data besar.
                 'eksemplars as jumlah_eksemplar_aktif' => fn ($q) => $q->where('status', '!=', StatusEksemplar::Hilang),
                 'eksemplars as jumlah_stok_tersedia' => fn ($q) => $q->where('status', StatusEksemplar::Tersedia),
                 'eksemplars as jumlah_eksemplar_rusak' => fn ($q) => $q->where('status', StatusEksemplar::Rusak),
@@ -141,9 +198,6 @@ class BukuResource extends Resource
                     ->label('Tahun')
                     ->sortable()
                     ->toggleable(),
-                // Sekarang membaca kolom hasil withCount di atas - TIDAK
-                // lagi memanggil $record->jumlahEksemplarAktif() (yang
-                // menjalankan query baru tiap baris).
                 TextColumn::make('jumlah_eksemplar_aktif')
                     ->label('Jumlah Buku')
                     ->description(fn (Buku $record) => $record->jumlah_eksemplar_hilang > 0
@@ -220,7 +274,7 @@ class BukuResource extends Resource
                             Notification::make()
                                 ->warning()
                                 ->title('Tidak ada Eksemplar')
-                                ->body('Buku yang dipilih belumpunya Eksemplar untuk dicetak labelnya.')
+                                ->body('Buku yang dipilih belum punya Eksemplar untuk dicetak labelnya.')
                                 ->send();
 
                             return;

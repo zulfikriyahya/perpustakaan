@@ -13,6 +13,12 @@ use Illuminate\Support\Str;
  * Wrapper untuk WhatsApp Gateway (whatsapp.zedlabs.id API v1, autentikasi HMAC-SHA256).
  * Signature dihitung dari raw body bytes persis seperti yang dikirim - lihat
  * dokumen kontrak API bagian 2.1. Jangan format ulang body setelah signing.
+ *
+ * Kredensial SEKARANG dibaca dari Setting (grup Kredensial, lihat
+ * PengaturanSistem) - dengan FALLBACK ke config()/.env jika Setting belum
+ * diisi (mis. fresh install belum sempat dikonfigurasi Admin lewat panel).
+ * Operator `?:` dipakai (bukan `??`) karena Setting::get() bisa
+ * mengembalikan string kosong '' yang harus tetap dianggap "belum diisi".
  */
 class WhatsappService
 {
@@ -26,19 +32,15 @@ class WhatsappService
 
     public function __construct()
     {
-        $this->baseUrl = rtrim((string) config('services.whatsapp_gateway.base_url'), '/');
-        $this->apiKeyId = (string) config('services.whatsapp_gateway.api_key_id');
-        $this->secret = (string) config('services.whatsapp_gateway.secret');
-        $this->timeout = (int) config('services.whatsapp_gateway.timeout', 15);
+        $this->baseUrl = rtrim((string) (Setting::get('whatsapp_gateway_base_url') ?: config('services.whatsapp_gateway.base_url')), '/');
+        $this->apiKeyId = (string) (Setting::get('whatsapp_gateway_api_key_id') ?: config('services.whatsapp_gateway.api_key_id'));
+        $this->secret = (string) (Setting::get('whatsapp_gateway_secret') ?: config('services.whatsapp_gateway.secret'));
+        $this->timeout = (int) (Setting::get('whatsapp_gateway_timeout') ?: config('services.whatsapp_gateway.timeout', 15));
     }
 
     /**
-     * Kirim pesan berbasis template terdaftar di panel gateway.
-     * Dipanggil SINKRON oleh KirimNotifikasiWhatsapp job (bukan langsung
-     * oleh Controller/Observer/Service lain) - lihat kirimEvent() di bawah.
-     *
      * @param  array<string, mixed>  $variables
-     * @param  array<string, mixed>|null  $media  Lihat dokumen kontrak API bagian 2.2 (jenis: dokumen|gambar|video|link|kontak)
+     * @param  array<string, mixed>|null  $media
      * @return array{job_id: string, status: string}
      *
      * @throws WhatsappGatewayException
@@ -61,9 +63,6 @@ class WhatsappService
             $body['reference_id'] = $referenceId;
         }
 
-        // json_encode default PHP tanpa spasi tambahan - konsisten dengan body yang
-        // ditandatangani. JSON_UNESCAPED_SLASHES/UNICODE agar tidak ada karakter
-        // escape tak perlu yang mengubah representasi byte.
         $bodyString = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         [$status, $payload] = $this->kirimRequest('POST', '/api/v1/messages', $bodyString);
@@ -79,8 +78,6 @@ class WhatsappService
     }
 
     /**
-     * Ambil status terkini satu job (queued|processing|sent|delivered|read|failed).
-     *
      * @return array{job_id: string, status: string, waktu_antre: string, waktu_kirim: string, keterangan_gagal: string}
      *
      * @throws WhatsappGatewayException
@@ -96,30 +93,6 @@ class WhatsappService
         return $payload;
     }
 
-    /**
-     * Titik masuk TUNGGAL untuk seluruh notifikasi WA di aplikasi (Aturan
-     * poin 3 - Prinsip DRY). Method ini hanya me-resolve template_code dari
-     * Setting lalu men-dispatch KirimNotifikasiWhatsapp ke queue 'whatsapp'.
-     *
-     * ->afterCommit(): pemanggil (PeminjamanService::tandaiDenda,
-     * PointService::catatEvent, dsb.) sering berada di dalam DB::transaction.
-     * Tanpa afterCommit(), worker queue 'redis' bisa memproses job sebelum
-     * transaksi commit (config/queue.php redis tidak set after_commit=true
-     * secara global) - kalau transaksi rollback, notifikasi WA sudah
-     * terlanjur terkirim untuk data yang batal tersimpan. Jika dipanggil di
-     * luar transaksi (tidak ada transaksi aktif), afterCommit() tidak
-     * memberi efek tambahan - job tetap dispatch langsung.
-     *
-     * Key pola: wa_template_{event_code}, mis. 'wa_template_peminjaman_aktif'.
-     *
-     * TODO: ASUMSI - nama key Setting per event belum ditentukan spec, memakai pola
-     * di atas. Admin wajib mengisi Setting ini + membuat/mengaitkan template_code
-     * yang sesuai di panel gateway (dok bagian 4.2) sebelum notifikasi terkirim.
-     *
-     * Jika template belum dikonfigurasi (Setting kosong), pengiriman di-skip dan
-     * dicatat sebagai warning - TIDAK di-dispatch ke queue sama sekali, supaya
-     * tidak menumpuk job yang pasti gagal karena template_code kosong.
-     */
     public function kirimEvent(
         string $eventCode,
         string $nomorTujuan,

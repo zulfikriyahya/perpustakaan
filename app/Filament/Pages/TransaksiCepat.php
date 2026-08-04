@@ -102,7 +102,7 @@ class TransaksiCepat extends Page
     /**
      * Window rate limit anti-scan-ganda (detik). Lihat catatan class di atas.
      */
-    protected const RATE_LIMIT_DETIK = 60;
+    protected const RATE_LIMIT_DETIK = 300;
 
     /**
      * Minimal karakter sebelum live-search fallback (nama/judul) dieksekusi

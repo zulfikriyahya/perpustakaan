@@ -16,6 +16,7 @@ use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
@@ -34,10 +35,28 @@ class JurusanResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('nama')->required()->maxLength(255),
-            TextInput::make('kode')->required()
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255),
+            Section::make('Informasi Jurusan')
+                ->description('Kelas mensyaratkan Jurusan (wajib diisi) - lihat migration kelas_wajib_jurusan_unique_per_jurusan.')
+                ->columns(2)
+                ->columnSpanFull()
+                ->schema([
+                    TextInput::make('nama')
+                        ->required()
+                        ->maxLength(255)
+                        ->validationMessages([
+                            'required' => 'Nama jurusan wajib diisi.',
+                            'max' => 'Nama jurusan maksimal 255 karakter.',
+                        ]),
+                    TextInput::make('kode')
+                        ->required()
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->validationMessages([
+                            'required' => 'Kode jurusan wajib diisi.',
+                            'unique' => 'Kode jurusan ini sudah dipakai jurusan lain yang masih aktif.',
+                            'max' => 'Kode jurusan maksimal 255 karakter.',
+                        ]),
+                ]),
         ]);
     }
 
@@ -60,11 +79,6 @@ class JurusanResource extends Resource
             ->recordActions([
                 DeleteAction::make(),
                 RestoreAction::make(),
-                // DIUBAH (iterasi ini) - kelas.jurusan_id sekarang RESTRICT
-                // (bukan nullOnDelete lagi, lihat migration
-                // 2026_08_03_000002). WAJIB cek pemakaian (termasuk Kelas
-                // ter-soft-delete) sebelum force-delete, atau DB akan
-                // menolak dengan error 1451 mentah.
                 ForceDeleteAction::make()
                     ->action(function (Jurusan $record) {
                         $dipakai = Kelas::query()

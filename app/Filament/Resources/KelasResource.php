@@ -17,6 +17,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -36,32 +37,69 @@ class KelasResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('nama')
-                ->label('Nama Kelas (mis. X IPA 1)')
-                ->required()
-                ->maxLength(255)
-                ->unique(
-                    table: 'kelas',
-                    column: 'nama',
-                    ignoreRecord: true,
-                    modifyRuleUsing: fn ($rule, $get) => $rule
-                        ->whereNull('deleted_at')
-                        ->where('jurusan_id', $get('jurusan_id')),
-                ),
-            TextInput::make('tingkat')
-                ->numeric()
-                ->integer()
-                ->minValue(1)
-                ->required()
-                ->helperText('Angka tingkat, mis. 10, 11, 12 - dipakai untuk urutan kenaikan kelas.'),
-            Select::make('jurusan_id')
-                ->label('Jurusan')
-                ->relationship('jurusan', 'nama')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->live()
-                ->helperText('Setiap Kelas wajib punya Jurusan. Nama Kelas unik per Jurusan (boleh sama di Jurusan berbeda).'),
+            Section::make('Informasi Kelas')
+                ->description('Setiap Kelas wajib punya Jurusan. Nama Kelas unik PER Jurusan (boleh sama di Jurusan berbeda) - lihat migration kelas_wajib_jurusan_unique_per_jurusan.')
+                ->columns(3)
+                ->columnSpanFull()
+                ->schema([
+                    TextInput::make('nama')
+                        ->label('Nama Kelas (mis. X IPA 1)')
+                        ->required()
+                        ->maxLength(255)
+                        ->unique(
+                            table: 'kelas',
+                            column: 'nama',
+                            ignoreRecord: true,
+                            modifyRuleUsing: fn ($rule, $get) => $rule
+                                ->whereNull('deleted_at')
+                                ->where('jurusan_id', $get('jurusan_id')),
+                        )
+                        ->validationMessages([
+                            'required' => 'Nama kelas wajib diisi.',
+                            'unique' => 'Nama kelas ini sudah dipakai di Jurusan yang sama (masih aktif). Nama boleh sama jika Jurusan berbeda.',
+                            'max' => 'Nama kelas maksimal 255 karakter.',
+                        ]),
+                    TextInput::make('tingkat')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(1)
+                        ->required()
+                        ->helperText('Angka tingkat, mis. 10, 11, 12 - dipakai untuk urutan kenaikan kelas.')
+                        ->validationMessages([
+                            'required' => 'Tingkat wajib diisi.',
+                            'integer' => 'Tingkat harus berupa bilangan bulat.',
+                            'min' => 'Tingkat minimal 1.',
+                        ]),
+                    Select::make('jurusan_id')
+                        ->label('Jurusan')
+                        ->relationship('jurusan', 'nama')
+                        ->searchable()
+                        ->preload()
+                        ->required()
+                        ->live()
+                        ->createOptionForm([
+                            TextInput::make('nama')
+                                ->required()
+                                ->maxLength(255)
+                                ->validationMessages([
+                                    'required' => 'Nama jurusan wajib diisi.',
+                                    'max' => 'Nama jurusan maksimal 255 karakter.',
+                                ]),
+                            TextInput::make('kode')
+                                ->required()
+                                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                                ->maxLength(255)
+                                ->validationMessages([
+                                    'required' => 'Kode jurusan wajib diisi.',
+                                    'unique' => 'Kode jurusan ini sudah dipakai jurusan lain yang masih aktif.',
+                                    'max' => 'Kode jurusan maksimal 255 karakter.',
+                                ]),
+                        ])
+                        ->helperText('Wajib diisi - constraint NOT NULL di database (lihat migration kelas_wajib_jurusan_unique_per_jurusan).')
+                        ->validationMessages([
+                            'required' => 'Jurusan wajib dipilih.',
+                        ]),
+                ]),
         ]);
     }
 
@@ -87,10 +125,6 @@ class KelasResource extends Resource
             ->recordActions([
                 DeleteAction::make(),
                 RestoreAction::make(),
-                // TODO: GAP-SPEC - blokir force-delete jika ada KTP (termasuk
-                // yang sudah di-soft-delete) di bawah Kelas ini yang masih
-                // punya siswa aktif - mencegah cascade DB diam-diam
-                // memutus assignment siswa yang sedang berjalan.
                 ForceDeleteAction::make()
                     ->action(function (Kelas $record) {
                         $adaSiswaAktif = KelasTahunPelajaran::query()

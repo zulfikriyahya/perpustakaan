@@ -16,29 +16,29 @@ use Illuminate\Support\HtmlString;
 
 /**
  * Halaman Pengaturan Sistem: form terstruktur per GroupSetting, menulis
- * ke tabel `settings` (bukan generate Resource generik). Konsisten
- * dengan pola LaporanBulanan (custom Page + Schema->statePath('data')).
+ * ke tabel `settings` (bukan generate Resource generik).
  *
- * Simpan dipisah 2 method (simpanUmum / simpanDevice) - BUKAN satu
- * Action generik - supaya konfirmasi dialog hanya wajib untuk grup
- * Device (poin 17: perubahan di sini menyentuh device fisik yang
- * sudah aktif di lapangan). Dialog konfirmasi di-trigger via Alpine
- * confirm() di Blade, bukan Filament Action::requiresConfirmation(),
- * karena signature Action pada Filament 5.7 belum diverifikasi penuh
- * untuk kasus non-Resource page ini.
+ * ITERASI INI: tab baru "Kredensial Sensitif" memindahkan WHATSAPP_GATEWAY_*
+ * dan DEVICE_GATEWAY_API_KEY dari .env ke Setting (dienkripsi via
+ * Setting::setEncrypted() untuk field secret). Method simpan DIPISAH lagi
+ * (simpanKredensial(), bukan gabung ke simpanUmum()) dengan dialog
+ * konfirmasi Alpine sendiri - sama seperti Device, karena:
+ * - Ganti DEVICE_GATEWAY_API_KEY di sini TIDAK mengubah key di firmware
+ *   ESP32 yang sudah terpasang - device lama akan langsung gagal
+ *   autentikasi (401) sampai direconfigure manual via provisioning mode.
+ * - Ganti WhatsApp secret/api_key_id yang tidak cocok dengan panel
+ *   gateway zedlabs membuat SELURUH notifikasi WA gagal (HMAC signature
+ *   mismatch di WhatsappService::kirimRequest()).
+ *
+ * Fallback: jika Setting kosong (mis. baru migrate, belum sempat diisi
+ * Admin), WhatsappService & AuthenticateDeviceApiKey fallback membaca
+ * config()/.env seperti sebelumnya (lihat masing-masing file) - jadi
+ * .env TIDAK dihapus, hanya jadi fallback (dikonfirmasi user).
  *
  * TODO: verifikasi signature terhadap versi package yang terpasang -
  * komponen Tabs/Tab/Grid diasumsikan berada di Filament\Schemas\Components
  * (mengikuti pola Schema/Select yang sudah dipakai LaporanBulanan),
  * cek ulang jika filament/filament ^5.7 punya lokasi berbeda.
- *
- * TODO: GAP-SPEC/UI - setiap Tab dibungkus Grid responsif (default 1
- * kolom mobile, 2 kolom tablet, 3 kolom desktop, 4 kolom layar lebar)
- * agar field pendek (angka jam, point, tarif) tidak memanjang penuh
- * satu baris - proporsional terhadap panjang label/nilai. Tab
- * "WhatsApp Template" tetap dibatasi maksimal 3 kolom (bukan 4) karena
- * label & helperText lebih panjang, 4 kolom akan membuat teks terpotong/
- * wrap berlebihan.
  */
 class PengaturanSistem extends Page
 {
@@ -72,9 +72,30 @@ class PengaturanSistem extends Page
     ];
 
     /**
-     * Kolom grid responsif standar untuk tab dengan field pendek
-     * (Peminjaman/Denda, Point, Device) - proporsional di layar lebar.
+     * Key milik grup Kredensial - kontrak keamanan mengikat WhatsApp
+     * Gateway & Device Gateway RFID (Aturan poin 17), wajib konfirmasi
+     * terpisah dari grup lain.
      */
+    protected const KEY_KREDENSIAL_SENSITIVE = [
+        'whatsapp_gateway_base_url',
+        'whatsapp_gateway_api_key_id',
+        'whatsapp_gateway_secret',
+        'whatsapp_gateway_timeout',
+        'device_gateway_api_key',
+    ];
+
+    /**
+     * Subset dari KEY_KREDENSIAL_SENSITIVE yang benar-benar dienkripsi
+     * (Setting::setEncrypted()) - base_url & timeout bukan secret,
+     * disimpan plaintext seperti Setting lain agar tidak menambah
+     * overhead enkripsi percuma.
+     */
+    protected const KEY_KREDENSIAL_TERENKRIPSI = [
+        'whatsapp_gateway_api_key_id',
+        'whatsapp_gateway_secret',
+        'device_gateway_api_key',
+    ];
+
     protected const GRID_KOLOM_STANDAR = [
         'default' => 1,
         'sm' => 2,
@@ -82,10 +103,6 @@ class PengaturanSistem extends Page
         'xl' => 4,
     ];
 
-    /**
-     * Kolom grid untuk tab dengan label/helperText panjang (WhatsApp
-     * Template) - dibatasi 3 kolom maksimal supaya tidak wrap berlebihan.
-     */
     protected const GRID_KOLOM_PADAT = [
         'default' => 1,
         'sm' => 2,
@@ -102,11 +119,25 @@ class PengaturanSistem extends Page
         return 'Pengaturan Sistem';
     }
 
+    /**
+     * Nilai key Kredensial-terenkripsi didekripsi transparan oleh
+     * Setting::get() (dipanggil lewat query pluck di bawah -> TIDAK,
+     * pluck() langsung dari DB TIDAK mendekripsi). Jadi untuk key
+     * terenkripsi, isi form manual lewat Setting::get() per key supaya
+     * value yang tampil di TextInput::password() sudah plaintext
+     * (bukan ciphertext mentah).
+     */
     public function mount(): void
     {
-        $values = Setting::query()->pluck('value', 'key');
+        $values = Setting::query()->pluck('value', 'key')->toArray();
 
-        $this->form->fill($values->toArray());
+        foreach (self::KEY_KREDENSIAL_TERENKRIPSI as $key) {
+            if (array_key_exists($key, $values)) {
+                $values[$key] = Setting::get($key);
+            }
+        }
+
+        $this->form->fill($values);
     }
 
     public function form(Schema $schema): Schema
@@ -203,13 +234,42 @@ class PengaturanSistem extends Page
                                         ->numeric()->integer()->minValue(1000)->required(),
                                 ]),
                         ]),
+
+                    Tab::make('Kredensial Sensitif')
+                        ->schema([
+                            Placeholder::make('kredensial_info')
+                                ->label('')
+                                ->content('Field bertanda kunci disimpan terenkripsi di database. Mengubah nilai di sini TIDAK otomatis mengubah konfigurasi di panel gateway WhatsApp atau firmware device RFID yang sudah terpasang - pastikan nilai baru sudah sinkron di kedua sisi sebelum menyimpan.')
+                                ->columnSpanFull(),
+                            Grid::make(self::GRID_KOLOM_PADAT)
+                                ->schema([
+                                    TextInput::make('whatsapp_gateway_base_url')
+                                        ->label('WhatsApp Gateway Base URL')
+                                        ->url()->required(),
+                                    TextInput::make('whatsapp_gateway_timeout')
+                                        ->label('WhatsApp Gateway Timeout (detik)')
+                                        ->numeric()->integer()->minValue(1)->required(),
+                                    TextInput::make('whatsapp_gateway_api_key_id')
+                                        ->label('WhatsApp Gateway API Key ID')
+                                        ->password()->revealable()->required()
+                                        ->helperText('Terenkripsi di database.'),
+                                    TextInput::make('whatsapp_gateway_secret')
+                                        ->label('WhatsApp Gateway Secret (HMAC)')
+                                        ->password()->revealable()->required()
+                                        ->helperText('Terenkripsi di database. Harus sama persis dengan panel gateway zedlabs.'),
+                                    TextInput::make('device_gateway_api_key')
+                                        ->label('Device Gateway API Key (ESP32)')
+                                        ->password()->revealable()->required()
+                                        ->helperText('Terenkripsi di database. Ganti nilai ini TIDAK mengubah key di firmware yang sudah terpasang.'),
+                                ]),
+                        ]),
                 ]),
         ])->statePath('data');
     }
 
     /**
      * Simpan grup Peminjaman, Denda, Point, WhatsApp - tanpa konfirmasi,
-     * tidak menyentuh kontrak device.
+     * tidak menyentuh kontrak device/kredensial.
      */
     public function simpanUmum(): void
     {
@@ -218,6 +278,7 @@ class PengaturanSistem extends Page
         $keys = array_diff(
             array_keys($state),
             self::KEY_DEVICE_SENSITIVE,
+            self::KEY_KREDENSIAL_SENSITIVE,
             self::KEY_READONLY,
         );
 
@@ -228,11 +289,6 @@ class PengaturanSistem extends Page
 
     /**
      * Simpan grup Device - dipanggil setelah konfirmasi Alpine di Blade.
-     * TODO: GAP-SPEC - perubahan di sini baru dipakai device pada siklus
-     * fetch config berikutnya (lihat PerpustakaanDeviceController), TIDAK
-     * ada mekanisme push aktif ke device yang sedang online. Jika perlu
-     * push real-time, perlu keputusan desain tambahan (mis. queue command
-     * ke device via endpoint lain) - belum diimplementasikan.
      */
     public function simpanDevice(): void
     {
@@ -244,6 +300,34 @@ class PengaturanSistem extends Page
             ->warning()
             ->title('Pengaturan device disimpan.')
             ->body('Device akan memakai nilai baru pada sinkronisasi berikutnya, bukan seketika.')
+            ->send();
+    }
+
+    /**
+     * Simpan grup Kredensial - dipanggil setelah konfirmasi Alpine di
+     * Blade. Field dalam KEY_KREDENSIAL_TERENKRIPSI disimpan via
+     * Setting::setEncrypted(); sisanya (base_url, timeout) via jalur
+     * biasa (simpanKeys) karena bukan secret.
+     */
+    public function simpanKredensial(): void
+    {
+        $state = $this->form->getState();
+
+        foreach (self::KEY_KREDENSIAL_TERENKRIPSI as $key) {
+            if (! array_key_exists($key, $state) || $state[$key] === null || $state[$key] === '') {
+                continue;
+            }
+
+            Setting::setEncrypted($key, (string) $state[$key], GroupSetting::Kredensial);
+        }
+
+        $keysPlaintext = array_diff(self::KEY_KREDENSIAL_SENSITIVE, self::KEY_KREDENSIAL_TERENKRIPSI);
+        $this->simpanKeys($state, $keysPlaintext);
+
+        Notification::make()
+            ->danger()
+            ->title('Kredensial sensitif disimpan.')
+            ->body('Pastikan nilai baru sudah disesuaikan juga di panel gateway WhatsApp dan/atau firmware device, jika tidak notifikasi WA/autentikasi device akan gagal.')
             ->send();
     }
 
@@ -265,6 +349,8 @@ class PengaturanSistem extends Page
             'device_oled_dim_end_hour' => GroupSetting::Device,
             'device_sync_interval_ms' => GroupSetting::Device,
             'device_ota_check_interval_ms' => GroupSetting::Device,
+            'whatsapp_gateway_base_url' => GroupSetting::Kredensial,
+            'whatsapp_gateway_timeout' => GroupSetting::Kredensial,
         ];
 
         foreach ($keys as $key) {
@@ -276,7 +362,7 @@ class PengaturanSistem extends Page
 
             Setting::query()->updateOrCreate(
                 ['key' => $key],
-                ['value' => (string) $state[$key], 'group' => $group],
+                ['value' => (string) $state[$key], 'group' => $group, 'is_encrypted' => false],
             );
         }
     }

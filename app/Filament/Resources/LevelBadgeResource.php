@@ -17,6 +17,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -36,26 +37,63 @@ class LevelBadgeResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('nama_badge')
-                ->required()
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255),
-            TextInput::make('min_point')
-                ->numeric()
-                ->integer()
-                ->required(),
-            TextInput::make('max_point')
-                ->numeric()
-                ->integer()
-                ->helperText('Kosongkan jika badge tertinggi (tidak ada batas atas).'),
-            TextInput::make('urutan')
-                ->numeric()
-                ->integer()
-                ->default(0)
-                ->helperText('Dipakai untuk urutan tampilan, bukan urutan threshold.'),
-            FileUpload::make('icon')
-                ->image()
-                ->directory('level-badge-icon'),
+            Section::make('Informasi Badge')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('nama_badge')
+                        ->required()
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->columnSpanFull()
+                        ->validationMessages([
+                            'required' => 'Nama badge wajib diisi.',
+                            'unique' => 'Nama badge ini sudah dipakai dan masih aktif.',
+                        ]),
+                    FileUpload::make('icon')
+                        ->image()
+                        ->directory('level-badge-icon')
+                        ->columnSpanFull(),
+                ]),
+
+            Section::make('Threshold Point')
+                ->description('Rentang akumulasi point yang memicu badge ini (dicek PointService).')
+                ->columns(3)
+                ->schema([
+                    TextInput::make('min_point')
+                        ->numeric()
+                        ->integer()
+                        ->required()
+                        ->live(onBlur: true)
+                        ->validationMessages([
+                            'required' => 'Point minimum wajib diisi.',
+                            'integer' => 'Point minimum harus berupa bilangan bulat.',
+                        ]),
+                    TextInput::make('max_point')
+                        ->numeric()
+                        ->integer()
+                        ->helperText('Kosongkan jika badge tertinggi (tidak ada batas atas).')
+                        // TODO: GAP-SPEC - aturan "max_point >= min_point" belum
+                        // ada sebelumnya di form maupun DB (kolom hanya integer
+                        // nullable biasa). Ditambahkan di sini murni validasi
+                        // form (tidak mengubah skema) - perlu dikonfirmasi apakah
+                        // ini memang aturan bisnis yang diinginkan, atau overlap
+                        // rentang antar badge memang disengaja/ditangani di
+                        // tempat lain (PointService?).
+                        ->gte('min_point')
+                        ->validationMessages([
+                            'integer' => 'Point maksimum harus berupa bilangan bulat.',
+                            'gte' => 'Point maksimum tidak boleh lebih kecil dari point minimum.',
+                        ]),
+                    TextInput::make('urutan')
+                        ->numeric()
+                        ->integer()
+                        ->default(0)
+                        ->required()
+                        ->helperText('Urutan tampilan, bukan urutan threshold.')
+                        ->validationMessages([
+                            'integer' => 'Urutan harus berupa bilangan bulat.',
+                        ]),
+                ]),
         ]);
     }
 
@@ -80,8 +118,6 @@ class LevelBadgeResource extends Resource
             ->recordActions([
                 DeleteAction::make(),
                 RestoreAction::make(),
-                // FK users.level_badge_id default RESTRICT - WAJIB cek
-                // pemakaian (termasuk User ter-soft-delete) sebelum force-delete.
                 ForceDeleteAction::make()
                     ->action(function (LevelBadge $record) {
                         $dipakai = User::query()

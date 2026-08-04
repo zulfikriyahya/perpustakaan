@@ -15,9 +15,11 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
 use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
@@ -36,17 +38,49 @@ class RakResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('nama')
-                ->required()
-                ->maxLength(255),
-            TextInput::make('lokasi')
-                ->maxLength(255),
-            Select::make('kategoris')
-                ->label('Kategori Terkait')
-                ->relationship('kategoris', 'nama')
-                ->multiple()
-                ->preload()
-                ->searchable(),
+            Section::make('Informasi Rak')
+                ->description('Identitas dan lokasi fisik rak penyimpanan.')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('nama')
+                        ->required()
+                        ->maxLength(255)
+                        ->validationMessages([
+                            'required' => 'Nama rak wajib diisi.',
+                            'max' => 'Nama rak maksimal 255 karakter.',
+                        ]),
+                    TextInput::make('lokasi')
+                        ->maxLength(255)
+                        ->helperText('Opsional - mis. "Lantai 2, Sisi Timur".')
+                        ->validationMessages([
+                            'max' => 'Lokasi maksimal 255 karakter.',
+                        ]),
+                ]),
+
+            Section::make('Kategori Terkait')
+                ->description('Kategori buku yang biasanya ditempatkan di rak ini.')
+                ->schema([
+                    Select::make('kategoris')
+                        ->label('Kategori Terkait')
+                        ->relationship('kategoris', 'nama')
+                        ->multiple()
+                        ->preload()
+                        ->searchable()
+                        // BARU - createOptionForm timbal-balik dengan Kategori
+                        // (KategoriResource sudah punya untuk Rak), supaya
+                        // Pustakawan tidak perlu pindah halaman saat mengisi data
+                        // rak baru sekaligus kategori barunya (Aturan gap ini).
+                        ->createOptionForm([
+                            TextInput::make('nama')
+                                ->required()
+                                ->maxLength(255)
+                                ->validationMessages([
+                                    'required' => 'Nama kategori wajib diisi.',
+                                ]),
+                            Textarea::make('deskripsi')
+                                ->columnSpanFull(),
+                        ]),
+                ]),
         ]);
     }
 
@@ -78,8 +112,6 @@ class RakResource extends Resource
             ->recordActions([
                 DeleteAction::make(),
                 RestoreAction::make(),
-                // FK eksemplars.rak_id default RESTRICT - blokir jika masih
-                // dipakai (termasuk Eksemplar ter-soft-delete).
                 ForceDeleteAction::make()
                     ->action(function (Rak $record) {
                         $dipakai = Eksemplar::query()->withTrashed()

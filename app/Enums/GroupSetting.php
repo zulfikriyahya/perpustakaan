@@ -10,4 +10,5 @@ enum GroupSetting: string
     case Denda = 'denda';
     case Device = 'device';
     case Whatsapp = 'whatsapp';
+    case Kredensial = 'kredensial';
 }

@@ -3,8 +3,10 @@
 namespace App\Filament\Resources;
 
 use App\Enums\StatusRiwayatKelas;
+use App\Filament\Exports\RiwayatKelasSiswaExporter;
 use App\Filament\Resources\RiwayatKelasSiswaResource\Pages;
 use App\Models\RiwayatKelasSiswa;
+use Filament\Actions\ExportAction;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -37,6 +39,11 @@ class RiwayatKelasSiswaResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(RiwayatKelasSiswaExporter::class)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', RiwayatKelasSiswa::class) ?? false),
+            ])
             ->columns([
                 TextColumn::make('user.nama')->label('Siswa')->searchable()->sortable(),
                 TextColumn::make('user.nisn')->label('NISN')->searchable(),

@@ -28,11 +28,10 @@ use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 /**
- * Denda SELALU dibuat otomatis oleh PeminjamanService (keterlambatan saat
- * pengembalian, kerusakan/kehilangan saat proses terkait) - tidak ada
- * Create/Edit page di Resource ini, sesuai pola PengembalianResource
- * (Aturan poin 3, DRY - tidak ada jalan lain mengubah data selain lewat
- * Service/Observer terpusat).
+ * Denda SELALU dibuat otomatis oleh PeminjamanService - tidak ada
+ * Create/Edit page di Resource ini (form() sengaja kosong, TIDAK diubah
+ * iterasi ini karena memang tidak ada form utama untuk dikompakkan -
+ * hanya dua Action schema kecil di bawah yang mendapat validationMessages()).
  *
  * TODO: GAP-SPEC - PeminjamanService::batalkanDenda() TIDAK men-set
  * status_refund ke 'perlu_refund' saat membatalkan Denda yang sudah
@@ -71,11 +70,6 @@ class DendaResource extends Resource
                     ->label('User')
                     ->searchable()
                     ->sortable(),
-                // BUG FIX (iterasi ini): 'peminjaman.buku.judul' DIHAPUS -
-                // Peminjaman tidak lagi punya relasi langsung ke Buku sejak
-                // migration 2026_08_02_000002-000004. Diganti
-                // 'peminjaman.eksemplar.buku.judul', konsisten dengan
-                // PengembalianResource yang sudah benar.
                 TextColumn::make('peminjaman.eksemplar.buku.judul')
                     ->label('Buku')
                     ->searchable()
@@ -139,7 +133,10 @@ class DendaResource extends Resource
                         DateTimePicker::make('tanggal_lunas')
                             ->label('Tanggal Lunas')
                             ->default(now())
-                            ->required(),
+                            ->required()
+                            ->validationMessages([
+                                'required' => 'Tanggal lunas wajib diisi.',
+                            ]),
                         Textarea::make('keterangan')
                             ->label('Catatan')
                             ->default(fn (Denda $record) => $record->keterangan),
@@ -152,9 +149,6 @@ class DendaResource extends Resource
                             'keterangan' => $data['keterangan'] ?? $record->keterangan,
                         ]);
 
-                        // FITUR BARU: catat Transaksi jenis pembayaran_denda -
-                        // satu sumber kebenaran pembuatan Transaksi tipe ini,
-                        // jangan duplikasi di tempat lain (Aturan poin 3).
                         Transaksi::create([
                             'user_id' => $record->user_id,
                             'jenis' => JenisTransaksi::PembayaranDenda,
@@ -182,7 +176,10 @@ class DendaResource extends Resource
                         Select::make('status_refund')
                             ->label('Status Refund')
                             ->options(collect(StatusRefund::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
-                            ->required(),
+                            ->required()
+                            ->validationMessages([
+                                'required' => 'Status refund wajib dipilih.',
+                            ]),
                     ])
                     ->action(function (Denda $record, array $data) {
                         $record->update(['status_refund' => $data['status_refund']]);

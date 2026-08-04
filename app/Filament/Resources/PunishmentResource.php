@@ -18,6 +18,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -38,26 +39,44 @@ class PunishmentResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('nama')
-                ->required()
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255),
-            Textarea::make('deskripsi')
-                ->columnSpanFull(),
-            TextInput::make('threshold_point_minus')
-                ->numeric()
-                ->integer()
-                ->maxValue(0)
-                ->required()
-                ->helperText('Nilai negatif - akumulasi point <= nilai ini akan memicu punishment.'),
-            TextInput::make('durasi_suspend_hari')
-                ->numeric()
-                ->integer()
-                ->minValue(1)
-                ->helperText('Kosongkan jika punishment tidak memicu suspend otomatis.'),
-            Toggle::make('aktif')
-                ->default(true)
-                ->helperText('Punishment nonaktif tidak akan dicek/direalisasikan lagi oleh PointService.'),
+            Section::make('Informasi Punishment')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('nama')
+                        ->required()
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->columnSpanFull()
+                        ->validationMessages([
+                            'required' => 'Nama punishment wajib diisi.',
+                            'unique' => 'Nama punishment ini sudah dipakai dan masih aktif.',
+                        ]),
+                    Textarea::make('deskripsi')
+                        ->columnSpanFull(),
+                    TextInput::make('threshold_point_minus')
+                        ->numeric()
+                        ->integer()
+                        ->maxValue(0)
+                        ->required()
+                        ->helperText('Nilai negatif - akumulasi point <= nilai ini akan memicu punishment.')
+                        ->validationMessages([
+                            'required' => 'Threshold point minus wajib diisi.',
+                            'integer' => 'Threshold point minus harus berupa bilangan bulat.',
+                            'max' => 'Threshold point minus harus nol atau negatif.',
+                        ]),
+                    TextInput::make('durasi_suspend_hari')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(1)
+                        ->helperText('Kosongkan jika punishment tidak memicu suspend otomatis.')
+                        ->validationMessages([
+                            'integer' => 'Durasi suspend harus berupa bilangan bulat.',
+                            'min' => 'Durasi suspend minimal 1 hari.',
+                        ]),
+                    Toggle::make('aktif')
+                        ->default(true)
+                        ->helperText('Punishment nonaktif tidak akan dicek/direalisasikan lagi oleh PointService.'),
+                ]),
         ]);
     }
 
@@ -81,7 +100,6 @@ class PunishmentResource extends Resource
             ->recordActions([
                 DeleteAction::make(),
                 RestoreAction::make(),
-                // FK punishment_logs.punishment_id default RESTRICT.
                 ForceDeleteAction::make()
                     ->action(function (Punishment $record) {
                         $dipakai = PunishmentLog::query()->withTrashed()

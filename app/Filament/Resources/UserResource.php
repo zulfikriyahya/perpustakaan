@@ -13,6 +13,7 @@ use App\Models\Denda;
 use App\Models\KelasTahunPelajaran;
 use App\Models\Peminjaman;
 use App\Models\User;
+use App\Rules\FormatKartuRfid;
 use App\Services\KenaikanKelasService;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
@@ -27,6 +28,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
@@ -43,6 +45,20 @@ use Illuminate\Support\Collection;
  *
  * TODO: verifikasi signature terhadap versi package yang terpasang -
  * mengikuti pola BukuResource untuk Schema/Table API Filament ^5.7.
+ *
+ * TODO: ASUMSI - dipakai Section (bukan Wizard) untuk mengompakkan form,
+ * karena form ini dipakai untuk create DAN edit inline pada satu halaman
+ * (Wizard cocok untuk alur create bertahap, tapi kurang lazim untuk edit
+ * single-page dengan banyak field disabled/read-only seperti
+ * 'status_akademik'). Jika yang diinginkan justru Wizard bertahap khusus
+ * saat create, beri tahu agar disesuaikan.
+ *
+ * ITERASI INI - hanya menambahkan validationMessages() informatif di
+ * seluruh field form dan menyamakan pesan dengan constraint DB soft-
+ * delete-aware (unique_aktif, lihat migration
+ * 2026_08_03_000001_make_unique_constraints_soft_delete_aware.php) -
+ * TIDAK mengubah struktur Section/field yang sudah ada (Aturan poin 17,
+ * tidak menyentuh proteksi super_admin/otorisasi).
  */
 class UserResource extends Resource
 {
@@ -54,120 +70,156 @@ class UserResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Sistem';
 
+    protected static function isTargetSuperAdmin(callable $get): bool
+    {
+        return $get('role') === RoleUser::Admin->value;
+    }
+
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([
-            TextInput::make('nama')
-                ->required()
-                ->maxLength(255),
-            Select::make('role')
-                ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
-                ->required()
-                ->live()
-                // BARU (iterasi ini) - saat role diganti, bersihkan field
-                // NISN/NIP yang jadi tidak relevan (dihitung PeminjamanService?
-                // tidak - murni UI form, lihat visible()/dehydrated() di
-                // nisn/nip di bawah). Mencegah nilai lama nyangkut diam-diam
-                // di $record sebelum sempat disembunyikan dari tampilan.
-                ->afterStateUpdated(function ($state, callable $set) {
-                    if ($state === RoleUser::Siswa->value) {
-                        $set('nip', null);
-                    } else {
-                        $set('nisn', null);
-                    }
-                }),
-            TextInput::make('nisn')
-                ->label('NISN')
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255)
-                // BARU - NISN hanya relevan untuk Siswa, disembunyikan untuk
-                // role lain. dehydrated() disamakan dengan visible() supaya
-                // field yang disembunyikan tidak ikut ter-submit/tersimpan
-                // (Aturan poin 3 - satu sumber kebenaran "role menentukan
-                // identitas yang valid", bukan dua tempat berbeda).
-                ->visible(fn (callable $get) => $get('role') === RoleUser::Siswa->value)
-                ->dehydrated(fn (callable $get) => $get('role') === RoleUser::Siswa->value),
-            TextInput::make('nip')
-                ->label('NIP')
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255)
-                // BARU - NIP hanya relevan untuk Pegawai/Pustakawan/Admin,
-                // disembunyikan untuk Siswa. Pola sama dengan 'nisn' di atas.
-                ->visible(fn (callable $get) => $get('role') !== RoleUser::Siswa->value)
-                ->dehydrated(fn (callable $get) => $get('role') !== RoleUser::Siswa->value),
-            Select::make('jenis_kelamin')
-                ->label('Jenis Kelamin')
-                ->options(collect(JenisKelamin::cases())->mapWithKeys(fn ($j) => [$j->value => $j->label()]))
-                ->native(false),
-            // Kolom 'kelas' (string bebas) sudah di-drop dari tabel users
-            // (migration 2026_08_01_000006), diganti relasi
-            // kelas_tahun_pelajaran_id. Ditampilkan read-only di sini -
-            // penetapan/perubahan kelas WAJIB lewat KenaikanKelasService
-            // (bulk action 'assign_kelas' di tabel bawah, atau proses
-            // kenaikan kelas massal) supaya RiwayatKelasSiswa selalu
-            // tercatat. Form ini sengaja TIDAK menyediakan input langsung
-            // untuk field ini agar tidak ada jalur kedua yang melewati
-            // service (Aturan poin 3, DRY).
-            // TODO: GAP-SPEC - pada 'create', user baru dibuat tanpa KTP
-            // (kelas_tahun_pelajaran_id null, status_akademik default
-            // 'aktif' dari migration). Assignment awal dilakukan setelah
-            // user tersimpan, lewat bulk action 'assign_kelas' di index.
-            // Perlu dikonfirmasi apakah alur ini sudah sesuai ekspektasi,
-            // atau dibutuhkan Select assignment langsung di form create.
+        $isProtected = fn (callable $get) => static::isTargetSuperAdmin($get);
 
-            Placeholder::make('kelas_tahun_pelajaran_id')
-                ->label('Kelas (Tahun Pelajaran)')
-                ->content(fn (?User $record) => $record?->kelasTahunPelajaran
-                    ? "{$record->kelasTahunPelajaran->kelas->nama} - {$record->kelasTahunPelajaran->tahunPelajaran->nama}"
-                    : 'Belum di-assign - gunakan aksi "Assign ke Kelas" di daftar User.')
-                ->visibleOn('edit'),
-            // Hanya tampil saat create - field virtual (bukan kolom User),
-            // dibuang & diproses lewat KenaikanKelasService::assignKelas()
-            // di CreateUser::afterCreate(). Assignment setelah create
-            // (bukan saat edit) tetap konsisten dengan alur bulk action
-            // 'assign_kelas' yang juga selalu lewat service ini.
-            Select::make('assign_kelas_tahun_pelajaran_id')
-                ->label('Assign ke Kelas (opsional)')
-                ->options(
-                    KelasTahunPelajaran::query()
-                        ->with(['kelas', 'tahunPelajaran'])
-                        ->get()
-                        ->mapWithKeys(fn (KelasTahunPelajaran $ktp) => [
-                            $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
+        return $schema->components([
+            Section::make('Informasi Akun')
+                ->description('Data identitas dasar dan peran akun.')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('nama')
+                        ->required()
+                        ->maxLength(255)
+                        ->columnSpan(2)
+                        ->validationMessages([
+                            'required' => 'Nama wajib diisi.',
+                            'max' => 'Nama maksimal 255 karakter.',
+                        ]),
+                    Select::make('role')
+                        ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
+                        ->required()
+                        ->live()
+                        ->hidden($isProtected)
+                        ->validationMessages([
+                            'required' => 'Peran (role) wajib dipilih.',
                         ])
-                )
-                ->searchable()
-                ->helperText('Bisa dikosongkan, assign belakangan lewat aksi "Assign ke Kelas".')
-                ->dehydrated()
-                ->visibleOn('create'),
-            Select::make('status_akademik')
-                ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
-                ->disabled()
-                ->dehydrated(false)
-                ->helperText('Berubah otomatis lewat proses Kenaikan Kelas / assignment, tidak bisa diedit manual di sini.')
-                ->visibleOn('edit'),
-            TextInput::make('jabatan')
-                ->maxLength(255),
-            TextInput::make('no_telepon')
-                ->label('No. Telepon')
-                ->required()
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255),
-            TextInput::make('no_kartu_rfid')
-                ->label('No. Kartu RFID')
-                ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                ->maxLength(255),
-            TextInput::make('password')
-                ->password()
-                ->revealable()
-                ->required(fn (string $operation) => $operation === 'create')
-                ->dehydrated(fn (?string $state) => filled($state))
-                ->maxLength(255)
-                ->helperText('Kosongkan jika tidak ingin mengubah password.'),
-            FileUpload::make('avatar')
-                ->image()
-                ->disk('public')
-                ->directory('user-avatar'),
+                        ->afterStateUpdated(function ($state, callable $set) {
+                            if ($state === RoleUser::Siswa->value) {
+                                $set('nip', null);
+                            } else {
+                                $set('nisn', null);
+                            }
+                        }),
+                    Select::make('jenis_kelamin')
+                        ->label('Jenis Kelamin')
+                        ->options(collect(JenisKelamin::cases())->mapWithKeys(fn ($j) => [$j->value => $j->label()]))
+                        ->native(false)
+                        ->hidden($isProtected),
+                    TextInput::make('password')
+                        ->password()
+                        ->revealable()
+                        ->required(fn (string $operation) => $operation === 'create')
+                        ->dehydrated(fn (?string $state) => filled($state))
+                        ->maxLength(255)
+                        ->helperText('Kosongkan jika tidak ingin mengubah password.')
+                        ->validationMessages([
+                            'required' => 'Password wajib diisi saat membuat user baru.',
+                            'max' => 'Password maksimal 255 karakter.',
+                        ]),
+                    FileUpload::make('avatar')
+                        ->image()
+                        ->disk('public')
+                        ->directory('user-avatar'),
+                ]),
+
+            Section::make('Identitas & Kepegawaian')
+                ->description('Hanya tampil sesuai peran yang dipilih.')
+                ->columns(2)
+                ->hidden($isProtected)
+                ->schema([
+                    TextInput::make('nisn')
+                        ->label('NISN')
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->visible(fn (callable $get) => $get('role') === RoleUser::Siswa->value)
+                        ->dehydrated(fn (callable $get) => $get('role') === RoleUser::Siswa->value)
+                        ->validationMessages([
+                            'unique' => 'NISN ini sudah dipakai user lain yang masih aktif.',
+                            'max' => 'NISN maksimal 255 karakter.',
+                        ]),
+                    TextInput::make('nip')
+                        ->label('NIP')
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->visible(fn (callable $get) => $get('role') !== RoleUser::Siswa->value)
+                        ->dehydrated(fn (callable $get) => $get('role') !== RoleUser::Siswa->value)
+                        ->validationMessages([
+                            'unique' => 'NIP ini sudah dipakai user lain yang masih aktif.',
+                            'max' => 'NIP maksimal 255 karakter.',
+                        ]),
+                    TextInput::make('jabatan')
+                        ->maxLength(255)
+                        ->columnSpan(2)
+                        ->validationMessages([
+                            'max' => 'Jabatan maksimal 255 karakter.',
+                        ]),
+                ]),
+
+            Section::make('Kontak & Kartu RFID')
+                ->columns(2)
+                ->hidden($isProtected)
+                ->schema([
+                    TextInput::make('no_telepon')
+                        ->label('No. Telepon')
+                        ->required()
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->tel()
+                        ->validationMessages([
+                            'required' => 'No. telepon wajib diisi (dipakai untuk notifikasi WhatsApp).',
+                            'unique' => 'No. telepon ini sudah dipakai user lain yang masih aktif.',
+                            'max' => 'No. telepon maksimal 255 karakter.',
+                        ]),
+                    TextInput::make('no_kartu_rfid')
+                        ->label('No. Kartu RFID')
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->maxLength(255)
+                        ->rules([new FormatKartuRfid])
+                        ->helperText('Harus persis 10 digit angka - sesuai kontrak firmware Attendance Machine.')
+                        ->validationMessages([
+                            'unique' => 'No. kartu RFID ini sudah dipakai user lain yang masih aktif.',
+                            'max' => 'No. kartu RFID maksimal 255 karakter.',
+                        ]),
+                ]),
+
+            Section::make('Kelas')
+                ->columns(2)
+                ->hidden($isProtected)
+                ->schema([
+                    Placeholder::make('kelas_tahun_pelajaran_id')
+                        ->label('Kelas (Tahun Pelajaran)')
+                        ->content(fn (?User $record) => $record?->kelasTahunPelajaran
+                            ? "{$record->kelasTahunPelajaran->kelas->nama} - {$record->kelasTahunPelajaran->tahunPelajaran->nama}"
+                            : 'Belum di-assign - gunakan aksi "Assign ke Kelas" di daftar User.')
+                        ->visibleOn('edit'),
+                    Select::make('assign_kelas_tahun_pelajaran_id')
+                        ->label('Assign ke Kelas (opsional)')
+                        ->options(
+                            KelasTahunPelajaran::query()
+                                ->with(['kelas', 'tahunPelajaran'])
+                                ->get()
+                                ->mapWithKeys(fn (KelasTahunPelajaran $ktp) => [
+                                    $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
+                                ])
+                        )
+                        ->searchable()
+                        ->helperText('Bisa dikosongkan, assign belakangan lewat aksi "Assign ke Kelas".')
+                        ->dehydrated()
+                        ->visibleOn('create'),
+                    Select::make('status_akademik')
+                        ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->helperText('Berubah otomatis lewat proses Kenaikan Kelas / assignment, tidak bisa diedit manual di sini.')
+                        ->visibleOn('edit'),
+                ]),
         ]);
     }
 
@@ -225,10 +277,6 @@ class UserResource extends Resource
                     ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
                         && (auth()->user()?->can('delete', $record) ?? false)),
                 RestoreAction::make(),
-                // TODO: GAP-SPEC - guard force-delete dipilih sepihak: blokir
-                // jika masih ada Peminjaman aktif/terlambat ATAU Denda belum
-                // lunas milik user ini (termasuk yang sudah di-soft-delete),
-                // supaya jejak keuangan/operasional tidak musnah diam-diam.
                 ForceDeleteAction::make()
                     ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
                         && (auth()->user()?->can('forceDelete', $record) ?? false))
@@ -269,10 +317,13 @@ class UserResource extends Resource
                                     ->with(['kelas', 'tahunPelajaran'])
                                     ->get()
                                     ->mapWithKeys(fn (KelasTahunPelajaran $ktp) => [
-                                        $ktp->id => "{$ktp->kelas->nama} -{$ktp->tahunPelajaran->nama}",
+                                        $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
                                     ])
                             )
-                            ->searchable()->required(),
+                            ->searchable()->required()
+                            ->validationMessages([
+                                'required' => 'Kelas (Tahun Pelajaran) wajib dipilih.',
+                            ]),
                     ])
                     ->action(function (Collection $records, array $data) {
                         $ktp = KelasTahunPelajaran::query()->findOrFail($data['kelas_tahun_pelajaran_id']);

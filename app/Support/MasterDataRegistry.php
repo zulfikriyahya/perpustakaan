@@ -3,10 +3,8 @@
 namespace App\Support;
 
 use App\Enums\RoleUser;
-use App\Enums\StatusEksemplar;
 use App\Models\Buku;
 use App\Models\Denda;
-use App\Models\Eksemplar;
 use App\Models\FirmwareRelease;
 use App\Models\Jurusan;
 use App\Models\Kategori;
@@ -27,6 +25,7 @@ use App\Models\TahunPelajaran;
 use App\Models\Transaksi;
 use App\Models\User;
 use App\Rules\FormatKartuRfid;
+use App\Services\BukuImportResolverService;
 use App\Services\KenaikanKelasService;
 use App\Services\UserImportResolverService;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
@@ -37,7 +36,9 @@ use Illuminate\Support\Facades\Validator;
  * (Aturan poin 3, DRY). Urutan array ini MENGIKAT dua hal:
  * 1. Urutan sheet fisik di file hasil "Export Semua".
  * 2. Urutan proses saat "Import Semua" - dipetakan BY INDEX POSISI
- *    (bukan nama sheet) di ProcessMasterImportJob.
+ *    (bukan nama sheet) di ProcessMasterImportJob, DIVALIDASI terhadap
+ *    'label' di bawah sebelum diproses (lihat
+ *    ProcessMasterImportJob::validasiUrutanSheet(), BARU iterasi ini).
  *
  * 'importable' => false berarti model ini read-only/log otomatis
  * (dihasilkan Service - PeminjamanService/PointService/KenaikanKelasService/
@@ -49,9 +50,15 @@ use Illuminate\Support\Facades\Validator;
  * kolom (bug lama: whitelist heuristik tidak match banyak sheet,
  * lihat riwayat review sebelumnya).
  *
- * PERUBAHAN KONTRAK (iterasi ini, WAJIB diberi tahu ke pengguna -
- * lihat ringkasan balasan): file hasil "Export Semua" LAMA (sebelum
- * perubahan ini) TIDAK KOMPATIBEL untuk Import Semua lagi:
+ * REFACTOR (iterasi ini): entri 'buku' sekarang delegasi penuh ke
+ * BukuImportResolverService (Aturan poin 3, DRY) - sebelumnya
+ * logic resolusi kategori/rak/akumulasi-stok terduplikasi manual di
+ * sini dan di BukuImporter, berisiko drift diam-diam. Perilaku
+ * (pesan error, aturan akumulasi stok, dst.) TIDAK berubah.
+ *
+ * PERUBAHAN KONTRAK (dari iterasi sebelumnya, tetap berlaku - file
+ * hasil "Export Semua" LAMA sebelum perubahan ini TIDAK KOMPATIBEL
+ * untuk Import Semua lagi):
  * - Sheet 'user': kolom 'kelas' polos diganti 'kelas'+'jurusan_kode'+
  *   'tahun_pelajaran' (identik kontrak UserImporter, karena Kelas.nama
  *   tidak unik secara global). Ditambah 'jenis_kelamin', 'avatar',
@@ -301,10 +308,6 @@ class MasterDataRegistry
                     // 'password' SENGAJA tidak diexport (hash tidak berguna
                     // untuk reimport) - hanya diterima saat import di bawah.
                 ],
-                // Delegasi penuh ke UserImportResolverService (Aturan poin
-                // 3) - satu sumber kebenaran yang sama dipakai UserImporter,
-                // menutup bug double-hashing password & duplikasi resolusi
-                // kartu/avatar/KTP yang ditemukan pada review sebelumnya.
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['role']) || empty($row['no_telepon'])) {
                         throw new RowImportFailedException('Nama, role, dan no_telepon wajib diisi.');
@@ -370,9 +373,6 @@ class MasterDataRegistry
                         app(KenaikanKelasService::class)->assignKelas($user, $ktp);
                     }
 
-                    // Dikembalikan ke ProcessMasterImportJob::prosesSheet()
-                    // untuk direkap sebagai meta 'kartu_dihapus' di laporan
-                    // sheet ini (lihat file job).
                     return $kartuDihapus ? ['kartu_dihapus' => 1] : [];
                 },
             ],
@@ -391,19 +391,22 @@ class MasterDataRegistry
                     'rak' => fn($r) => $r->eksemplars->pluck('rak.nama')->filter()->unique()->implode('; '),
                     'kategori' => fn($r) => $r->kategoris->pluck('nama')->implode('; '),
                 ],
-                // TODO: GAP-SPEC - porting BukuImporter (resolusi kategori/rak
-                // by nama, akumulasi stok, generate barcode). Perilaku SAMA
-                // dengan BukuImporter asli - belum diuji end-to-end di jalur
-                // Master Import (Aturan poin 12).
+                // GAP-SPEC ditutup (iterasi ini): sebelumnya closure ini
+                // menduplikasi manual logic resolusi kategori/rak/akumulasi
+                // stok dari BukuImporter - sekarang delegasi penuh ke
+                // BukuImportResolverService (SATU sumber kebenaran, Aturan
+                // poin 3). Perilaku identik dengan BukuImporter. MASIH
+                // BELUM diuji end-to-end lewat jalur nyata "Import Semua"
+                // (Aturan poin 12) - baru diverifikasi statis konsisten
+                // dengan BukuImporter.
                 'import' => function (array $row) {
                     if (empty($row['judul']) || ! isset($row['harga_ganti'])) {
                         throw new RowImportFailedException('Judul dan harga_ganti wajib diisi.');
                     }
 
-                    $buku = ! empty($row['isbn'])
-                        ? Buku::query()->firstOrNew(['isbn' => $row['isbn']])
-                        : new Buku;
+                    $resolver = app(BukuImportResolverService::class);
 
+                    $buku = $resolver->resolveOrCreateBuku($row['isbn'] ?? null);
                     $buku->fill([
                         'judul' => $row['judul'],
                         'penulis' => $row['penulis'] ?? null,
@@ -411,28 +414,14 @@ class MasterDataRegistry
                         'harga_ganti' => (float) $row['harga_ganti'],
                     ])->save();
 
-                    if (! empty($row['kategori'])) {
-                        $namaKategoris = array_values(array_filter(array_map('trim', explode(';', $row['kategori']))));
-                        $kategoris = Kategori::query()->whereIn('nama', $namaKategoris)->get(['id', 'nama']);
-                        $tidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
-                        if (! empty($tidakDitemukan)) {
-                            throw new RowImportFailedException('Kategori tidak ditemukan: ' . implode(', ', $tidakDitemukan));
-                        }
-                        $buku->kategoris()->sync($kategoris->pluck('id')->all());
-                    }
+                    $kategoriIds = $resolver->resolveKategoriIds($row['kategori'] ?? null);
+                    $resolver->syncKategori($buku, $kategoriIds);
 
-                    $rak = ! empty($row['rak']) ? Rak::query()->where('nama', trim($row['rak']))->first() : null;
-                    $stokDiminta = (int) ($row['stok'] ?? 0);
-                    $eksemplarSaatIni = $buku->eksemplars()->count();
-                    $selisih = $stokDiminta - $eksemplarSaatIni;
-
-                    for ($i = 0; $i < $selisih; $i++) {
-                        $buku->eksemplars()->create([
-                            'barcode' => Eksemplar::generateBarcodeUntuk($buku, $eksemplarSaatIni + $i + 1),
-                            'rak_id' => $rak?->id,
-                            'status' => StatusEksemplar::Tersedia,
-                        ]);
-                    }
+                    $resolver->sinkronEksemplarDariSelisihStok(
+                        $buku,
+                        (int) ($row['stok'] ?? 0),
+                        $row['rak'] ?? null,
+                    );
                 },
             ],
 

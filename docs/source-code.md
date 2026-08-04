@@ -2531,21 +2531,16 @@ class TahunPelajaranImporter extends Importer
 namespace App\Filament\Imports;
 
 use App\Enums\RoleUser;
-use App\Models\Jurusan;
-use App\Models\Kelas;
 use App\Models\KelasTahunPelajaran;
-use App\Models\TahunPelajaran;
 use App\Models\User;
 use App\Rules\FormatKartuRfid;
 use App\Services\KenaikanKelasService;
+use App\Services\UserImportResolverService;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * TODO: GAP-SPEC - 'role' SENGAJA tidak termasuk kolom import (dikonfirmasi:
@@ -2555,78 +2550,41 @@ use Illuminate\Support\Str;
  * Upsert berdasarkan 'nisn' jika ada, fallback 'nip' - baris tanpa
  * keduanya akan gagal (lihat rules 'required_without').
  *
- * Kolom 'password' (dikonfirmasi masuk ke import, plaintext, di-hash
- * bcrypt otomatis lewat cast 'hashed' di Model User):
- * - Diisi -> password user (baru maupun existing) diganti sesuai isian.
- * - Dikosongkan, user BARU -> tetap auto-generate random 12 karakter
- *   (perilaku lama dipertahankan, TIDAK ada mekanisme kirim WA/email
- *   notifikasi password ke user baru dalam iterasi ini).
- * - Dikosongkan, user EXISTING -> password lama TIDAK diubah sama sekali.
+ * REFACTOR (iterasi ini): resolusi password/avatar/kartu-RFID/KTP
+ * dipindah ke UserImportResolverService (Aturan poin 3) - sebelumnya
+ * logic ini terduplikasi manual di sheet 'user' MasterDataRegistry
+ * dan menyebabkan bug double-hashing password di sana karena drift.
+ * Kontrak kolom/rules/perilaku dari sisi pengguna TIDAK berubah.
  *
  * PERINGATAN KEAMANAN (dikonfirmasi, RISIKO DITERIMA SADAR - bukan
- * kealpaan): resolveAvatar() di bawah bisa (a) menyalin FILE APA PUN
- * yang bisa dibaca proses PHP di server ke folder publik jika diisi
- * path absolut (risiko path traversal / kebocoran file sensitif mis.
- * .env), dan (b) melakukan HTTP request ke alamat mana pun termasuk
- * jaringan internal jika diisi URL (risiko SSRF). Fitur ini SENGAJA
- * tidak dibatasi karena hanya super_admin yang punya akses Import User
- * (lihat authorize() di UserResource) - JANGAN perluas permission
- * import ini ke role lain tanpa meninjau ulang dua risiko ini.
+ * kealpaan, lihat detail lengkap di docblock
+ * UserImportResolverService::resolveAvatar()): resolveAvatar bisa (a)
+ * menyalin FILE APA PUN yang bisa dibaca proses PHP di server jika
+ * diisi path absolut (path traversal), dan (b) melakukan HTTP request
+ * ke alamat mana pun termasuk jaringan internal jika diisi URL (SSRF).
+ * SENGAJA tidak dibatasi karena hanya super_admin yang punya akses
+ * Import User (lihat authorize() di UserResource) - JANGAN perluas
+ * permission import ini ke role lain tanpa meninjau ulang dua risiko ini.
  *
- * Kolom 'avatar' (dikonfirmasi masuk ke import, menerima URL ATAU
- * path - lihat resolveAvatar()):
- * - Diisi URL (http/https) -> file diunduh lalu disimpan ke disk 'public'
- *   folder 'user-avatar/' (SAMA dengan direktori FileUpload::make('avatar')
- *   di UserResource, Aturan poin 3 - satu sumber kebenaran lokasi file).
- * - Diisi path yang SUDAH ada di disk 'public' (mis. hasil upload manual
- *   sebelumnya) -> dipakai langsung sebagai nilai kolom avatar.
- * - Diisi path absolut yang ada di filesystem server (mis. hasil transfer
- *   file massal oleh admin sebelum import) -> disalin ke disk 'public'
- *   folder 'user-avatar/'.
- * - Tidak ditemukan di ketiga kemungkinan di atas -> baris GAGAL
- *   (RowImportFailedException), bukan diam-diam dilewati.
- * - Dikosongkan -> avatar lama (jika ada) TIDAK diubah.
- * TODO: GAP-SPEC - algoritma resolusi "path" di atas (cek disk 'public'
- * dulu, baru cek filesystem absolut) adalah ASUMSI untuk memudahkan admin
- * pemula (cukup isi nama file atau URL, tidak perlu tahu detail storage
- * disk). Perlu dikonfirmasi apakah ini sudah cukup atau butuh dukungan
- * sumber lain (mis. path relatif ke disk selain 'public').
- *
- * Kolom 'no_kartu_rfid' (dikonfirmasi masuk ke import, sebelumnya
- * sengaja dikeluarkan demi keamanan) - aturan MENGIKAT kontrak firmware
- * Attendance Machine (lihat FormatKartuRfid::class, wajib persis 10
- * digit angka) - dipakai lewat rule yang SAMA dengan form manual
- * (Aturan poin 3, satu sumber kebenaran validasi).
- *
- * Perilaku no_kartu_rfid (dikonfirmasi eksplisit):
- * - Diisi dan berbeda dari kartu user saat ini -> kartu di-assign,
- *   KECUALI nomor tersebut sudah dipakai user LAIN -> baris GAGAL
- *   (RowImportFailedException), user lain tidak diubah sama sekali.
- * - Dikosongkan, padahal user sudah punya kartu terdaftar -> kartu
- *   LAMA DIHAPUS (di-null-kan). User tersebut TIDAK BISA tap RFID lagi
- *   sampai didaftarkan ulang. Jumlah kartu yang terhapus direkap di
- *   notifikasi selesai import supaya tidak terjadi diam-diam.
- *
- * BUG FIX (ditemukan iterasi ini, sama pola dengan KelasImporter):
- * kolom 'kelas_nama', 'jurusan_kode', 'tahun_pelajaran_nama' adalah
- * lookup-only murni (dipakai di resolveKtp(), lalu efeknya lewat
- * KenaikanKelasService::assignKelas() di afterSave() - BUKAN kolom
- * tabel 'users'). 'avatar' juga lookup/transform-only (hasil
- * akhirnya ditulis ke kolom 'avatar', bukan 'avatar' - kolom
- * 'avatar' sendiri tidak ada di tabel users). Keempatnya diberi
+ * BUG FIX (pola sama dengan KelasImporter): kolom 'kelas_nama',
+ * 'jurusan_kode', 'tahun_pelajaran_nama', 'avatar' adalah lookup/
+ * transform-only (bukan kolom tabel 'users' persis nama itu) - diberi
  * ->fillRecordUsing() no-op supaya Filament tidak meng-assign atribut
  * dinamis ini ke $record, yang akan memicu SQL error "Unknown column"
- * saat save() - lihat detail penuh di docblock KelasImporter.
- *
- * 'no_kartu_rfid' dan 'password' TIDAK diberi fillRecordUsing() no-op -
+ * saat save(). 'no_kartu_rfid' dan 'password' TIDAK diberi no-op -
  * keduanya kolom ASLI tabel 'users', assignment akhirnya tetap lewat
- * beforeSave()/resolvePassword() (override manual, aman dari bug ini).
+ * beforeSave() (aman dari bug ini).
  */
 class UserImporter extends Importer
 {
     protected static ?string $model = User::class;
 
     protected ?KelasTahunPelajaran $ktpTerresolve = null;
+
+    protected function resolver(): UserImportResolverService
+    {
+        return app(UserImportResolverService::class);
+    }
 
     public static function getColumns(): array
     {
@@ -2653,21 +2611,18 @@ class UserImporter extends Importer
                 ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('VII A')
-                // BUG FIX - lookup-only, lihat docblock class.
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan (wajib jika kelas_nama diisi)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('Non_Jurusan')
-                // BUG FIX - lookup-only, lihat docblock class.
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('2026/2027')
-                // BUG FIX - lookup-only, lihat docblock class.
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example(''),
@@ -2678,7 +2633,7 @@ class UserImporter extends Importer
                 ->example('081234567890'),
             ImportColumn::make('no_kartu_rfid')
                 ->label('No. kartu RFID (opsional)')
-                ->helperText('PERHATIAN: kosongkan HANYA jika memang inginmenghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisatap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
+                ->helperText('PERHATIAN: kosongkan HANYA jika memang ingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
                 ->rules(['nullable', new FormatKartuRfid])
                 ->example('1234567890'),
             ImportColumn::make('password')
@@ -2691,10 +2646,7 @@ class UserImporter extends Importer
                 ->helperText('Isi URL gambar (https://...) atau path file yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
                 ->rules(['nullable', 'string', 'max:2048'])
                 ->example('https://contoh-sekolah.id/foto/siswa1.jpg')
-                // BUG FIX - lookup/transform-only, hasil akhir ditulis ke
-                // kolom 'avatar' (beda nama) lewat resolveAvatar(), lihat
-                // docblock class.
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
         ];
     }
 
@@ -2703,7 +2655,7 @@ class UserImporter extends Importer
         $namaKelas = trim((string) ($this->data['kelas_nama'] ?? ''));
 
         if ($namaKelas !== '') {
-            $this->ktpTerresolve = $this->resolveKtp(
+            $this->ktpTerresolve = $this->resolver()->resolveKtp(
                 $namaKelas,
                 trim((string) ($this->data['jurusan_kode'] ?? '')),
                 trim((string) ($this->data['tahun_pelajaran_nama'] ?? '')),
@@ -2723,137 +2675,18 @@ class UserImporter extends Importer
         return $record;
     }
 
-    /**
-     * Uniqueness no_kartu_rfid dicek manual (bukan rule 'unique' di
-     * getColumns()) karena butuh tahu ID record yang sedang di-upsert
-     * dulu (supaya user meng-update kartunya sendiri dengan nilai yang
-     * sama tidak dianggap konflik) - baru tersedia setelah resolveRecord().
-     */
     protected function beforeSave(): void
     {
-        $this->resolvePassword();
-        $this->resolveAvatar();
+        $this->resolver()->resolvePassword($this->record, $this->data['password'] ?? null);
 
-        $nomorBaru = trim((string) ($this->data['no_kartu_rfid'] ?? ''));
-
-        if ($nomorBaru === '') {
-            if ($this->record->no_kartu_rfid !== null) {
-                $this->record->no_kartu_rfid = null;
-                Cache::increment("import-{$this->import->id}-kartu-dihapus");
-            }
-
-            return;
-        }
-
-        $dipakaiUserLain = User::query()
-            ->where('no_kartu_rfid', $nomorBaru)
-            ->when($this->record->exists, fn ($q) => $q->whereKeyNot($this->record->id))
-            ->exists();
-
-        if ($dipakaiUserLain) {
-            throw new RowImportFailedException("Nomor kartu \"{$nomorBaru}\" sudah dipakai user lain. Cek kembali atau kosongkan kolom ini.");
-        }
-
-        $this->record->no_kartu_rfid = $nomorBaru;
-    }
-
-    /**
-     * Password diisi -> dipakai apa adanya (di-hash otomatis via cast
-     * 'hashed' saat $record->save()). Kosong & user baru -> random 12
-     * karakter (perilaku lama). Kosong & user existing -> tidak disentuh.
-     */
-    protected function resolvePassword(): void
-    {
-        $passwordBaru = trim((string) ($this->data['password'] ?? ''));
-
-        if ($passwordBaru !== '') {
-            $this->record->password = $passwordBaru; // di-hash otomatis via cast 'hashed'
-
-            return;
-        }
-
-        if (! $this->record->exists) {
-            $this->record->password = Str::random(12); // di-hash otomatisvia cast 'hashed'
-        }
-    }
-
-    /**
-     * TODO: GAP-SPEC - lihat catatan algoritma resolusi di docblock class.
-     * Urutan resolusi: (1) URL http/https -> unduh, (2) sudah ada di disk
-     * 'public' -> pakai langsung, (3) path absolut di filesystem server ->
-     * salin ke disk 'public'. Kosong -> avatar lama tidak diubah.
-     *
-     * BUG FIX (ditemukan iterasi ini): nama file SEBELUMNYA selalu
-     * Str::uuid() - re-import avatar yang sama terus-menerus menumpuk
-     * file baru di disk tanpa pernah menghapus yang lama (kebocoran
-     * storage). Diubah jadi nama deterministik berbasis identitas user
-     * (NISN, fallback NIP - konsisten dengan kunci upsert di
-     * resolveRecord()): re-import MENIMPA file lama dengan nama sama,
-     * sama pola dengan upsert barcode di BukuImporter (Aturan poin 3).
-     * Ekstensi TETAP mengikuti sumber asli (bukan dipaksa .png) - konversi
-     * format gambar butuh library tambahan (GD/Imagick) yang belum
-     * diverifikasi terpasang di composer.json, lihat Aturan poin 7/15.
-     */
-    protected function resolveAvatar(): void
-    {
-        $nilai = trim((string) ($this->data['avatar'] ?? ''));
-
-        if ($nilai === '') {
-            return;
-        }
-
-        $namaFile = $this->namaFileAvatar($nilai);
-
-        if (Str::startsWith($nilai, ['http://', 'https://'])) {
-            try {
-                $response = Http::timeout(15)->get($nilai);
-            } catch (\Throwable $e) {
-                throw new RowImportFailedException("Gagal mengunduh avatardari URL \"{$nilai}\": {$e->getMessage()}");
-            }
-
-            if (! $response->successful()) {
-                throw new RowImportFailedException("URL avatar \"{$nilai}\" tidak bisa diakses (HTTP {$response->status()}).");
-            }
-
-            Storage::disk('public')->put($namaFile, $response->body());
-            $this->record->avatar = $namaFile;
-
-            return;
-        }
-
-        if (Storage::disk('public')->exists($nilai)) {
-            // Sudah berupa path di disk 'public' - salin/rename ke nama
-            // deterministik supaya konsisten dengan dua kasus lain di
-            // bawah (bukan dipakai langsung dengan nama aslinya).
-            Storage::disk('public')->copy($nilai, $namaFile);
-            $this->record->avatar = $namaFile;
-
-            return;
-        }
-
-        if (is_file($nilai)) {
-            Storage::disk('public')->put($namaFile, file_get_contents($nilai));
-            $this->record->avatar = $namaFile;
-
-            return;
-        }
-
-        throw new RowImportFailedException("Avatar \"{$nilai}\" tidak ditemukan (bukan URL valid, bukan file di storage, bukan path lokal di server).");
-    }
-
-    /**
-     * Nama file deterministik: '{nisn_atau_nip}.{ekstensi_sumber}'.
-     * NISN diprioritaskan (konsisten dengan resolveRecord()), fallback
-     * NIP jika NISN kosong - salah satu dijamin ada karena validasi
-     * 'required_without' di getColumns().
-     */
-    protected function namaFileAvatar(string $sumber): string
-    {
         $identitas = trim((string) ($this->data['nisn'] ?? '')) ?: trim((string) ($this->data['nip'] ?? ''));
+        $this->resolver()->resolveAvatar($this->record, $this->data['avatar'] ?? null, $identitas);
 
-        $ekstensi = pathinfo(parse_url($sumber, PHP_URL_PATH) ?? $sumber, PATHINFO_EXTENSION) ?: 'jpg';
+        $kartuDihapus = $this->resolver()->resolveKartuRfid($this->record, $this->data['no_kartu_rfid'] ?? null);
 
-        return 'user-avatar/'.$identitas.'.'.$ekstensi;
+        if ($kartuDihapus) {
+            Cache::increment("import-{$this->import->id}-kartu-dihapus");
+        }
     }
 
     protected function afterSave(): void
@@ -2863,57 +2696,18 @@ class UserImporter extends Importer
         }
     }
 
-    protected function resolveKtp(string $namaKelas, string $kodeJurusan, string $namaTahun): KelasTahunPelajaran
-    {
-        if ($kodeJurusan === '' || $namaTahun === '') {
-            throw new RowImportFailedException('Kelas diisi tapi kolom jurusan_kode atau tahun_pelajaran_nama kosong. Isi ketiganya, atau kosongkan ketiganya jika user ini belum mau ditempatkan ke kelas.');
-        }
-
-        $jurusan = Jurusan::query()->where('kode', $kodeJurusan)->first();
-
-        if (! $jurusan) {
-            throw new RowImportFailedException("Kode jurusan \"{$kodeJurusan}\" tidak ditemukan. Cek ejaan atau tambahkan Jurusan-nya dulu di Master Data.");
-        }
-
-        $kelas = Kelas::query()
-            ->where('nama', $namaKelas)
-            ->where('jurusan_id', $jurusan->id)
-            ->first();
-
-        if (! $kelas) {
-            throw new RowImportFailedException("Kelas \"{$namaKelas}\" dengan jurusan \"{$kodeJurusan}\" tidak ditemukan. Cek ejaan atau tambahkan Kelas-nya dulu di Master Data.");
-        }
-
-        $tahun = TahunPelajaran::query()->where('nama', $namaTahun)->first();
-
-        if (! $tahun) {
-            throw new RowImportFailedException("Tahun pelajaran \"{$namaTahun}\" tidak ditemukan. Cek ejaan atau tambahkan dulu di Master Data.");
-        }
-
-        $ktp = KelasTahunPelajaran::query()
-            ->where('kelas_id', $kelas->id)
-            ->where('tahun_pelajaran_id', $tahun->id)
-            ->first();
-
-        if (! $ktp) {
-            throw new RowImportFailedException("Kombinasi kelas \"{$namaKelas}\" ({$kodeJurusan}) dan tahun pelajaran \"{$namaTahun}\" belum terdaftar. Import Kelas per Tahun Pelajaran dulu sebelum import User.");
-        }
-
-        return $ktp;
-    }
-
     public static function getCompletedNotificationBody(Import $import): string
     {
-        $body = 'Import User selesai, '.number_format($import->successful_rows).' dari '.number_format($import->total_rows).' baris berhasil diimpor.';
+        $body = 'Import User selesai, ' . number_format($import->successful_rows) . ' dari ' . number_format($import->total_rows) . ' baris berhasil diimpor.';
 
         if ($failedRowsCount = $import->getFailedRowsCount()) {
-            $body .= ' '.number_format($failedRowsCount).' baris gagal- buka riwayat import untuk lihat alasannya per baris.';
+            $body .= ' ' . number_format($failedRowsCount) . ' baris gagal - buka riwayat import untuk lihat alasannya per baris.';
         }
 
         $kartuDihapus = (int) Cache::get("import-{$import->id}-kartu-dihapus", 0);
 
         if ($kartuDihapus > 0) {
-            $body .= " PERHATIAN: {$kartuDihapus} kartu RFID dihapus dari user (kolom dikosongkan di file) - user tersebut tidak bisa tap RFID sampaididaftarkan ulang.";
+            $body .= " PERHATIAN: {$kartuDihapus} kartu RFID dihapus dari user (kolom dikosongkan di file) - user tersebut tidak bisa tap RFID sampai didaftarkan ulang.";
         }
 
         Cache::forget("import-{$import->id}-kartu-dihapus");
@@ -3589,7 +3383,7 @@ class ImportExportMaster extends Page
             ->label('Upload & Mulai Import')
             ->icon('heroicon-o-arrow-up-tray')
             ->requiresConfirmation()
-            ->modalDescription('File WAJIB hasil "Export Semua" (atau punya urutan sheet identik) - sheet dipetakan berdasarkan posisi, bukan nama. Baris yang gagal akan dilaporkan di akhir, baris yang sukses tetap tersimpan (partial success).')
+            ->modalDescription('File WAJIB hasil "Export Semua" TERBARU (atau punya urutan & jumlah sheet identik) - sheet dipetakan berdasarkan posisi, bukan nama. PERHATIAN: format sheet "User" (kini wajib kolom jurusan_kode + tahun_pelajaran, bukan hanya "kelas") dan "KelasTahunPelajaran" (kini wajib wali_kelas_nip, bukan nama) telah berubah - file hasil Export Semua LAMA sebelum pembaruan ini tidak bisa dipakai untuk Import Semua lagi, silakan export ulang terlebih dahulu. Baris yang gagal akan dilaporkan di akhir, baris yang sukses tetap tersimpan (partial success).')
             ->schema([
                 FileUpload::make('file_import')
                     ->label('File Master Data (.xlsx)')
@@ -3658,10 +3452,10 @@ class LaporanBulanan extends Page
 
     public ?array $data = [];
 
-    public static function canAccess(): bool
-    {
-        return auth()->user()?->can('ViewAny:LaporanBulanan') ?? false;
-    }
+    // public static function canAccess(): bool
+    // {
+    //     return auth()->user()?->can('ViewAny:LaporanBulanan') ?? false;
+    // }
 
     public function getHeading(): string|HtmlString
     {
@@ -3713,7 +3507,7 @@ class LaporanBulanan extends Page
                                 ->native(false)
                                 ->options(
                                     collect(range((int) now()->format('Y'), 2024))
-                                        ->mapWithKeys(fn ($y) => [$y => $y])
+                                        ->mapWithKeys(fn($y) => [$y => $y])
                                 )
                                 ->required(),
                         ]),
@@ -3731,7 +3525,7 @@ class LaporanBulanan extends Page
             ->setPaper('a4', 'portrait');
 
         return response()->streamDownload(
-            fn () => print ($pdf->output()),
+            fn() => print($pdf->output()),
             "laporan-bulanan-{$data['tahun']}-{$data['bulan']}.pdf",
             ['Content-Type' => 'application/pdf'],
         );
@@ -10569,9 +10363,15 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithTitle;
 
 /**
- * Satu class dipakai ulang untuk SEMUA 21 sheet Export Master (Aturan
- * poin 3, DRY - hindari 21 class terpisah yang isinya nyaris identik).
- * Dikonstruksi dari satu entri MasterDataRegistry::items().
+ * Satu class dipakai ulang untuk SEMUA sheet Export Master (Aturan
+ * poin 3, DRY). Dikonstruksi dari satu entri MasterDataRegistry::items().
+ *
+ * BUG FIX (iterasi ini): heuristik tebakRelasi() (whitelist nama key
+ * kolom) DIHAPUS - tidak match untuk banyak sheet (kolom nested seperti
+ * 'eksemplar.buku', key yang beda nama dari relasi asli seperti 'badge'
+ * vs 'levelBadge', dst.), menyebabkan N+1 tersembunyi. Diganti key
+ * 'eager' eksplisit per entri di MasterDataRegistry - deterministik,
+ * tidak bergantung tebakan dari nama kolom.
  */
 class GenericExportSheet implements FromCollection, ShouldAutoSize, ShouldQueue, WithHeadings, WithMapping, WithTitle
 {
@@ -10580,27 +10380,16 @@ class GenericExportSheet implements FromCollection, ShouldAutoSize, ShouldQueue,
     public function collection()
     {
         $modelClass = $this->item['model'];
+        $eager = $this->item['eager'] ?? [];
 
-        // eager-load relasi yang disebut di closure kolom - deteksi kasar
-        // dari nama relasi bertitik pada key kolom (mis. 'user', 'eksemplar.buku').
-        return $modelClass::query()->with($this->tebakRelasi())->get();
-    }
-
-    protected function tebakRelasi(): array
-    {
-        // TODO: GAP-SPEC - deteksi relasi masih heuristik sederhana
-        // (nama key kolom yang bukan kolom tabel dianggap relasi).
-        // Cukup untuk N+1 ringan pada dataset kecil-menengah; untuk
-        // dataset besar sebaiknya tiap entri registry punya key
-        // 'eager' eksplisit - belum diimplementasikan iterasi ini.
-        return array_values(array_filter(array_keys($this->item['columns']), function ($key) {
-            return in_array($key, ['user', 'eksemplar', 'kelas', 'kategoris', 'levelBadge', 'reward', 'punishment', 'kelasTahunPelajaran'], true);
-        }));
+        return $eager === []
+            ? $modelClass::query()->get()
+            : $modelClass::query()->with($eager)->get();
     }
 
     public function map($record): array
     {
-        return array_map(fn ($callback) => (string) ($callback($record) ?? ''), array_values($this->item['columns']));
+        return array_map(fn($callback) => (string) ($callback($record) ?? ''), array_values($this->item['columns']));
     }
 
     public function headings(): array
@@ -12556,17 +12345,22 @@ use Maatwebsite\Excel\Facades\Excel;
 use Throwable;
 
 /**
- * TODO: ASUMSI (WAJIB DIKONFIRMASI - lihat catatan di awal balasan) -
+ * TODO: ASUMSI (WAJIB DIKONFIRMASI, belum berubah dari sebelumnya) -
  * sheet dipetakan ke model berdasarkan POSISI/URUTAN fisik di file,
- * SAMA PERSIS dengan urutan MasterDataRegistry::items() (yang juga jadi
- * urutan sheet saat Export). File yang diupload WAJIB berasal dari hasil
- * "Export Semua" (atau minimal punya jumlah & urutan sheet identik) -
- * bukan dicocokkan berdasarkan judul sheet.
+ * SAMA PERSIS dengan urutan MasterDataRegistry::items(). File yang
+ * diupload WAJIB berasal dari hasil "Export Semua" TERBARU (setelah
+ * perubahan kontrak sheet 'user'/'kelas_tahun_pelajaran' iterasi ini) -
+ * file export lama sebelum perubahan ini TIDAK KOMPATIBEL.
  *
- * Kegagalan SATU baris tidak membatalkan baris lain dalam sheet yang
- * sama, atau sheet lain (partial success, dikonfirmasi) - setiap baris
- * dibungkus DB::transaction sendiri supaya efek samping relasi (mis.
- * sync kategori Buku) tetap atomik PER BARIS.
+ * Kegagalan SATU baris tidak membatalkan baris lain (partial success) -
+ * setiap baris dibungkus DB::transaction sendiri.
+ *
+ * BARU (iterasi ini): closure 'import' di registry BOLEH mengembalikan
+ * array meta (mis. ['kartu_dihapus' => 1]) - dijumlahkan per key ke
+ * dalam laporan['<sheet>']['meta'], dipakai untuk notifikasi kartu RFID
+ * terhapus pada sheet 'user' (jalur ini tidak lewat model Import
+ * Filament, jadi tidak bisa pakai pola Cache "import-{id}-..." seperti
+ * UserImporter).
  */
 class ProcessMasterImportJob implements ShouldQueue
 {
@@ -12582,7 +12376,7 @@ class ProcessMasterImportJob implements ShouldQueue
         $job->update(['status' => StatusBulkJob::Diproses]);
 
         try {
-            $rawSheets = Excel::toArray(new class {}, storage_path('app/'.$job->file_path));
+            $rawSheets = Excel::toArray(new class {}, storage_path('app/' . $job->file_path));
             $registry = MasterDataRegistry::items();
             $laporan = [];
 
@@ -12608,34 +12402,44 @@ class ProcessMasterImportJob implements ShouldQueue
     }
 
     /**
-     * @return array{total: int, sukses: int, gagal: int, errors: array<int, string>}
+     * @return array{total: int, sukses: int, gagal: int, errors: array<int, string>, meta: array<string, int>}
      */
     protected function prosesSheet(array $item, array $rawRows): array
     {
         if (empty($rawRows)) {
-            return ['total' => 0, 'sukses' => 0, 'gagal' => 0, 'errors' => []];
+            return ['total' => 0, 'sukses' => 0, 'gagal' => 0, 'errors' => [], 'meta' => []];
         }
 
-        $headings = array_map(fn ($h) => Str::slug((string) $h, '_'), array_shift($rawRows));
+        $headings = array_map(fn($h) => Str::slug((string) $h, '_'), array_shift($rawRows));
         $sukses = 0;
         $errors = [];
+        $meta = [];
 
         foreach ($rawRows as $nomorBaris => $rawRow) {
-            if (empty(array_filter($rawRow, fn ($v) => $v !== null && $v !== ''))) {
+            if (empty(array_filter($rawRow, fn($v) => $v !== null && $v !== ''))) {
                 continue; // baris kosong - dilewati, tidak dihitung total
             }
 
             $row = array_combine($headings, array_pad($rawRow, count($headings), null));
 
             try {
-                DB::transaction(function () use ($item, $row) {
-                    ($item['import'])($row);
+                $hasilMeta = DB::transaction(function () use ($item, $row) {
+                    return ($item['import'])($row);
                 });
+
+                if (is_array($hasilMeta)) {
+                    foreach ($hasilMeta as $metaKey => $metaValue) {
+                        if (is_numeric($metaValue)) {
+                            $meta[$metaKey] = ($meta[$metaKey] ?? 0) + $metaValue;
+                        }
+                    }
+                }
+
                 $sukses++;
             } catch (RowImportFailedException $e) {
-                $errors[] = 'Baris '.($nomorBaris + 2).": {$e->getMessage()}"; // +2: heading + index 0-based
+                $errors[] = 'Baris ' . ($nomorBaris + 2) . ": {$e->getMessage()}"; // +2: heading + index 0-based
             } catch (Throwable $e) {
-                $errors[] = 'Baris '.($nomorBaris + 2).": Gagal tidak terduga - {$e->getMessage()}";
+                $errors[] = 'Baris ' . ($nomorBaris + 2) . ": Gagal tidak terduga - {$e->getMessage()}";
             }
         }
 
@@ -12644,6 +12448,7 @@ class ProcessMasterImportJob implements ShouldQueue
             'sukses' => $sukses,
             'gagal' => count($errors),
             'errors' => $errors,
+            'meta' => $meta,
         ];
     }
 
@@ -12655,12 +12460,21 @@ class ProcessMasterImportJob implements ShouldQueue
         }
 
         $totalGagal = $success ? collect($job->laporan)->sum('gagal') : null;
+        $kartuDihapus = $success ? (int) (collect($job->laporan)->pluck('meta.kartu_dihapus')->filter()->sum()) : 0;
+
+        $bodyParts = [];
+        if ($success) {
+            $bodyParts[] = $totalGagal > 0
+                ? "{$totalGagal} baris gagal - lihat laporan di halaman Import & Export Data."
+                : 'Semua baris berhasil diimpor.';
+            if ($kartuDihapus > 0) {
+                $bodyParts[] = "PERHATIAN: {$kartuDihapus} kartu RFID dihapus dari user (kolom dikosongkan di file) - user tersebut tidak bisa tap RFID sampai didaftarkan ulang.";
+            }
+        }
 
         $notif = Notification::make()
             ->title($success ? 'Import Master Data selesai' : 'Import Master Data gagal')
-            ->body($success
-                ? ($totalGagal > 0 ? "{$totalGagal} baris gagal - lihat laporan di halaman Import & Export Data." : 'Semua baris berhasil diimpor.')
-                : $pesan);
+            ->body($success ? implode(' ', $bodyParts) : $pesan);
 
         $success && $totalGagal === 0 ? $notif->success() : $notif->warning();
         $success || $notif->danger();
@@ -14418,14 +14232,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -14485,8 +14299,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-}
 
+}
 ```
 ---
 
@@ -14498,14 +14312,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -14565,8 +14379,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-}
 
+}
 ```
 ---
 
@@ -14666,14 +14480,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\FirmwareRelease;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class FirmwareReleasePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:FirmwareRelease');
@@ -14733,8 +14547,8 @@ class FirmwareReleasePolicy
     {
         return $authUser->can('Reorder:FirmwareRelease');
     }
-}
 
+}
 ```
 ---
 
@@ -14746,14 +14560,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -14813,8 +14627,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-}
 
+}
 ```
 ---
 
@@ -14826,14 +14640,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -14893,8 +14707,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-}
 
+}
 ```
 ---
 
@@ -14906,14 +14720,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -14973,8 +14787,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-}
 
+}
 ```
 ---
 
@@ -14986,14 +14800,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -15053,8 +14867,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -15066,14 +14880,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -15133,8 +14947,8 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-}
 
+}
 ```
 ---
 
@@ -15146,14 +14960,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadgeLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgeLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadgeLog');
@@ -15213,8 +15027,8 @@ class LevelBadgeLogPolicy
     {
         return $authUser->can('Reorder:LevelBadgeLog');
     }
-}
 
+}
 ```
 ---
 
@@ -15226,14 +15040,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -15293,8 +15107,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-}
 
+}
 ```
 ---
 
@@ -15306,14 +15120,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -15373,8 +15187,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-}
 
+}
 ```
 ---
 
@@ -15386,14 +15200,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -15453,8 +15267,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-}
 
+}
 ```
 ---
 
@@ -15466,14 +15280,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -15533,8 +15347,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-}
 
+}
 ```
 ---
 
@@ -15546,14 +15360,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -15613,8 +15427,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-}
 
+}
 ```
 ---
 
@@ -15626,14 +15440,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -15693,8 +15507,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-}
 
+}
 ```
 ---
 
@@ -15706,14 +15520,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -15773,8 +15587,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-}
 
+}
 ```
 ---
 
@@ -15786,14 +15600,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -15853,8 +15667,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-}
 
+}
 ```
 ---
 
@@ -15866,14 +15680,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -15933,8 +15747,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-}
 
+}
 ```
 ---
 
@@ -15946,14 +15760,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -16013,8 +15827,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-}
 
+}
 ```
 ---
 
@@ -16026,14 +15840,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -16093,8 +15907,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -16106,14 +15920,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -16173,8 +15987,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-}
 
+}
 ```
 ---
 
@@ -16184,13 +15998,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -16250,8 +16064,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-}
 
+}
 ```
 ---
 
@@ -18017,6 +17831,213 @@ class SnapshotHarianService
 ```
 ---
 
+## app/Services/UserImportResolverService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\KelasTahunPelajaran;
+use App\Models\Jurusan;
+use App\Models\Kelas;
+use App\Models\TahunPelajaran;
+use App\Models\User;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+
+/**
+ * Satu sumber kebenaran (Aturan poin 3) untuk logika yang SEBELUMNYA
+ * terduplikasi antara UserImporter dan sheet 'user' di
+ * MasterDataRegistry - drift antara keduanya yang menyebabkan bug
+ * double-hashing password ditemukan pada iterasi sebelumnya.
+ *
+ * Method di sini TIDAK menyimpan (save()) $user - pemanggil
+ * (UserImporter::beforeSave() / closure import MasterDataRegistry)
+ * yang bertanggung jawab memanggil save() setelah semua resolve
+ * selesai, supaya urutan efek samping (mis. gagal di tengah karena
+ * kartu bentrok) tidak meninggalkan record ter-save sebagian.
+ */
+class UserImportResolverService
+{
+    /**
+     * Password diisi -> dipakai apa adanya (di-hash otomatis via cast
+     * 'hashed' pada Model User saat save()). Kosong & user baru ->
+     * random 12 karakter. Kosong & user existing -> tidak disentuh.
+     */
+    public function resolvePassword(User $user, ?string $passwordBaru): void
+    {
+        $passwordBaru = trim((string) $passwordBaru);
+
+        if ($passwordBaru !== '') {
+            $user->password = $passwordBaru; // di-hash otomatis via cast 'hashed'
+
+            return;
+        }
+
+        if (! $user->exists) {
+            $user->password = Str::random(12); // di-hash otomatis via cast 'hashed'
+        }
+    }
+
+    /**
+     * Uniqueness no_kartu_rfid dicek terhadap user lain (KECUALI
+     * $user sendiri jika sudah exists). Return true jika kartu LAMA
+     * dihapus (dikosongkan) - dipakai pemanggil untuk merekap jumlah
+     * kartu terhapus di notifikasi.
+     *
+     * @throws RowImportFailedException jika nomor sudah dipakai user lain
+     */
+    public function resolveKartuRfid(User $user, ?string $nomorBaru): bool
+    {
+        $nomorBaru = trim((string) $nomorBaru);
+
+        if ($nomorBaru === '') {
+            if ($user->no_kartu_rfid !== null) {
+                $user->no_kartu_rfid = null;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        $dipakaiUserLain = User::query()
+            ->where('no_kartu_rfid', $nomorBaru)
+            ->when($user->exists, fn($q) => $q->whereKeyNot($user->id))
+            ->exists();
+
+        if ($dipakaiUserLain) {
+            throw new RowImportFailedException("Nomor kartu \"{$nomorBaru}\" sudah dipakai user lain. Cek kembali atau kosongkan kolom ini.");
+        }
+
+        $user->no_kartu_rfid = $nomorBaru;
+
+        return false;
+    }
+
+    /**
+     * TODO: GAP-SPEC - lihat catatan algoritma resolusi (URL -> unduh,
+     * path di disk 'public' -> pakai langsung, path absolut di
+     * filesystem server -> salin) yang sudah dikonfirmasi sebelumnya
+     * pada UserImporter. PERINGATAN KEAMANAN yang sama berlaku di sini:
+     * bisa membaca file APA PUN yang bisa diakses proses PHP (path
+     * traversal) dan melakukan HTTP request ke alamat mana pun (SSRF).
+     * SENGAJA tidak dibatasi karena baik UserImporter (hanya
+     * super_admin, lihat UserResource::authorize) maupun sheet 'user'
+     * di Import Master (halaman ini HANYA bisa diakses super_admin,
+     * lihat ImportExportMaster::canAccess()) sama-sama dibatasi ke role
+     * setertinggi ini. JANGAN panggil method ini dari konteks yang bisa
+     * diakses role lain tanpa meninjau ulang dua risiko ini.
+     *
+     * $identitas dipakai sebagai nama file deterministik (NISN/NIP) -
+     * re-import avatar yang sama akan MENIMPA file lama, bukan menumpuk
+     * file baru terus-menerus.
+     *
+     * @throws RowImportFailedException jika sumber tidak bisa diresolusi
+     */
+    public function resolveAvatar(User $user, ?string $nilaiAvatar, string $identitas): void
+    {
+        $nilai = trim((string) $nilaiAvatar);
+
+        if ($nilai === '') {
+            return;
+        }
+
+        $namaFile = $this->namaFileAvatar($nilai, $identitas);
+
+        if (Str::startsWith($nilai, ['http://', 'https://'])) {
+            try {
+                $response = Http::timeout(15)->get($nilai);
+            } catch (\Throwable $e) {
+                throw new RowImportFailedException("Gagal mengunduh avatar dari URL \"{$nilai}\": {$e->getMessage()}");
+            }
+
+            if (! $response->successful()) {
+                throw new RowImportFailedException("URL avatar \"{$nilai}\" tidak bisa diakses (HTTP {$response->status()}).");
+            }
+
+            Storage::disk('public')->put($namaFile, $response->body());
+            $user->avatar = $namaFile;
+
+            return;
+        }
+
+        if (Storage::disk('public')->exists($nilai)) {
+            Storage::disk('public')->copy($nilai, $namaFile);
+            $user->avatar = $namaFile;
+
+            return;
+        }
+
+        if (is_file($nilai)) {
+            Storage::disk('public')->put($namaFile, file_get_contents($nilai));
+            $user->avatar = $namaFile;
+
+            return;
+        }
+
+        throw new RowImportFailedException("Avatar \"{$nilai}\" tidak ditemukan (bukan URL valid, bukan file di storage, bukan path lokal di server).");
+    }
+
+    protected function namaFileAvatar(string $sumber, string $identitas): string
+    {
+        $ekstensi = pathinfo(parse_url($sumber, PHP_URL_PATH) ?? $sumber, PATHINFO_EXTENSION) ?: 'jpg';
+
+        return 'user-avatar/' . $identitas . '.' . $ekstensi;
+    }
+
+    /**
+     * Resolusi KelasTahunPelajaran dari 3 kolom (nama kelas, kode
+     * jurusan, nama tahun pelajaran) - kontrak WAJIB 3 kolom karena
+     * Kelas.nama TIDAK unik secara global (hanya unik per Jurusan).
+     *
+     * @throws RowImportFailedException jika salah satu tidak ditemukan/ambigu
+     */
+    public function resolveKtp(string $namaKelas, string $kodeJurusan, string $namaTahun): KelasTahunPelajaran
+    {
+        if ($kodeJurusan === '' || $namaTahun === '') {
+            throw new RowImportFailedException('Kelas diisi tapi kolom jurusan_kode atau tahun_pelajaran kosong. Isi ketiganya, atau kosongkan ketiganya jika belum mau ditempatkan ke kelas.');
+        }
+
+        $jurusan = Jurusan::query()->where('kode', $kodeJurusan)->first();
+
+        if (! $jurusan) {
+            throw new RowImportFailedException("Kode jurusan \"{$kodeJurusan}\" tidak ditemukan. Cek ejaan atau tambahkan Jurusan-nya dulu di Master Data.");
+        }
+
+        $kelas = Kelas::query()
+            ->where('nama', $namaKelas)
+            ->where('jurusan_id', $jurusan->id)
+            ->first();
+
+        if (! $kelas) {
+            throw new RowImportFailedException("Kelas \"{$namaKelas}\" dengan jurusan \"{$kodeJurusan}\" tidak ditemukan. Cek ejaan atau tambahkan Kelas-nya dulu di Master Data.");
+        }
+
+        $tahun = TahunPelajaran::query()->where('nama', $namaTahun)->first();
+
+        if (! $tahun) {
+            throw new RowImportFailedException("Tahun pelajaran \"{$namaTahun}\" tidak ditemukan. Cek ejaan atau tambahkan dulu di Master Data.");
+        }
+
+        $ktp = KelasTahunPelajaran::query()
+            ->where('kelas_id', $kelas->id)
+            ->where('tahun_pelajaran_id', $tahun->id)
+            ->first();
+
+        if (! $ktp) {
+            throw new RowImportFailedException("Kombinasi kelas \"{$namaKelas}\" ({$kodeJurusan}) dan tahun pelajaran \"{$namaTahun}\" belum terdaftar. Import Kelas per Tahun Pelajaran dulu sebelum import User.");
+        }
+
+        return $ktp;
+    }
+}
+
+```
+---
+
 ## app/Services/WhatsappService.php
 ```php
 <?php
@@ -18167,6 +18188,7 @@ class WhatsappService
 
 namespace App\Support;
 
+use App\Enums\RoleUser;
 use App\Enums\StatusEksemplar;
 use App\Models\Buku;
 use App\Models\Denda;
@@ -18192,6 +18214,7 @@ use App\Models\Transaksi;
 use App\Models\User;
 use App\Rules\FormatKartuRfid;
 use App\Services\KenaikanKelasService;
+use App\Services\UserImportResolverService;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Illuminate\Support\Facades\Validator;
 
@@ -18199,25 +18222,28 @@ use Illuminate\Support\Facades\Validator;
  * SATU SUMBER KEBENARAN urutan sheet + kolom untuk Export/Import Master
  * (Aturan poin 3, DRY). Urutan array ini MENGIKAT dua hal:
  * 1. Urutan sheet fisik di file hasil "Export Semua".
- * 2. Urutan proses saat "Import Semua" - dependency data (Jurusan
- *    sebelum Kelas, Kelas sebelum KelasTahunPelajaran, dst.) - lihat
- *    TODO: ASUMSI di ProcessMasterImportJob soal pencocokan sheet by
- *    posisi (bukan nama).
+ * 2. Urutan proses saat "Import Semua" - dipetakan BY INDEX POSISI
+ *    (bukan nama sheet) di ProcessMasterImportJob.
  *
  * 'importable' => false berarti model ini read-only/log otomatis
  * (dihasilkan Service - PeminjamanService/PointService/KenaikanKelasService/
  * device RFID) - HANYA di-export, TIDAK diproses saat Import meski
- * sheet-nya ikut ada di file (Aturan poin 3 - jangan bypass validasi
- * service dengan insert manual).
+ * sheet-nya ikut ada di file.
  *
- * TODO: GAP-SPEC - logic 'import' untuk Buku dan User adalah PORTING
- * dari BukuImporter/UserImporter yang sudah ada, disederhanakan agar
- * bisa dipanggil generik dari MasterImportProcessor (bukan dari
- * ImportAction Filament). Perilaku inti (resolusi kategori/rak by nama,
- * akumulasi stok, generate barcode, role-conditional field User, rule
- * FormatKartuRfid) DIPERTAHANKAN - tapi belum diuji end-to-end terhadap
- * dataset besar, wajib diverifikasi manual sebelum dipakai di production
- * (Aturan poin 12).
+ * 'eager' => daftar relasi eksplisit untuk eager-load sebelum export
+ * (Aturan poin 3) - GenericExportSheet TIDAK LAGI menebak dari nama
+ * kolom (bug lama: whitelist heuristik tidak match banyak sheet,
+ * lihat riwayat review sebelumnya).
+ *
+ * PERUBAHAN KONTRAK (iterasi ini, WAJIB diberi tahu ke pengguna -
+ * lihat ringkasan balasan): file hasil "Export Semua" LAMA (sebelum
+ * perubahan ini) TIDAK KOMPATIBEL untuk Import Semua lagi:
+ * - Sheet 'user': kolom 'kelas' polos diganti 'kelas'+'jurusan_kode'+
+ *   'tahun_pelajaran' (identik kontrak UserImporter, karena Kelas.nama
+ *   tidak unik secara global). Ditambah 'jenis_kelamin', 'avatar',
+ *   'password' (password TIDAK diexport, hanya diterima saat import).
+ * - Sheet 'kelas_tahun_pelajaran': kolom 'wali_kelas' (nama) diganti
+ *   'wali_kelas_nip' (NIP - nama tidak dijamin unik).
  */
 class MasterDataRegistry
 {
@@ -18229,9 +18255,10 @@ class MasterDataRegistry
                 'label' => 'Jurusan',
                 'model' => Jurusan::class,
                 'importable' => true,
+                'eager' => [],
                 'columns' => [
-                    'nama' => fn ($r) => $r->nama,
-                    'kode' => fn ($r) => $r->kode,
+                    'nama' => fn($r) => $r->nama,
+                    'kode' => fn($r) => $r->kode,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['kode'])) {
@@ -18245,11 +18272,12 @@ class MasterDataRegistry
                 'label' => 'TahunPelajaran',
                 'model' => TahunPelajaran::class,
                 'importable' => true,
+                'eager' => [],
                 'columns' => [
-                    'nama' => fn ($r) => $r->nama,
-                    'tanggal_mulai' => fn ($r) => $r->tanggal_mulai,
-                    'tanggal_selesai' => fn ($r) => $r->tanggal_selesai,
-                    'aktif' => fn ($r) => $r->aktif ? 'ya' : 'tidak',
+                    'nama' => fn($r) => $r->nama,
+                    'tanggal_mulai' => fn($r) => $r->tanggal_mulai,
+                    'tanggal_selesai' => fn($r) => $r->tanggal_selesai,
+                    'aktif' => fn($r) => $r->aktif ? 'ya' : 'tidak',
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['tanggal_mulai']) || empty($row['tanggal_selesai'])) {
@@ -18261,8 +18289,7 @@ class MasterDataRegistry
                             'tanggal_mulai' => $row['tanggal_mulai'],
                             'tanggal_selesai' => $row['tanggal_selesai'],
                             // aktif SENGAJA tidak diubah lewat import massal -
-                            // status aktif hanya lewat Action "Jadikan Aktif"
-                            // (Aturan poin 3, satu sumber kebenaran transisi).
+                            // status aktif hanya lewat Action "Jadikan Aktif".
                         ]
                     );
                 },
@@ -18272,10 +18299,11 @@ class MasterDataRegistry
                 'label' => 'Kelas',
                 'model' => Kelas::class,
                 'importable' => true,
+                'eager' => ['jurusan'],
                 'columns' => [
-                    'nama' => fn ($r) => $r->nama,
-                    'tingkat' => fn ($r) => $r->tingkat,
-                    'jurusan' => fn ($r) => $r->jurusan?->nama,
+                    'nama' => fn($r) => $r->nama,
+                    'tingkat' => fn($r) => $r->tingkat,
+                    'jurusan' => fn($r) => $r->jurusan?->nama,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['tingkat']) || empty($row['jurusan'])) {
@@ -18296,10 +18324,11 @@ class MasterDataRegistry
                 'label' => 'KelasTahunPelajaran',
                 'model' => KelasTahunPelajaran::class,
                 'importable' => true,
+                'eager' => ['kelas', 'tahunPelajaran', 'waliKelas'],
                 'columns' => [
-                    'kelas' => fn ($r) => $r->kelas?->nama,
-                    'tahun_pelajaran' => fn ($r) => $r->tahunPelajaran?->nama,
-                    'wali_kelas' => fn ($r) => $r->waliKelas?->nama,
+                    'kelas' => fn($r) => $r->kelas?->nama,
+                    'tahun_pelajaran' => fn($r) => $r->tahunPelajaran?->nama,
+                    'wali_kelas_nip' => fn($r) => $r->waliKelas?->nip,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['kelas']) || empty($row['tahun_pelajaran'])) {
@@ -18311,11 +18340,13 @@ class MasterDataRegistry
                         throw new RowImportFailedException('Kelas atau Tahun Pelajaran tidak ditemukan.');
                     }
                     $waliKelasId = null;
-                    if (! empty($row['wali_kelas'])) {
-                        $wali = User::query()->where('nama', trim($row['wali_kelas']))
-                            ->whereIn('role', ['pustakawan', 'pegawai'])->first();
+                    if (! empty($row['wali_kelas_nip'])) {
+                        $wali = User::query()->where('nip', trim($row['wali_kelas_nip']))->first();
                         if (! $wali) {
-                            throw new RowImportFailedException("Wali kelas '{$row['wali_kelas']}' tidak ditemukan atau bukan role Pustakawan/Pegawai.");
+                            throw new RowImportFailedException("NIP wali kelas \"{$row['wali_kelas_nip']}\" tidak ditemukan.");
+                        }
+                        if (! in_array($wali->role->value, ['pustakawan', 'pegawai'], true)) {
+                            throw new RowImportFailedException('User dengan NIP tersebut bukan Pustakawan/Pegawai - hanya kedua role ini yang bisa dijadikan wali kelas.');
                         }
                         $waliKelasId = $wali->id;
                     }
@@ -18330,9 +18361,10 @@ class MasterDataRegistry
                 'label' => 'Rak',
                 'model' => Rak::class,
                 'importable' => true,
+                'eager' => [],
                 'columns' => [
-                    'nama' => fn ($r) => $r->nama,
-                    'lokasi' => fn ($r) => $r->lokasi,
+                    'nama' => fn($r) => $r->nama,
+                    'lokasi' => fn($r) => $r->lokasi,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama'])) {
@@ -18346,9 +18378,10 @@ class MasterDataRegistry
                 'label' => 'Kategori',
                 'model' => Kategori::class,
                 'importable' => true,
+                'eager' => [],
                 'columns' => [
-                    'nama' => fn ($r) => $r->nama,
-                    'deskripsi' => fn ($r) => $r->deskripsi,
+                    'nama' => fn($r) => $r->nama,
+                    'deskripsi' => fn($r) => $r->deskripsi,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama'])) {
@@ -18362,11 +18395,12 @@ class MasterDataRegistry
                 'label' => 'LevelBadge',
                 'model' => LevelBadge::class,
                 'importable' => true,
+                'eager' => [],
                 'columns' => [
-                    'nama_badge' => fn ($r) => $r->nama_badge,
-                    'min_point' => fn ($r) => $r->min_point,
-                    'max_point' => fn ($r) => $r->max_point,
-                    'urutan' => fn ($r) => $r->urutan,
+                    'nama_badge' => fn($r) => $r->nama_badge,
+                    'min_point' => fn($r) => $r->min_point,
+                    'max_point' => fn($r) => $r->max_point,
+                    'urutan' => fn($r) => $r->urutan,
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama_badge']) || ! isset($row['min_point'])) {
@@ -18387,10 +18421,11 @@ class MasterDataRegistry
                 'label' => 'Reward',
                 'model' => Reward::class,
                 'importable' => true,
+                'eager' => [],
                 'columns' => [
-                    'nama' => fn ($r) => $r->nama,
-                    'threshold_point' => fn ($r) => $r->threshold_point,
-                    'aktif' => fn ($r) => $r->aktif ? 'ya' : 'tidak',
+                    'nama' => fn($r) => $r->nama,
+                    'threshold_point' => fn($r) => $r->threshold_point,
+                    'aktif' => fn($r) => $r->aktif ? 'ya' : 'tidak',
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['threshold_point'])) {
@@ -18410,11 +18445,12 @@ class MasterDataRegistry
                 'label' => 'Punishment',
                 'model' => Punishment::class,
                 'importable' => true,
+                'eager' => [],
                 'columns' => [
-                    'nama' => fn ($r) => $r->nama,
-                    'threshold_point_minus' => fn ($r) => $r->threshold_point_minus,
-                    'durasi_suspend_hari' => fn ($r) => $r->durasi_suspend_hari,
-                    'aktif' => fn ($r) => $r->aktif ? 'ya' : 'tidak',
+                    'nama' => fn($r) => $r->nama,
+                    'threshold_point_minus' => fn($r) => $r->threshold_point_minus,
+                    'durasi_suspend_hari' => fn($r) => $r->durasi_suspend_hari,
+                    'aktif' => fn($r) => $r->aktif ? 'ya' : 'tidak',
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || ! isset($row['threshold_point_minus'])) {
@@ -18435,21 +18471,44 @@ class MasterDataRegistry
                 'label' => 'User',
                 'model' => User::class,
                 'importable' => true,
+                'eager' => ['kelasTahunPelajaran.kelas.jurusan', 'kelasTahunPelajaran.tahunPelajaran'],
                 'columns' => [
-                    'nama' => fn ($r) => $r->nama,
-                    'role' => fn ($r) => $r->role?->value,
-                    'nisn' => fn ($r) => $r->nisn,
-                    'nip' => fn ($r) => $r->nip,
-                    'no_telepon' => fn ($r) => $r->no_telepon,
-                    'no_kartu_rfid' => fn ($r) => $r->no_kartu_rfid,
-                    'kelas' => fn ($r) => $r->kelasTahunPelajaran?->kelas?->nama,
+                    'nama' => fn($r) => $r->nama,
+                    'role' => fn($r) => $r->role?->value,
+                    'jenis_kelamin' => fn($r) => $r->jenis_kelamin?->value,
+                    'nisn' => fn($r) => $r->nisn,
+                    'nip' => fn($r) => $r->nip,
+                    'no_telepon' => fn($r) => $r->no_telepon,
+                    'no_kartu_rfid' => fn($r) => $r->no_kartu_rfid,
+                    'avatar' => fn($r) => $r->avatar,
+                    'kelas' => fn($r) => $r->kelasTahunPelajaran?->kelas?->nama,
+                    'jurusan_kode' => fn($r) => $r->kelasTahunPelajaran?->kelas?->jurusan?->kode,
+                    'tahun_pelajaran' => fn($r) => $r->kelasTahunPelajaran?->tahunPelajaran?->nama,
+                    // 'password' SENGAJA tidak diexport (hash tidak berguna
+                    // untuk reimport) - hanya diterima saat import di bawah.
                 ],
-                // TODO: GAP-SPEC - porting UserImporter, disederhanakan.
-                // Password TIDAK diproses lewat sheet ini (mengikuti pola
-                // UserImporter existing - perlu dicek apakah memang begitu).
+                // Delegasi penuh ke UserImportResolverService (Aturan poin
+                // 3) - satu sumber kebenaran yang sama dipakai UserImporter,
+                // menutup bug double-hashing password & duplikasi resolusi
+                // kartu/avatar/KTP yang ditemukan pada review sebelumnya.
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['role']) || empty($row['no_telepon'])) {
                         throw new RowImportFailedException('Nama, role, dan no_telepon wajib diisi.');
+                    }
+
+                    $role = RoleUser::tryFrom(trim($row['role']));
+                    if (! $role) {
+                        throw new RowImportFailedException("Role \"{$row['role']}\" tidak valid. Gunakan salah satu: " . implode(', ', array_column(RoleUser::cases(), 'value')));
+                    }
+
+                    $identitas = $role === RoleUser::Siswa
+                        ? trim((string) ($row['nisn'] ?? ''))
+                        : trim((string) ($row['nip'] ?? ''));
+
+                    if ($identitas === '') {
+                        throw new RowImportFailedException($role === RoleUser::Siswa
+                            ? 'NISN wajib diisi untuk role siswa.'
+                            : 'NIP wajib diisi untuk role selain siswa.');
                     }
 
                     if (! empty($row['no_kartu_rfid'])) {
@@ -18459,33 +18518,48 @@ class MasterDataRegistry
                         }
                     }
 
-                    $identifier = $row['role'] === 'siswa'
-                        ? ['nisn' => $row['nisn'] ?? null]
-                        : ['nip' => $row['nip'] ?? null];
+                    $user = $role === RoleUser::Siswa
+                        ? User::query()->firstOrNew(['nisn' => $identitas])
+                        : User::query()->firstOrNew(['nip' => $identitas]);
 
-                    $user = User::query()->firstOrNew(array_filter($identifier));
+                    $resolver = app(UserImportResolverService::class);
+
+                    $ktp = null;
+                    $namaKelas = trim((string) ($row['kelas'] ?? ''));
+                    if ($namaKelas !== '') {
+                        if ($role !== RoleUser::Siswa) {
+                            throw new RowImportFailedException('Kolom kelas hanya berlaku untuk role siswa.');
+                        }
+                        $ktp = $resolver->resolveKtp(
+                            $namaKelas,
+                            trim((string) ($row['jurusan_kode'] ?? '')),
+                            trim((string) ($row['tahun_pelajaran'] ?? '')),
+                        );
+                    }
+
                     $user->fill([
                         'nama' => $row['nama'],
-                        'role' => $row['role'],
+                        'role' => $role,
+                        'jenis_kelamin' => $row['jenis_kelamin'] ?: $user->jenis_kelamin,
                         'no_telepon' => $row['no_telepon'],
-                        'no_kartu_rfid' => $row['no_kartu_rfid'] ?? $user->no_kartu_rfid,
-                        'nisn' => $row['role'] === 'siswa' ? ($row['nisn'] ?? null) : null,
-                        'nip' => $row['role'] !== 'siswa' ? ($row['nip'] ?? null) : null,
+                        'nisn' => $role === RoleUser::Siswa ? $identitas : null,
+                        'nip' => $role !== RoleUser::Siswa ? $identitas : null,
                     ]);
-                    if (! $user->exists) {
-                        $user->password = bcrypt(str()->random(16)); // TODO: GAP-SPEC - password acak, user wajib reset via OTP
-                    }
+
+                    $resolver->resolvePassword($user, $row['password'] ?? null);
+                    $resolver->resolveAvatar($user, $row['avatar'] ?? null, $identitas);
+                    $kartuDihapus = $resolver->resolveKartuRfid($user, $row['no_kartu_rfid'] ?? null);
+
                     $user->save();
 
-                    if (! empty($row['kelas']) && $row['role'] === 'siswa') {
-                        $ktp = KelasTahunPelajaran::query()
-                            ->whereHas('kelas', fn ($q) => $q->where('nama', trim($row['kelas'])))
-                            ->whereHas('tahunPelajaran', fn ($q) => $q->where('aktif', true))
-                            ->first();
-                        if ($ktp) {
-                            app(KenaikanKelasService::class)->assignKelas($user, $ktp);
-                        }
+                    if ($ktp) {
+                        app(KenaikanKelasService::class)->assignKelas($user, $ktp);
                     }
+
+                    // Dikembalikan ke ProcessMasterImportJob::prosesSheet()
+                    // untuk direkap sebagai meta 'kartu_dihapus' di laporan
+                    // sheet ini (lihat file job).
+                    return $kartuDihapus ? ['kartu_dihapus' => 1] : [];
                 },
             ],
             [
@@ -18493,18 +18567,20 @@ class MasterDataRegistry
                 'label' => 'Buku',
                 'model' => Buku::class,
                 'importable' => true,
+                'eager' => ['eksemplars.rak', 'kategoris'],
                 'columns' => [
-                    'judul' => fn ($r) => $r->judul,
-                    'penulis' => fn ($r) => $r->penulis,
-                    'isbn' => fn ($r) => $r->isbn,
-                    'harga_ganti' => fn ($r) => $r->harga_ganti,
-                    'stok' => fn ($r) => $r->eksemplars->count(),
-                    'rak' => fn ($r) => $r->eksemplars->pluck('rak.nama')->filter()->unique()->implode('; '),
-                    'kategori' => fn ($r) => $r->kategoris->pluck('nama')->implode('; '),
+                    'judul' => fn($r) => $r->judul,
+                    'penulis' => fn($r) => $r->penulis,
+                    'isbn' => fn($r) => $r->isbn,
+                    'harga_ganti' => fn($r) => $r->harga_ganti,
+                    'stok' => fn($r) => $r->eksemplars->count(),
+                    'rak' => fn($r) => $r->eksemplars->pluck('rak.nama')->filter()->unique()->implode('; '),
+                    'kategori' => fn($r) => $r->kategoris->pluck('nama')->implode('; '),
                 ],
                 // TODO: GAP-SPEC - porting BukuImporter (resolusi kategori/rak
                 // by nama, akumulasi stok, generate barcode). Perilaku SAMA
-                // dengan BukuImporter asli - lihat class tersebut untuk detail.
+                // dengan BukuImporter asli - belum diuji end-to-end di jalur
+                // Master Import (Aturan poin 12).
                 'import' => function (array $row) {
                     if (empty($row['judul']) || ! isset($row['harga_ganti'])) {
                         throw new RowImportFailedException('Judul dan harga_ganti wajib diisi.');
@@ -18526,7 +18602,7 @@ class MasterDataRegistry
                         $kategoris = Kategori::query()->whereIn('nama', $namaKategoris)->get(['id', 'nama']);
                         $tidakDitemukan = array_diff($namaKategoris, $kategoris->pluck('nama')->all());
                         if (! empty($tidakDitemukan)) {
-                            throw new RowImportFailedException('Kategori tidak ditemukan: '.implode(', ', $tidakDitemukan));
+                            throw new RowImportFailedException('Kategori tidak ditemukan: ' . implode(', ', $tidakDitemukan));
                         }
                         $buku->kategoris()->sync($kategoris->pluck('id')->all());
                     }
@@ -18547,53 +18623,53 @@ class MasterDataRegistry
             ],
 
             // --- READ-ONLY (export saja, TIDAK diproses saat import) ---
-            ['key' => 'denda', 'label' => 'Denda', 'model' => Denda::class, 'importable' => false, 'columns' => [
-                'user' => fn ($r) => $r->user?->nama,
-                'tipe' => fn ($r) => $r->tipe?->value,
-                'nominal' => fn ($r) => $r->nominal,
-                'status_lunas' => fn ($r) => $r->status_lunas ? 'lunas' : 'belum lunas',
+            ['key' => 'denda', 'label' => 'Denda', 'model' => Denda::class, 'importable' => false, 'eager' => ['user'], 'columns' => [
+                'user' => fn($r) => $r->user?->nama,
+                'tipe' => fn($r) => $r->tipe?->value,
+                'nominal' => fn($r) => $r->nominal,
+                'status_lunas' => fn($r) => $r->status_lunas ? 'lunas' : 'belum lunas',
             ]],
-            ['key' => 'peminjaman', 'label' => 'Peminjaman', 'model' => Peminjaman::class, 'importable' => false, 'columns' => [
-                'user' => fn ($r) => $r->user?->nama,
-                'buku' => fn ($r) => $r->eksemplar?->buku?->judul,
-                'tanggal_pinjam' => fn ($r) => $r->tanggal_pinjam,
-                'status' => fn ($r) => $r->status?->value,
+            ['key' => 'peminjaman', 'label' => 'Peminjaman', 'model' => Peminjaman::class, 'importable' => false, 'eager' => ['user', 'eksemplar.buku'], 'columns' => [
+                'user' => fn($r) => $r->user?->nama,
+                'buku' => fn($r) => $r->eksemplar?->buku?->judul,
+                'tanggal_pinjam' => fn($r) => $r->tanggal_pinjam,
+                'status' => fn($r) => $r->status?->value,
             ]],
-            ['key' => 'pengembalian', 'label' => 'Pengembalian', 'model' => Pengembalian::class, 'importable' => false, 'columns' => [
-                'tanggal_kembali' => fn ($r) => $r->tanggal_kembali,
-                'kondisi' => fn ($r) => $r->kondisi?->value,
+            ['key' => 'pengembalian', 'label' => 'Pengembalian', 'model' => Pengembalian::class, 'importable' => false, 'eager' => [], 'columns' => [
+                'tanggal_kembali' => fn($r) => $r->tanggal_kembali,
+                'kondisi' => fn($r) => $r->kondisi?->value,
             ]],
-            ['key' => 'transaksi', 'label' => 'Transaksi', 'model' => Transaksi::class, 'importable' => false, 'columns' => [
-                'user' => fn ($r) => $r->user?->nama,
-                'jenis' => fn ($r) => $r->jenis?->value,
-                'tanggal' => fn ($r) => $r->tanggal,
+            ['key' => 'transaksi', 'label' => 'Transaksi', 'model' => Transaksi::class, 'importable' => false, 'eager' => ['user'], 'columns' => [
+                'user' => fn($r) => $r->user?->nama,
+                'jenis' => fn($r) => $r->jenis?->value,
+                'tanggal' => fn($r) => $r->tanggal,
             ]],
-            ['key' => 'kunjungan', 'label' => 'Kunjungan', 'model' => Kunjungan::class, 'importable' => false, 'columns' => [
-                'user' => fn ($r) => $r->user?->nama,
-                'tanggal' => fn ($r) => $r->tanggal,
+            ['key' => 'kunjungan', 'label' => 'Kunjungan', 'model' => Kunjungan::class, 'importable' => false, 'eager' => ['user'], 'columns' => [
+                'user' => fn($r) => $r->user?->nama,
+                'tanggal' => fn($r) => $r->tanggal,
             ]],
-            ['key' => 'level_badge_log', 'label' => 'RiwayatBadge', 'model' => LevelBadgeLog::class, 'importable' => false, 'columns' => [
-                'user' => fn ($r) => $r->user?->nama,
-                'badge' => fn ($r) => $r->levelBadge?->nama_badge,
-                'tanggal_didapat' => fn ($r) => $r->tanggal_didapat,
+            ['key' => 'level_badge_log', 'label' => 'RiwayatBadge', 'model' => LevelBadgeLog::class, 'importable' => false, 'eager' => ['user', 'levelBadge'], 'columns' => [
+                'user' => fn($r) => $r->user?->nama,
+                'badge' => fn($r) => $r->levelBadge?->nama_badge,
+                'tanggal_didapat' => fn($r) => $r->tanggal_didapat,
             ]],
-            ['key' => 'reward_log', 'label' => 'RiwayatReward', 'model' => RewardLog::class, 'importable' => false, 'columns' => [
-                'user' => fn ($r) => $r->user?->nama,
-                'reward' => fn ($r) => $r->reward?->nama,
-                'tanggal_didapat' => fn ($r) => $r->tanggal_didapat,
+            ['key' => 'reward_log', 'label' => 'RiwayatReward', 'model' => RewardLog::class, 'importable' => false, 'eager' => ['user', 'reward'], 'columns' => [
+                'user' => fn($r) => $r->user?->nama,
+                'reward' => fn($r) => $r->reward?->nama,
+                'tanggal_didapat' => fn($r) => $r->tanggal_didapat,
             ]],
-            ['key' => 'punishment_log', 'label' => 'RiwayatPunishment', 'model' => PunishmentLog::class, 'importable' => false, 'columns' => [
-                'user' => fn ($r) => $r->user?->nama,
-                'punishment' => fn ($r) => $r->punishment?->nama,
-                'tanggal_diterapkan' => fn ($r) => $r->tanggal_diterapkan,
+            ['key' => 'punishment_log', 'label' => 'RiwayatPunishment', 'model' => PunishmentLog::class, 'importable' => false, 'eager' => ['user', 'punishment'], 'columns' => [
+                'user' => fn($r) => $r->user?->nama,
+                'punishment' => fn($r) => $r->punishment?->nama,
+                'tanggal_diterapkan' => fn($r) => $r->tanggal_diterapkan,
             ]],
-            ['key' => 'riwayat_kelas_siswa', 'label' => 'RiwayatKelasSiswa', 'model' => RiwayatKelasSiswa::class, 'importable' => false, 'columns' => [
-                'user' => fn ($r) => $r->user?->nama,
-                'status' => fn ($r) => $r->status?->value,
+            ['key' => 'riwayat_kelas_siswa', 'label' => 'RiwayatKelasSiswa', 'model' => RiwayatKelasSiswa::class, 'importable' => false, 'eager' => ['user'], 'columns' => [
+                'user' => fn($r) => $r->user?->nama,
+                'status' => fn($r) => $r->status?->value,
             ]],
-            ['key' => 'firmware', 'label' => 'FirmwareOTA', 'model' => FirmwareRelease::class, 'importable' => false, 'columns' => [
-                'version' => fn ($r) => $r->version,
-                'aktif' => fn ($r) => $r->aktif ? 'ya' : 'tidak',
+            ['key' => 'firmware', 'label' => 'FirmwareOTA', 'model' => FirmwareRelease::class, 'importable' => false, 'eager' => [], 'columns' => [
+                'version' => fn($r) => $r->version,
+                'aktif' => fn($r) => $r->aktif ? 'ya' : 'tidak',
             ]],
         ];
     }
@@ -24481,205 +24557,6 @@ return Application::configure(basePath: dirname(__DIR__))
 ```
 ---
 
-## bootstrap/cache/filament/panels/dashboard.php
-```php
-<?php return array (
-  'livewireComponents' => 
-  array (
-    'App\\Filament\\Pages\\Dashboard' => 'App\\Filament\\Pages\\Dashboard',
-    'App\\Filament\\Resources\\BukuResource\\Pages\\CreateBuku' => 'App\\Filament\\Resources\\BukuResource\\Pages\\CreateBuku',
-    'App\\Filament\\Resources\\BukuResource\\Pages\\EditBuku' => 'App\\Filament\\Resources\\BukuResource\\Pages\\EditBuku',
-    'App\\Filament\\Resources\\BukuResource\\Pages\\ListBukus' => 'App\\Filament\\Resources\\BukuResource\\Pages\\ListBukus',
-    'App\\Filament\\Resources\\BukuResource\\RelationManagers\\EksemplarsRelationManager' => 'App\\Filament\\Resources\\BukuResource\\RelationManagers\\EksemplarsRelationManager',
-    'App\\Filament\\Resources\\BukuResource\\Widgets\\BukuStatsWidget' => 'App\\Filament\\Resources\\BukuResource\\Widgets\\BukuStatsWidget',
-    'App\\Filament\\Resources\\DendaResource\\Pages\\ListDendas' => 'App\\Filament\\Resources\\DendaResource\\Pages\\ListDendas',
-    'App\\Filament\\Resources\\DendaResource\\Widgets\\DendaStatsWidget' => 'App\\Filament\\Resources\\DendaResource\\Widgets\\DendaStatsWidget',
-    'App\\Filament\\Resources\\FirmwareResource\\Pages\\CreateFirmwareRelease' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\CreateFirmwareRelease',
-    'App\\Filament\\Resources\\FirmwareResource\\Pages\\EditFirmwareRelease' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\EditFirmwareRelease',
-    'App\\Filament\\Resources\\FirmwareResource\\Pages\\ListFirmwareReleases' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\ListFirmwareReleases',
-    'App\\Filament\\Resources\\FirmwareResource\\Widgets\\FirmwareStatsWidget' => 'App\\Filament\\Resources\\FirmwareResource\\Widgets\\FirmwareStatsWidget',
-    'App\\Filament\\Resources\\JurusanResource\\Pages\\CreateJurusan' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\CreateJurusan',
-    'App\\Filament\\Resources\\JurusanResource\\Pages\\EditJurusan' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\EditJurusan',
-    'App\\Filament\\Resources\\JurusanResource\\Pages\\ListJurusans' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\ListJurusans',
-    'App\\Filament\\Resources\\JurusanResource\\Widgets\\JurusanStatsWidget' => 'App\\Filament\\Resources\\JurusanResource\\Widgets\\JurusanStatsWidget',
-    'App\\Filament\\Resources\\KategoriResource\\Pages\\CreateKategori' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\CreateKategori',
-    'App\\Filament\\Resources\\KategoriResource\\Pages\\EditKategori' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\EditKategori',
-    'App\\Filament\\Resources\\KategoriResource\\Pages\\ListKategoris' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\ListKategoris',
-    'App\\Filament\\Resources\\KategoriResource\\Widgets\\KategoriStatsWidget' => 'App\\Filament\\Resources\\KategoriResource\\Widgets\\KategoriStatsWidget',
-    'App\\Filament\\Resources\\KelasResource\\Pages\\CreateKelas' => 'App\\Filament\\Resources\\KelasResource\\Pages\\CreateKelas',
-    'App\\Filament\\Resources\\KelasResource\\Pages\\EditKelas' => 'App\\Filament\\Resources\\KelasResource\\Pages\\EditKelas',
-    'App\\Filament\\Resources\\KelasResource\\Pages\\ListKelas' => 'App\\Filament\\Resources\\KelasResource\\Pages\\ListKelas',
-    'App\\Filament\\Resources\\KelasResource\\Widgets\\KelasStatsWidget' => 'App\\Filament\\Resources\\KelasResource\\Widgets\\KelasStatsWidget',
-    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\CreateKelasTahunPelajaran' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\CreateKelasTahunPelajaran',
-    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\EditKelasTahunPelajaran' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\EditKelasTahunPelajaran',
-    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\ListKelasTahunPelajarans' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\ListKelasTahunPelajarans',
-    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\RelationManagers\\SiswaAktifRelationManager' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\RelationManagers\\SiswaAktifRelationManager',
-    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Widgets\\KelasTahunPelajaranStatsWidget' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Widgets\\KelasTahunPelajaranStatsWidget',
-    'App\\Filament\\Resources\\KunjunganResource\\Pages\\ListKunjungans' => 'App\\Filament\\Resources\\KunjunganResource\\Pages\\ListKunjungans',
-    'App\\Filament\\Resources\\KunjunganResource\\Widgets\\KunjunganStatsWidget' => 'App\\Filament\\Resources\\KunjunganResource\\Widgets\\KunjunganStatsWidget',
-    'App\\Filament\\Resources\\LevelBadgeLogResource\\Pages\\ListLevelBadgeLogs' => 'App\\Filament\\Resources\\LevelBadgeLogResource\\Pages\\ListLevelBadgeLogs',
-    'App\\Filament\\Resources\\LevelBadgeLogResource\\Widgets\\LevelBadgeLogStatsWidget' => 'App\\Filament\\Resources\\LevelBadgeLogResource\\Widgets\\LevelBadgeLogStatsWidget',
-    'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\CreateLevelBadge' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\CreateLevelBadge',
-    'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\EditLevelBadge' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\EditLevelBadge',
-    'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\ListLevelBadges' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\ListLevelBadges',
-    'App\\Filament\\Resources\\LevelBadgeResource\\Widgets\\LevelBadgeStatsWidget' => 'App\\Filament\\Resources\\LevelBadgeResource\\Widgets\\LevelBadgeStatsWidget',
-    'App\\Filament\\Resources\\PeminjamanResource\\Pages\\CreatePeminjaman' => 'App\\Filament\\Resources\\PeminjamanResource\\Pages\\CreatePeminjaman',
-    'App\\Filament\\Resources\\PeminjamanResource\\Pages\\ListPeminjamans' => 'App\\Filament\\Resources\\PeminjamanResource\\Pages\\ListPeminjamans',
-    'App\\Filament\\Resources\\PeminjamanResource\\Widgets\\PeminjamanOverviewWidget' => 'App\\Filament\\Resources\\PeminjamanResource\\Widgets\\PeminjamanOverviewWidget',
-    'App\\Filament\\Resources\\PengembalianResource\\Pages\\ListPengembalians' => 'App\\Filament\\Resources\\PengembalianResource\\Pages\\ListPengembalians',
-    'App\\Filament\\Resources\\PengembalianResource\\Widgets\\PengembalianStatsWidget' => 'App\\Filament\\Resources\\PengembalianResource\\Widgets\\PengembalianStatsWidget',
-    'App\\Filament\\Resources\\PunishmentLogResource\\Pages\\ListPunishmentLogs' => 'App\\Filament\\Resources\\PunishmentLogResource\\Pages\\ListPunishmentLogs',
-    'App\\Filament\\Resources\\PunishmentLogResource\\Widgets\\PunishmentLogStatsWidget' => 'App\\Filament\\Resources\\PunishmentLogResource\\Widgets\\PunishmentLogStatsWidget',
-    'App\\Filament\\Resources\\PunishmentResource\\Pages\\CreatePunishment' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\CreatePunishment',
-    'App\\Filament\\Resources\\PunishmentResource\\Pages\\EditPunishment' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\EditPunishment',
-    'App\\Filament\\Resources\\PunishmentResource\\Pages\\ListPunishments' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\ListPunishments',
-    'App\\Filament\\Resources\\PunishmentResource\\Widgets\\PunishmentStatsWidget' => 'App\\Filament\\Resources\\PunishmentResource\\Widgets\\PunishmentStatsWidget',
-    'App\\Filament\\Resources\\RakResource\\Pages\\CreateRak' => 'App\\Filament\\Resources\\RakResource\\Pages\\CreateRak',
-    'App\\Filament\\Resources\\RakResource\\Pages\\EditRak' => 'App\\Filament\\Resources\\RakResource\\Pages\\EditRak',
-    'App\\Filament\\Resources\\RakResource\\Pages\\ListRaks' => 'App\\Filament\\Resources\\RakResource\\Pages\\ListRaks',
-    'App\\Filament\\Resources\\RakResource\\RelationManagers\\EksemplarsRelationManager' => 'App\\Filament\\Resources\\RakResource\\RelationManagers\\EksemplarsRelationManager',
-    'App\\Filament\\Resources\\RakResource\\Widgets\\RakStatsWidget' => 'App\\Filament\\Resources\\RakResource\\Widgets\\RakStatsWidget',
-    'App\\Filament\\Resources\\RewardLogResource\\Pages\\ListRewardLogs' => 'App\\Filament\\Resources\\RewardLogResource\\Pages\\ListRewardLogs',
-    'App\\Filament\\Resources\\RewardLogResource\\Widgets\\RewardLogStatsWidget' => 'App\\Filament\\Resources\\RewardLogResource\\Widgets\\RewardLogStatsWidget',
-    'App\\Filament\\Resources\\RewardResource\\Pages\\CreateReward' => 'App\\Filament\\Resources\\RewardResource\\Pages\\CreateReward',
-    'App\\Filament\\Resources\\RewardResource\\Pages\\EditReward' => 'App\\Filament\\Resources\\RewardResource\\Pages\\EditReward',
-    'App\\Filament\\Resources\\RewardResource\\Pages\\ListRewards' => 'App\\Filament\\Resources\\RewardResource\\Pages\\ListRewards',
-    'App\\Filament\\Resources\\RewardResource\\Widgets\\RewardStatsWidget' => 'App\\Filament\\Resources\\RewardResource\\Widgets\\RewardStatsWidget',
-    'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Pages\\ListRiwayatKelasSiswas' => 'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Pages\\ListRiwayatKelasSiswas',
-    'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Widgets\\RiwayatKelasSiswaStatsWidget' => 'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Widgets\\RiwayatKelasSiswaStatsWidget',
-    'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\CreateTahunPelajaran' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\CreateTahunPelajaran',
-    'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\EditTahunPelajaran' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\EditTahunPelajaran',
-    'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\ListTahunPelajarans' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\ListTahunPelajarans',
-    'App\\Filament\\Resources\\TahunPelajaranResource\\Widgets\\TahunPelajaranStatsWidget' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Widgets\\TahunPelajaranStatsWidget',
-    'App\\Filament\\Resources\\TransaksiResource\\Pages\\ListTransaksis' => 'App\\Filament\\Resources\\TransaksiResource\\Pages\\ListTransaksis',
-    'App\\Filament\\Resources\\TransaksiResource\\Pages\\ViewTransaksi' => 'App\\Filament\\Resources\\TransaksiResource\\Pages\\ViewTransaksi',
-    'App\\Filament\\Resources\\TransaksiResource\\RelationManagers\\PeminjamansRelationManager' => 'App\\Filament\\Resources\\TransaksiResource\\RelationManagers\\PeminjamansRelationManager',
-    'App\\Filament\\Resources\\TransaksiResource\\Widgets\\TransaksiStatsWidget' => 'App\\Filament\\Resources\\TransaksiResource\\Widgets\\TransaksiStatsWidget',
-    'App\\Filament\\Resources\\UserResource\\Pages\\CreateUser' => 'App\\Filament\\Resources\\UserResource\\Pages\\CreateUser',
-    'App\\Filament\\Resources\\UserResource\\Pages\\EditUser' => 'App\\Filament\\Resources\\UserResource\\Pages\\EditUser',
-    'App\\Filament\\Resources\\UserResource\\Pages\\ListUsers' => 'App\\Filament\\Resources\\UserResource\\Pages\\ListUsers',
-    'App\\Filament\\Resources\\UserResource\\Widgets\\UserStatsWidget' => 'App\\Filament\\Resources\\UserResource\\Widgets\\UserStatsWidget',
-    'App\\Filament\\Pages\\Auth\\Login' => 'App\\Filament\\Pages\\Auth\\Login',
-    'App\\Filament\\Pages\\Auth\\RequestPasswordReset' => 'App\\Filament\\Pages\\Auth\\RequestPasswordReset',
-    'App\\Filament\\Pages\\Auth\\ResetPassword' => 'App\\Filament\\Pages\\Auth\\ResetPassword',
-    'App\\Filament\\Pages\\LaporanBulanan' => 'App\\Filament\\Pages\\LaporanBulanan',
-    'App\\Filament\\Pages\\PengaturanSistem' => 'App\\Filament\\Pages\\PengaturanSistem',
-    'App\\Filament\\Pages\\ProsesKenaikanKelas' => 'App\\Filament\\Pages\\ProsesKenaikanKelas',
-    'App\\Filament\\Pages\\TransaksiCepat' => 'App\\Filament\\Pages\\TransaksiCepat',
-    'App\\Filament\\Widgets\\BukuPerKategoriWidget' => 'App\\Filament\\Widgets\\BukuPerKategoriWidget',
-    'App\\Filament\\Widgets\\BukuRusakHilangWidget' => 'App\\Filament\\Widgets\\BukuRusakHilangWidget',
-    'App\\Filament\\Widgets\\DendaTerbaruWidget' => 'App\\Filament\\Widgets\\DendaTerbaruWidget',
-    'App\\Filament\\Widgets\\GamifikasiBulananWidget' => 'App\\Filament\\Widgets\\GamifikasiBulananWidget',
-    'App\\Filament\\Widgets\\PeminjamanJatuhTempoWidget' => 'App\\Filament\\Widgets\\PeminjamanJatuhTempoWidget',
-    'App\\Filament\\Widgets\\PeminjamanStatsWidget' => 'App\\Filament\\Widgets\\PeminjamanStatsWidget',
-    'App\\Filament\\Widgets\\PerJenisKelaminWidget' => 'App\\Filament\\Widgets\\PerJenisKelaminWidget',
-    'App\\Filament\\Widgets\\TrenBulananWidget' => 'App\\Filament\\Widgets\\TrenBulananWidget',
-    'App\\Filament\\Widgets\\WhatsappLogWidget' => 'App\\Filament\\Widgets\\WhatsappLogWidget',
-    'Filament\\Livewire\\DatabaseNotifications' => 'Filament\\Livewire\\DatabaseNotifications',
-    'Filament\\Auth\\Pages\\EditProfile' => 'Filament\\Auth\\Pages\\EditProfile',
-    'Filament\\Livewire\\GlobalSearch' => 'Filament\\Livewire\\GlobalSearch',
-    'Filament\\Livewire\\Notifications' => 'Filament\\Livewire\\Notifications',
-    'Filament\\Livewire\\Sidebar' => 'Filament\\Livewire\\Sidebar',
-    'Filament\\Livewire\\SimpleUserMenu' => 'Filament\\Livewire\\SimpleUserMenu',
-    'Filament\\Livewire\\Topbar' => 'Filament\\Livewire\\Topbar',
-    'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ListRoles' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ListRoles',
-    'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\CreateRole' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\CreateRole',
-    'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ViewRole' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ViewRole',
-    'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\EditRole' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\EditRole',
-  ),
-  'clusters' => 
-  array (
-  ),
-  'clusteredComponents' => 
-  array (
-  ),
-  'clusterDirectories' => 
-  array (
-  ),
-  'clusterNamespaces' => 
-  array (
-  ),
-  'pages' => 
-  array (
-    0 => 'App\\Filament\\Pages\\Dashboard',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/Dashboard.php' => 'App\\Filament\\Pages\\Dashboard',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/LaporanBulanan.php' => 'App\\Filament\\Pages\\LaporanBulanan',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/PengaturanSistem.php' => 'App\\Filament\\Pages\\PengaturanSistem',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/ProsesKenaikanKelas.php' => 'App\\Filament\\Pages\\ProsesKenaikanKelas',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/TransaksiCepat.php' => 'App\\Filament\\Pages\\TransaksiCepat',
-    1 => 'App\\Filament\\Pages\\Dashboard',
-  ),
-  'pageConfigurations' => 
-  array (
-  ),
-  'pageDirectories' => 
-  array (
-    0 => '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages',
-  ),
-  'pageNamespaces' => 
-  array (
-    0 => 'App\\Filament\\Pages',
-  ),
-  'resources' => 
-  array (
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/BukuResource.php' => 'App\\Filament\\Resources\\BukuResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/DendaResource.php' => 'App\\Filament\\Resources\\DendaResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/FirmwareResource.php' => 'App\\Filament\\Resources\\FirmwareResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/JurusanResource.php' => 'App\\Filament\\Resources\\JurusanResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/KategoriResource.php' => 'App\\Filament\\Resources\\KategoriResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/KelasResource.php' => 'App\\Filament\\Resources\\KelasResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/KelasTahunPelajaranResource.php' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/KunjunganResource.php' => 'App\\Filament\\Resources\\KunjunganResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/LevelBadgeLogResource.php' => 'App\\Filament\\Resources\\LevelBadgeLogResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/LevelBadgeResource.php' => 'App\\Filament\\Resources\\LevelBadgeResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/PeminjamanResource.php' => 'App\\Filament\\Resources\\PeminjamanResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/PengembalianResource.php' => 'App\\Filament\\Resources\\PengembalianResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/PunishmentLogResource.php' => 'App\\Filament\\Resources\\PunishmentLogResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/PunishmentResource.php' => 'App\\Filament\\Resources\\PunishmentResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/RakResource.php' => 'App\\Filament\\Resources\\RakResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/RewardLogResource.php' => 'App\\Filament\\Resources\\RewardLogResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/RewardResource.php' => 'App\\Filament\\Resources\\RewardResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/RiwayatKelasSiswaResource.php' => 'App\\Filament\\Resources\\RiwayatKelasSiswaResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/TahunPelajaranResource.php' => 'App\\Filament\\Resources\\TahunPelajaranResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/TransaksiResource.php' => 'App\\Filament\\Resources\\TransaksiResource',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/UserResource.php' => 'App\\Filament\\Resources\\UserResource',
-    0 => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\RoleResource',
-  ),
-  'resourceConfigurations' => 
-  array (
-  ),
-  'resourceDirectories' => 
-  array (
-    0 => '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources',
-  ),
-  'resourceNamespaces' => 
-  array (
-    0 => 'App\\Filament\\Resources',
-  ),
-  'widgets' => 
-  array (
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/BukuPerKategoriWidget.php' => 'App\\Filament\\Widgets\\BukuPerKategoriWidget',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/BukuRusakHilangWidget.php' => 'App\\Filament\\Widgets\\BukuRusakHilangWidget',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/DendaTerbaruWidget.php' => 'App\\Filament\\Widgets\\DendaTerbaruWidget',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/GamifikasiBulananWidget.php' => 'App\\Filament\\Widgets\\GamifikasiBulananWidget',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/PeminjamanJatuhTempoWidget.php' => 'App\\Filament\\Widgets\\PeminjamanJatuhTempoWidget',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/PeminjamanStatsWidget.php' => 'App\\Filament\\Widgets\\PeminjamanStatsWidget',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/PerJenisKelaminWidget.php' => 'App\\Filament\\Widgets\\PerJenisKelaminWidget',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/TrenBulananWidget.php' => 'App\\Filament\\Widgets\\TrenBulananWidget',
-    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/WhatsappLogWidget.php' => 'App\\Filament\\Widgets\\WhatsappLogWidget',
-  ),
-  'widgetDirectories' => 
-  array (
-    0 => '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets',
-  ),
-  'widgetNamespaces' => 
-  array (
-    0 => 'App\\Filament\\Widgets',
-  ),
-);
-```
----
-
 ## bootstrap/cache/packages.php
 ```php
 <?php return array (
@@ -24829,20 +24706,6 @@ return Application::configure(basePath: dirname(__DIR__))
       0 => 'Laravel\\Octane\\OctaneServiceProvider',
     ),
   ),
-  'laravel/pail' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'Laravel\\Pail\\PailServiceProvider',
-    ),
-  ),
-  'laravel/pao' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
-    ),
-  ),
   'laravel/tinker' => 
   array (
     'providers' => 
@@ -24877,13 +24740,6 @@ return Application::configure(basePath: dirname(__DIR__))
     'providers' => 
     array (
       0 => 'Carbon\\Laravel\\ServiceProvider',
-    ),
-  ),
-  'nunomaduro/collision' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     ),
   ),
   'nunomaduro/termwind' => 
@@ -24962,18 +24818,15 @@ return Application::configure(basePath: dirname(__DIR__))
     39 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
     40 => 'Blueprint\\BlueprintServiceProvider',
     41 => 'Laravel\\Octane\\OctaneServiceProvider',
-    42 => 'Laravel\\Pail\\PailServiceProvider',
-    43 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
-    44 => 'Laravel\\Tinker\\TinkerServiceProvider',
-    45 => 'Livewire\\LivewireServiceProvider',
-    46 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
-    47 => 'Carbon\\Laravel\\ServiceProvider',
-    48 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
-    49 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    50 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
-    51 => 'Spatie\\Permission\\PermissionServiceProvider',
-    52 => 'App\\Providers\\AppServiceProvider',
-    53 => 'App\\Providers\\Filament\\DashboardPanelProvider',
+    42 => 'Laravel\\Tinker\\TinkerServiceProvider',
+    43 => 'Livewire\\LivewireServiceProvider',
+    44 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
+    45 => 'Carbon\\Laravel\\ServiceProvider',
+    46 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    47 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
+    48 => 'Spatie\\Permission\\PermissionServiceProvider',
+    49 => 'App\\Providers\\AppServiceProvider',
+    50 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
   'eager' => 
   array (
@@ -25004,17 +24857,14 @@ return Application::configure(basePath: dirname(__DIR__))
     24 => 'Filament\\Widgets\\WidgetsServiceProvider',
     25 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
     26 => 'Laravel\\Octane\\OctaneServiceProvider',
-    27 => 'Laravel\\Pail\\PailServiceProvider',
-    28 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
-    29 => 'Livewire\\LivewireServiceProvider',
-    30 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
-    31 => 'Carbon\\Laravel\\ServiceProvider',
-    32 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
-    33 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    34 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
-    35 => 'Spatie\\Permission\\PermissionServiceProvider',
-    36 => 'App\\Providers\\AppServiceProvider',
-    37 => 'App\\Providers\\Filament\\DashboardPanelProvider',
+    27 => 'Livewire\\LivewireServiceProvider',
+    28 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
+    29 => 'Carbon\\Laravel\\ServiceProvider',
+    30 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    31 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
+    32 => 'Spatie\\Permission\\PermissionServiceProvider',
+    33 => 'App\\Providers\\AppServiceProvider',
+    34 => 'App\\Providers\\Filament\\DashboardPanelProvider',
   ),
   'deferred' => 
   array (
@@ -25431,81 +25281,366 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 ## resources/views/filament/pages/import-export-master.blade.php
 ```blade
 <x-filament-panels::page>
-    <div wire:poll.5s>
+    <style>
+        .iem-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .iem-box {
+            padding: 28px;
+        }
+
+        .iem-head {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .iem-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            flex-shrink: 0;
+        }
+
+        .iem-icon svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .iem-icon--export {
+            background: rgba(56, 189, 248, 0.12);
+            color: rgb(56, 189, 248);
+        }
+
+        .iem-icon--import {
+            background: rgba(52, 211, 153, 0.12);
+            color: rgb(52, 211, 153);
+        }
+
+        .iem-icon--history {
+            background: rgba(167, 139, 250, 0.12);
+            color: rgb(167, 139, 250);
+        }
+
+        .iem-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+        }
+
+        .iem-desc {
+            font-size: 0.8125rem;
+            line-height: 1.5;
+            color: rgb(148 163 184);
+            margin: 0;
+        }
+
+        .iem-action {
+            margin-top: 4px;
+        }
+
+        /* Riwayat */
+        .iem-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .iem-row {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 18px 0 18px 24px;
+            border-left: 2px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .iem-row::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 24px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgb(100 116 139);
+            border: 2px solid var(--iem-dot-bg, #18181b);
+        }
+
+        .iem-row--selesai::before {
+            background: rgb(52, 211, 153);
+        }
+
+        .iem-row--gagal::before {
+            background: rgb(248, 113, 113);
+        }
+
+        .iem-row--diproses::before {
+            background: rgb(250, 204, 21);
+        }
+
+        .iem-row:last-child {
+            padding-bottom: 4px;
+        }
+
+        .iem-row-info {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .iem-row-tipe {
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        .iem-row-time {
+            font-size: 0.75rem;
+            color: rgb(148 163 184);
+        }
+
+        .iem-row-time::before {
+            content: '·';
+            margin-right: 10px;
+            color: rgb(100 116 139);
+        }
+
+        .iem-row-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .iem-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: rgb(56, 189, 248);
+        }
+
+        .iem-link svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .iem-report {
+            font-size: 0.75rem;
+        }
+
+        .iem-report-summary {
+            cursor: pointer;
+            font-weight: 500;
+            color: rgb(167, 139, 250);
+            list-style: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .iem-report-summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .iem-report-summary::after {
+            content: '▾';
+            font-size: 0.65rem;
+            transition: transform 0.15s ease;
+        }
+
+        details[open] .iem-report-summary::after {
+            transform: rotate(180deg);
+        }
+
+        .iem-report-body {
+            margin-top: 12px;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .iem-report-item {
+            font-size: 0.75rem;
+            line-height: 1.6;
+        }
+
+        .iem-report-item strong {
+            color: rgb(226 232 240);
+        }
+
+        .iem-report-errors {
+            margin: 6px 0 0 16px;
+            list-style: disc;
+            color: rgb(248 113 113);
+        }
+
+        .iem-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 40px 0;
+            text-align: center;
+            color: rgb(100 116 139);
+        }
+
+        .iem-empty svg {
+            width: 32px;
+            height: 32px;
+            opacity: 0.5;
+        }
+
+        .iem-empty p {
+            font-size: 0.8125rem;
+            margin: 0;
+        }
+
+        @media (min-width: 640px) {
+            .iem-row {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+            }
+        }
+    </style>
+
+    <div wire:poll.5s class="iem-wrapper">
         <x-filament::section>
-            <x-slot name="heading">Export Semua Data</x-slot>
-            <x-slot name="description">
-                Menghasilkan SATU file .xlsx berisi {{ count($this->getDaftarModel()) }} sheet (satu per jenis data), sesuai urutan baku sistem. Proses berjalan di latar belakang.
-            </x-slot>
-
-            <x-filament::button wire:click="mulaiExport" icon="heroicon-o-arrow-down-tray">
-                Mulai Export Semua
-            </x-filament::button>
-        </x-filament::section>
-
-        <x-filament::section class="mt-6">
-            <x-slot name="heading">Import Semua Data</x-slot>
-            <x-slot name="description">
-                Upload file .xlsx (wajib hasil Export Semua di atas). Data yang berhasil tetap tersimpan meski ada baris lain yang gagal.
-            </x-slot>
-
-            {{ $this->mulaiImportAction() }}
-        </x-filament::section>
-
-        <x-filament::section class="mt-6">
-            <x-slot name="heading">Riwayat Proses (10 terakhir)</x-slot>
-
-            <x-filament::grid>
-                @forelse ($this->getRiwayatJobs() as $job)
-                    <div class="flex items-center justify-between border-b py-2">
-                        <div>
-                            <span class="font-medium">{{ ucfirst($job->tipe->value) }}</span>
-                            —
-                            <x-filament::badge :color="match($job->status->value) {
-                                'selesai' => 'success',
-                                'gagal' => 'danger',
-                                'diproses' => 'warning',
-                                default => 'gray',
-                            }">
-                                {{ ucfirst($job->status->value) }}
-                            </x-filament::badge>
-                            <span class="text-xs text-gray-500">{{ $job->created_at->diffForHumans() }}</span>
-                        </div>
-
-                        <div class="flex items-center gap-2">
-                            @if ($url = $this->unduhUrl($job))
-                                <a href="{{ $url }}" class="fi-link text-sm" target="_blank">Unduh Hasil</a>
-                            @endif
-
-                            @if ($job->laporan && $job->tipe->value === 'import')
-                                <details class="text-xs">
-                                    <summary class="cursor-pointer text-primary-600">Lihat Laporan</summary>
-                                    <div class="mt-2 space-y-1">
-                                        @foreach ($job->laporan as $key => $ringkasan)
-                                            @if (is_array($ringkasan) && isset($ringkasan['total']))
-                                                <div>
-                                                    <strong>{{ $key }}</strong>:
-                                                    {{ $ringkasan['sukses'] }} sukses,
-                                                    {{ $ringkasan['gagal'] }} gagal dari {{ $ringkasan['total'] }}
-                                                    @if (! empty($ringkasan['errors']))
-                                                        <ul class="ml-4 list-disc text-danger-600">
-                                                            @foreach ($ringkasan['errors'] as $err)
-                                                                <li>{{ $err }}</li>
-                                                            @endforeach
-                                                        </ul>
-                                                    @endif
-                                                </div>
-                                            @endif
-                                        @endforeach
-                                    </div>
-                                </details>
-                            @endif
-                        </div>
+            <div class="iem-box">
+                <div class="iem-head">
+                    <div class="iem-icon iem-icon--export">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
                     </div>
-                @empty
-                    <p class="text-sm text-gray-500">Belum ada proses.</p>
-                @endforelse
-            </x-filament::grid>
+                    <div>
+                        <h3 class="iem-title">Export Semua Data</h3>
+                        <p class="iem-desc">
+                            Menghasilkan SATU file .xlsx berisi {{ count($this->getDaftarModel()) }} sheet (satu per jenis data), sesuai urutan baku sistem. Proses berjalan di latar belakang.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="iem-action">
+                    <x-filament::button wire:click="mulaiExport" icon="heroicon-o-arrow-down-tray">
+                        Mulai Export Semua
+                    </x-filament::button>
+                </div>
+            </div>
+        </x-filament::section>
+
+        <x-filament::section>
+            <div class="iem-box">
+                <div class="iem-head">
+                    <div class="iem-icon iem-icon--import">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M7.5 7.5 12 3m0 0 4.5 4.5M12 3v13.5" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="iem-title">Import Semua Data</h3>
+                        <p class="iem-desc">
+                            Upload file .xlsx (wajib hasil Export Semua di atas). Data yang berhasil tetap tersimpan meski ada baris lain yang gagal.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="iem-action">
+                    {{ $this->mulaiImportAction() }}
+                </div>
+            </div>
+        </x-filament::section>
+
+        <x-filament::section>
+            <div class="iem-box">
+                <div class="iem-head">
+                    <div class="iem-icon iem-icon--history">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="iem-title">Riwayat Proses</h3>
+                        <p class="iem-desc">10 aktivitas terakhir, diperbarui otomatis tiap 5 detik.</p>
+                    </div>
+                </div>
+
+                <div class="iem-list">
+                    @forelse ($this->getRiwayatJobs() as $job)
+                        <div class="iem-row iem-row--{{ $job->status->value }}">
+                            <div class="iem-row-info">
+                                <span class="iem-row-tipe">{{ ucfirst($job->tipe->value) }}</span>
+
+                                <x-filament::badge :color="match($job->status->value) {
+                                    'selesai' => 'success',
+                                    'gagal' => 'danger',
+                                    'diproses' => 'warning',
+                                    default => 'gray',
+                                }">
+                                    {{ ucfirst($job->status->value) }}
+                                </x-filament::badge>
+
+                                <span class="iem-row-time">{{ $job->created_at->diffForHumans() }}</span>
+                            </div>
+
+                            <div class="iem-row-actions">
+                                @if ($url = $this->unduhUrl($job))
+                                    <a href="{{ $url }}" class="fi-link iem-link" target="_blank">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                        </svg>
+                                        Unduh Hasil
+                                    </a>
+                                @endif
+
+                                @if ($job->laporan && $job->tipe->value === 'import')
+                                    <details class="iem-report">
+                                        <summary class="iem-report-summary">Lihat Laporan</summary>
+                                        <div class="iem-report-body">
+                                            @foreach ($job->laporan as $key => $ringkasan)
+                                                @if (is_array($ringkasan) && isset($ringkasan['total']))
+                                                    <div class="iem-report-item">
+                                                        <strong>{{ $key }}</strong>:
+                                                        {{ $ringkasan['sukses'] }} sukses,
+                                                        {{ $ringkasan['gagal'] }} gagal dari {{ $ringkasan['total'] }}
+
+                                                        @if (! empty($ringkasan['errors']))
+                                                            <ul class="iem-report-errors">
+                                                                @foreach ($ringkasan['errors'] as $err)
+                                                                    <li>{{ $err }}</li>
+                                                                @endforeach
+                                                            </ul>
+                                                        @endif
+                                                    </div>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    </details>
+                                @endif
+                            </div>
+                        </div>
+                    @empty
+                        <div class="iem-empty">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3-15H8.25A2.25 2.25 0 0 0 6 4.5v15A2.25 2.25 0 0 0 8.25 21.75H15.75A2.25 2.25 0 0 0 18 19.5V9L12.75 3z" />
+                            </svg>
+                            <p>Belum ada proses.</p>
+                        </div>
+                    @endforelse
+                </div>
+            </div>
         </x-filament::section>
     </div>
 </x-filament-panels::page>

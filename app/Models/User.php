@@ -6,6 +6,7 @@ use App\Enums\JenisKelamin;
 use App\Enums\RoleUser;
 use App\Enums\StatusAkademik;
 use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasAvatar;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
@@ -17,7 +18,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasName
+class User extends Authenticatable implements AuthenticatableContract, FilamentUser, HasName, HasAvatar
 {
     use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
@@ -78,5 +79,12 @@ class User extends Authenticatable implements AuthenticatableContract, FilamentU
     public function riwayatKelas(): HasMany
     {
         return $this->hasMany(RiwayatKelasSiswa::class);
+    }
+
+        public function getFilamentAvatarUrl(): ?string
+    {
+        return $this->avatar
+            ? asset('storage/'.($this->avatar))
+            : null;
     }
 }

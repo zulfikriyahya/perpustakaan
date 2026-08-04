@@ -16,25 +16,32 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use RuntimeException;
 use Throwable;
 
 /**
- * TODO: ASUMSI (WAJIB DIKONFIRMASI, belum berubah dari sebelumnya) -
- * sheet dipetakan ke model berdasarkan POSISI/URUTAN fisik di file,
- * SAMA PERSIS dengan urutan MasterDataRegistry::items(). File yang
- * diupload WAJIB berasal dari hasil "Export Semua" TERBARU (setelah
- * perubahan kontrak sheet 'user'/'kelas_tahun_pelajaran' iterasi ini) -
- * file export lama sebelum perubahan ini TIDAK KOMPATIBEL.
+ * Sheet dipetakan ke model berdasarkan POSISI/URUTAN fisik di file, SAMA
+ * PERSIS dengan urutan MasterDataRegistry::items() - SEKARANG (iterasi
+ * ini) divalidasi eksplisit lewat validasiUrutanSheet() SEBELUM baris
+ * manapun diproses (Aturan poin 8/12 - sebelumnya hanya TODO: ASUMSI
+ * tanpa pengecekan nyata, berisiko baris ter-import diam-diam ke model
+ * yang salah kalau urutan/sheet tidak sesuai).
  *
- * Kegagalan SATU baris tidak membatalkan baris lain (partial success) -
- * setiap baris dibungkus DB::transaction sendiri.
+ * File yang diupload WAJIB berasal dari hasil "Export Semua" TERBARU
+ * (setelah perubahan kontrak sheet 'user'/'kelas_tahun_pelajaran') - file
+ * export lama sebelum perubahan itu TIDAK KOMPATIBEL dan sekarang akan
+ * GAGAL TOTAL di validasiUrutanSheet() dengan pesan jelas (bukan diproses
+ * diam-diam dengan pemetaan yang salah).
  *
- * BARU (iterasi ini): closure 'import' di registry BOLEH mengembalikan
- * array meta (mis. ['kartu_dihapus' => 1]) - dijumlahkan per key ke
- * dalam laporan['<sheet>']['meta'], dipakai untuk notifikasi kartu RFID
- * terhapus pada sheet 'user' (jalur ini tidak lewat model Import
- * Filament, jadi tidak bisa pakai pola Cache "import-{id}-..." seperti
- * UserImporter).
+ * Kegagalan SATU baris (setelah validasi struktur lolos) tidak
+ * membatalkan baris lain (partial success) - setiap baris dibungkus
+ * DB::transaction sendiri.
+ *
+ * closure 'import' di registry BOLEH mengembalikan array meta (mis.
+ * ['kartu_dihapus' => 1]) - dijumlahkan per key ke dalam
+ * laporan['<sheet>']['meta'], dipakai untuk notifikasi kartu RFID
+ * terhapus pada sheet 'user'.
  */
 class ProcessMasterImportJob implements ShouldQueue
 {
@@ -50,8 +57,17 @@ class ProcessMasterImportJob implements ShouldQueue
         $job->update(['status' => StatusBulkJob::Diproses]);
 
         try {
-            $rawSheets = Excel::toArray(new class {}, storage_path('app/' . $job->file_path));
+            $absolutePath = storage_path('app/' . $job->file_path);
             $registry = MasterDataRegistry::items();
+
+            // BARU (iterasi ini) - validasi struktur file SEBELUM baris
+            // manapun diproses. Jika nama/urutan sheet tidak cocok,
+            // seluruh job GAGAL TOTAL dengan pesan jelas - mencegah baris
+            // ter-import diam-diam ke model yang salah karena pemetaan
+            // by-index posisi.
+            $this->validasiUrutanSheet($absolutePath, $registry);
+
+            $rawSheets = Excel::toArray(new class {}, $absolutePath);
             $laporan = [];
 
             foreach ($registry as $index => $item) {
@@ -72,6 +88,36 @@ class ProcessMasterImportJob implements ShouldQueue
                 'laporan' => ['error' => $e->getMessage()],
             ]);
             $this->notifikasi($job, success: false, pesan: $e->getMessage());
+        }
+    }
+
+    /**
+     * Membandingkan nama sheet FISIK di file (dibaca langsung dari
+     * workbook, bukan ditebak dari heading kolom) terhadap urutan 'label'
+     * di MasterDataRegistry::items() - HARUS identik urutan dan nama,
+     * karena ProcessMasterImportJob memetakan sheet berikutnya by index
+     * posisi, bukan nama.
+     *
+     * TODO: verifikasi signature terhadap versi phpoffice/phpspreadsheet
+     * yang benar-benar terpasang (dependency dari maatwebsite/excel
+     * ^3.1 di composer.json, versi pasti belum diverifikasi terhadap
+     * composer.lock) - IOFactory::load()->getSheetNames() diasumsikan
+     * stabil di rilis phpspreadsheet yang umum dipakai versi ini.
+     *
+     * @throws RuntimeException jika nama/urutan sheet tidak cocok.
+     */
+    protected function validasiUrutanSheet(string $absolutePath, array $registry): void
+    {
+        $namaSheetFile = IOFactory::load($absolutePath)->getSheetNames();
+        $namaSheetDiharapkan = array_map(fn(array $item) => $item['label'], $registry);
+
+        if ($namaSheetFile !== $namaSheetDiharapkan) {
+            throw new RuntimeException(
+                'File tidak sesuai format hasil "Export Semua" terbaru - urutan atau nama sheet tidak cocok. '
+                    . 'Sheet ditemukan di file: [' . implode(', ', $namaSheetFile) . ']. '
+                    . 'Sheet yang diharapkan sistem: [' . implode(', ', $namaSheetDiharapkan) . ']. '
+                    . 'Silakan export ulang lewat "Mulai Export Semua" di halaman ini, lalu gunakan file hasilnya (tanpa diedit strukturnya) untuk Import Semua.'
+            );
         }
     }
 
@@ -126,6 +172,16 @@ class ProcessMasterImportJob implements ShouldQueue
         ];
     }
 
+    /**
+     * REFACTOR (iterasi ini): logika warna notifikasi sebelumnya
+     * mengandalkan urutan short-circuit dua baris terpisah
+     * ($success && $totalGagal === 0 ? ... ; $success || $notif->danger();)
+     * - "bekerja" tapi rapuh, gampang salah kalau di-refactor tanpa sadar
+     * urutannya penting. Diganti match() eksplisit, perilaku IDENTIK:
+     * - gagal total -> danger
+     * - sukses tapi ada baris gagal -> warning
+     * - sukses semua -> success
+     */
     protected function notifikasi(BulkDataJob $job, bool $success, ?string $pesan = null): void
     {
         $user = User::find($job->diproses_oleh);
@@ -133,7 +189,7 @@ class ProcessMasterImportJob implements ShouldQueue
             return;
         }
 
-        $totalGagal = $success ? collect($job->laporan)->sum('gagal') : null;
+        $totalGagal = $success ? (int) collect($job->laporan)->sum('gagal') : null;
         $kartuDihapus = $success ? (int) (collect($job->laporan)->pluck('meta.kartu_dihapus')->filter()->sum()) : 0;
 
         $bodyParts = [];
@@ -146,12 +202,21 @@ class ProcessMasterImportJob implements ShouldQueue
             }
         }
 
+        $warna = match (true) {
+            ! $success => 'danger',
+            $totalGagal > 0 => 'warning',
+            default => 'success',
+        };
+
         $notif = Notification::make()
             ->title($success ? 'Import Master Data selesai' : 'Import Master Data gagal')
             ->body($success ? implode(' ', $bodyParts) : $pesan);
 
-        $success && $totalGagal === 0 ? $notif->success() : $notif->warning();
-        $success || $notif->danger();
+        match ($warna) {
+            'danger' => $notif->danger(),
+            'warning' => $notif->warning(),
+            'success' => $notif->success(),
+        };
 
         $notif->sendToDatabase($user);
     }

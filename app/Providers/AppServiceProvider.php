@@ -9,6 +9,9 @@ use App\Observers\DendaObserver;
 use App\Observers\SettingObserver;
 use App\Observers\UserObserver;
 use BezhanSalleh\FilamentShield\Facades\FilamentShield;
+use Carbon\Carbon;
+use Filament\Support\Colors\Color;
+use Filament\Support\Facades\FilamentColor;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -45,5 +48,17 @@ class AppServiceProvider extends ServiceProvider
         Denda::observe(DendaObserver::class);
         User::observe(UserObserver::class);
         Setting::observe(SettingObserver::class); // invalidasi cache Setting::get()
+
+        setlocale(LC_TIME, 'id_ID.utf8');
+        Carbon::setLocale('id');
+
+        FilamentColor::register([
+            'primary' => Color::hex('#0f766e'),
+            // 'gray' => Color::hex('#1e293b'),
+            'info' => Color::hex('#6366f1'),
+            'success' => Color::hex('#10b981'),
+            'warning' => Color::hex('#f59e0b'),
+            'danger' => Color::hex('#ef4444'),
+        ]);
     }
 }

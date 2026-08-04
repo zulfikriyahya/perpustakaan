@@ -100,7 +100,7 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- kenapa setiap perubahan rfid user tidak mengupdate mesin?
+- review snapshoot dengan tugas lain, khawatir mengirimkan pesan per 15 menit.
 
 ---
 

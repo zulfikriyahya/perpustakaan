@@ -4052,6 +4052,101 @@ class ProsesKenaikanKelas extends Page
 ```
 ---
 
+## app/Filament/Pages/Sirkulasi.php
+```php
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Models\Eksemplar;
+
+/**
+ * Halaman "Sirkulasi": DUPLIKAT fungsi & fitur Transaksi Cepat, tapi TANPA
+ * sidebar dan HANYA diakses lewat tombol di topbar (kanan atas) - TIDAK
+ * didaftarkan ke navigasi sidebar (lihat shouldRegisterNavigation()).
+ *
+ * Extends TransaksiCepat, BUKAN copy-paste class PHP-nya, supaya seluruh
+ * logic bisnis (scanKartu, scanKode, muatUser, prosesEksemplar, rate
+ * limit anti-scan-ganda, fallback pencarian nama/judul, dst.) TIDAK
+ * terduplikasi (Aturan poin 3 - DRY).
+ *
+ * LAYOUT (gap iterasi ini) - 2 area:
+ *  1. Section utama: form scan (kartu/kode) - identik dengan Transaksi
+ *     Cepat, logic diwarisi. Jam analog ditampilkan di sampingnya (posisi
+ *     visual jam vs form diatur murni lewat CSS `order` di view, TIDAK
+ *     memengaruhi logic apa pun di sini).
+ *  2. Riwayat harian (total pengguna hari ini, riwayat 5 transaksi
+ *     terbaru, seluruh riwayat hari ini) - method computed-nya DIPINDAH
+ *     ke child Livewire component terpisah (App\Livewire\RiwayatSirkulasiHarian,
+ *     lihat class tsb) supaya render-nya TIDAK ikut ter-trigger ulang
+ *     setiap kali form scan berubah (wire:model.live.debounce di
+ *     kartuInput/kodeInput). Ini alasan MURNI PERFORMA (scan terasa
+ *     "stuck" sebelumnya karena query riwayat berat ikut jalan tiap
+ *     keystroke) - bukan perubahan kebijakan data.
+ *
+ * KEPUTUSAN YANG TETAP DIPEGANG (dari iterasi sebelumnya, tidak berubah):
+ *  - Sumber data riwayat: Peminjaman/Pengembalian (BUKAN Kunjungan) -
+ *    dikonfirmasi eksplisit sebelumnya.
+ *  - TIDAK ADA polling - riwayat dihitung ulang saat page load/navigate,
+ *    dan SEKARANG JUGA saat event 'transaksi-sirkulasi-berhasil'
+ *    di-dispatch dari prosesEksemplar() override di bawah (bukan
+ *    berdasarkan interval waktu).
+ *  - TIDAK ada Widget Filament riwayat kunjungan di halaman ini.
+ *  - Halaman ini TETAP TIDAK menulis ke tabel kunjungans/peminjamans di
+ *    luar jalur scan yang sudah ada.
+ *
+ * Otorisasi: reuse canAccess() yang diwarisi dari TransaksiCepat
+ * (Create:Peminjaman) - TIDAK ada permission baru. Child Livewire
+ * component riwayat TIDAK punya otorisasi sendiri karena hanya dirender
+ * di dalam halaman ini yang sudah digerbang canAccess() - TODO: GAP-SPEC,
+ * belum diverifikasi eksplisit bahwa component tsb tidak bisa diakses
+ * langsung lewat mekanisme lain di luar halaman ini (biasanya aman by
+ * default untuk child component non-full-page Livewire).
+ *
+ * TODO: verifikasi signature terhadap versi package yang terpasang -
+ * Livewire\Attributes\Computed/On dipakai sama seperti sebelumnya, cek
+ * ulang terhadap composer.lock jika belum diverifikasi sebelumnya.
+ */
+class Sirkulasi extends TransaksiCepat
+{
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-group';
+
+    protected static ?string $navigationLabel = 'Sirkulasi';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
+
+    protected string $view = 'filament.pages.sirkulasi';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Override RINGAN dari TransaksiCepat::prosesEksemplar() - HANYA
+     * menambahkan dispatch event ke RiwayatSirkulasiHarian (child
+     * component) setelah proses pinjam/kembali diproses, supaya section
+     * riwayat ikut refresh TANPA polling dan TANPA numpang di siklus
+     * render form scan untuk kasus normal (mengetik/scan yang masih
+     * mencari kandidat tidak memicu apa pun di sini - hanya dipanggil
+     * SETELAH eksemplar benar-benar diproses).
+     *
+     * TIDAK menduplikasi logic pinjam/kembali - tetap panggil parent
+     * (Aturan poin 3, DRY). Dispatch dilakukan baik hasil sukses maupun
+     * gagal/ditolak (rate limit) supaya counter riwayat tetap konsisten
+     * dengan kondisi terbaru database, bukan berdasarkan asumsi sukses.
+     */
+    protected function prosesEksemplar(Eksemplar $eksemplar): void
+    {
+        parent::prosesEksemplar($eksemplar);
+
+        $this->dispatch('transaksi-sirkulasi-berhasil');
+    }
+}
+
+```
+---
+
 ## app/Filament/Pages/TransaksiCepat.php
 ```php
 <?php
@@ -4154,6 +4249,45 @@ class TransaksiCepat extends Page
     protected static string|\UnitEnum|null $navigationGroup = 'Operasional';
 
     protected string $view = 'filament.pages.transaksi-cepat';
+
+    /**
+     * GAP iterasi ini - "Transaksi Cepat" digantikan Sirkulasi secara
+     * penuh sebagai satu-satunya pintu akses operator (dok permintaan
+     * user). Class ini TETAP ADA dan TETAP extends Page - dijadikan
+     * dasar logic bagi Sirkulasi (Aturan poin 3, DRY: scanKartu,
+     * scanKode, prosesEksemplar, dst. TIDAK diduplikasi) - hanya
+     * statusnya sebagai halaman yang bisa dikunjungi SENDIRI yang
+     * dicabut, bukan logic-nya.
+     *
+     * Disembunyikan dari navigasi (konsisten dengan Sirkulasi yang juga
+     * shouldRegisterNavigation() => false) - satu-satunya jalan masuk
+     * resmi tetap tombol topbar Sirkulasi (sirkulasi-topbar-button.blade.php).
+     */
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
+    /**
+     * URL lama '/dashboard/transaksi-cepat' (bookmark/link lama operator)
+     * di-redirect ke Sirkulasi. PENTING: guard `static::class !==
+     * self::class` WAJIB ada - method ini terwarisi ke Sirkulasi (child
+     * class) karena Sirkulasi TIDAK override mount(). Tanpa guard ini,
+     * saat Sirkulasi dimuat, ia ikut menjalankan mount() versi ini dan
+     * redirect ke dirinya sendiri lewat Sirkulasi::getUrl() -> infinite
+     * redirect loop (bug yang sempat terjadi). `self::class` di sini
+     * SENGAJA merujuk TransaksiCepat (bukan static/late binding), supaya
+     * hanya request langsung ke TransaksiCepat yang kena redirect,
+     * request ke Sirkulasi lewat tanpa efek apa pun.
+     */
+    public function mount(): void
+    {
+        if (static::class !== self::class) {
+            return;
+        }
+
+        $this->redirect(Sirkulasi::getUrl());
+    }
 
     /**
      * Window rate limit anti-scan-ganda (detik). Lihat catatan class di atas.
@@ -4849,6 +4983,7 @@ class ListBukus extends ListRecords
 
 namespace App\Filament\Resources;
 
+use App\Enums\JenisFileBuku;
 use App\Enums\StatusEksemplar;
 use App\Enums\StatusPeminjaman;
 use App\Filament\Exports\BukuExporter;
@@ -4866,6 +5001,7 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ImportAction;
 use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -4880,8 +5016,6 @@ use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
-use App\Enums\JenisFileBuku;
-use Filament\Forms\Components\Repeater;
 
 /**
  * TODO: ASUMSI - dipakai Section (bukan Wizard) untuk mengompakkan form,
@@ -4931,7 +5065,7 @@ class BukuResource extends Resource
                         ]),
                     TextInput::make('isbn')
                         ->label('ISBN')
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
                         ->helperText('1 ISBN = 1 judul. Jumlah eksemplar fisik dikelola di tab Eksemplar setelah buku disimpan.')
                         ->validationMessages([
@@ -5017,7 +5151,7 @@ class BukuResource extends Resource
                         ]),
                     Select::make('rak_id_eksemplar_awal')
                         ->label('Rak untuk Eksemplar Awal')
-                        ->options(fn() => Rak::query()->pluck('nama', 'id'))
+                        ->options(fn () => Rak::query()->pluck('nama', 'id'))
                         ->searchable()
                         ->helperText('Rak yang sama dipakaikan ke semua eksemplar awal yang dibuat.')
                         ->dehydrated(false),
@@ -5031,7 +5165,7 @@ class BukuResource extends Resource
                         ->schema([
                             Select::make('jenis')
                                 ->options(collect(JenisFileBuku::cases())->mapWithKeys(
-                                    fn($c) => [$c->value => $c->label()]
+                                    fn ($c) => [$c->value => $c->label()]
                                 ))
                                 ->required(),
                             TextInput::make('nama_file')
@@ -5044,7 +5178,7 @@ class BukuResource extends Resource
                                 ->acceptedFileTypes(['application/pdf', 'application/epub+zip', 'audio/mpeg', 'audio/wav'])
                                 ->required()
                                 ->storeFileNamesIn('nama_file_asli')
-                                ->dehydrateStateUsing(fn($state) => $state), // TODO: verifikasi signature FileUpload disk custom terhadap Filament ^5.7
+                                ->dehydrateStateUsing(fn ($state) => $state), // TODO: verifikasi signature FileUpload disk custom terhadap Filament ^5.7
                             TextInput::make('urutan')
                                 ->numeric()
                                 ->default(0)
@@ -5061,19 +5195,19 @@ class BukuResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn(Builder $query) => $query->withCount([
-                'eksemplars as jumlah_eksemplar_aktif' => fn($q) => $q->where('status', '!=', StatusEksemplar::Hilang),
-                'eksemplars as jumlah_stok_tersedia' => fn($q) => $q->where('status', StatusEksemplar::Tersedia),
-                'eksemplars as jumlah_eksemplar_rusak' => fn($q) => $q->where('status', StatusEksemplar::Rusak),
-                'eksemplars as jumlah_eksemplar_hilang' => fn($q) => $q->where('status', StatusEksemplar::Hilang),
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount([
+                'eksemplars as jumlah_eksemplar_aktif' => fn ($q) => $q->where('status', '!=', StatusEksemplar::Hilang),
+                'eksemplars as jumlah_stok_tersedia' => fn ($q) => $q->where('status', StatusEksemplar::Tersedia),
+                'eksemplars as jumlah_eksemplar_rusak' => fn ($q) => $q->where('status', StatusEksemplar::Rusak),
+                'eksemplars as jumlah_eksemplar_hilang' => fn ($q) => $q->where('status', StatusEksemplar::Hilang),
             ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(BukuImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', Buku::class) ?? false),
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -5090,22 +5224,22 @@ class BukuResource extends Resource
                     ->toggleable(),
                 TextColumn::make('jumlah_eksemplar_aktif')
                     ->label('Jumlah Buku')
-                    ->description(fn(Buku $record) => $record->jumlah_eksemplar_hilang > 0
+                    ->description(fn (Buku $record) => $record->jumlah_eksemplar_hilang > 0
                         ? "{$record->jumlah_eksemplar_hilang} hilang (tidak dihitung)"
                         : null)
                     ->badge()
-                    ->color(fn(Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
+                    ->color(fn (Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
                     ->sortable(),
                 TextColumn::make('jumlah_stok_tersedia')
                     ->label('Stok Tersedia')
                     ->badge()
-                    ->color(fn(Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
+                    ->color(fn (Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
                     ->sortable(),
                 TextColumn::make('eksemplar_bermasalah')
                     ->label('Rusak/Hilang')
-                    ->state(fn(Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
+                    ->state(fn (Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
                     ->badge()
-                    ->color(fn(Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
+                    ->color(fn (Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
@@ -5123,7 +5257,7 @@ class BukuResource extends Resource
                         $adaPeminjamanBerjalan = Eksemplar::query()
                             ->withTrashed()
                             ->where('buku_id', $record->id)
-                            ->whereHas('peminjamans', fn($q) => $q->whereIn('status', [
+                            ->whereHas('peminjamans', fn ($q) => $q->whereIn('status', [
                                 StatusPeminjaman::Aktif,
                                 StatusPeminjaman::Terlambat,
                             ]))
@@ -5153,7 +5287,7 @@ class BukuResource extends Resource
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label Eksemplar')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
                     ->action(function (Collection $records) {
                         $eksemplarIds = Eksemplar::query()
                             ->whereIn('buku_id', $records->pluck('id'))
@@ -12087,7 +12221,7 @@ class BukuPublikController extends Controller
     public function index()
     {
         $ebooks = Buku::query()
-            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
                 JenisFileBuku::Pdf->value,
                 JenisFileBuku::Epub->value,
             ]))
@@ -12095,7 +12229,7 @@ class BukuPublikController extends Controller
             ->paginate(12, ['*'], 'ebook_page');
 
         $audiobooks = Buku::query()
-            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
                 JenisFileBuku::AudioMp3->value,
                 JenisFileBuku::AudioWav->value,
             ]))
@@ -12373,7 +12507,7 @@ class SitemapController extends Controller
         $authorUrls = Author::query()
             ->select('id', 'updated_at')
             ->get()
-            ->map(fn(Author $author) => [
+            ->map(fn (Author $author) => [
                 'loc' => route('authors.show', $author),
                 'priority' => '0.6',
                 'lastmod' => $author->updated_at?->toAtomString(),
@@ -13006,6 +13140,122 @@ class ProcessMasterImportJob implements ShouldQueue
 ```
 ---
 
+## app/Livewire/RiwayatSirkulasiHarian.php
+```php
+<?php
+
+namespace App\Livewire;
+
+use App\Models\Peminjaman;
+use App\Models\Pengembalian;
+use Illuminate\Support\Collection;
+use Livewire\Attributes\Computed;
+use Livewire\Component;
+
+/**
+ * Child Livewire component TERPISAH dari Sirkulasi (Page) - dipisah dari
+ * Filament Page murni untuk alasan PERFORMA, bukan business decision baru:
+ * sebelumnya riwayatTransaksiHariIni()/riwayatLengkapHariIni() adalah
+ * computed property di Sirkulasi.php, ikut ter-render ULANG setiap kali
+ * form scan (kartuInput/kodeInput) berubah (wire:model.live.debounce),
+ * karena satu Livewire component = satu siklus render. Ini yang membuat
+ * scan terasa "stuck" dibanding Transaksi Cepat.
+ *
+ * Dengan dipisah jadi child component sendiri, render section 1 & 3 TIDAK
+ * lagi terikat ke siklus render form scan Sirkulasi (Page) - tetap
+ * dihitung SEKALI per page load/navigate (BUKAN polling, keputusan awal
+ * tetap dipegang), hanya sumber render-nya yang dipisah.
+ *
+ * BUKAN Filament Widget (tidak extends TableWidget/dsb) - murni Livewire
+ * Component biasa yang di-mount manual dari sirkulasi.blade.php lewat
+ * <livewire:riwayat-sirkulasi-harian /> - konsisten dengan keputusan awal
+ * "tidak ada widget riwayat kunjungan di halaman ini" (itu soal WIDGET
+ * FILAMENT/kunjungan, beda konteks dengan pemisahan render performa ini).
+ */
+class RiwayatSirkulasiHarian extends Component
+{
+    protected const LIMIT_RIWAYAT_TERBARU = 5;
+
+    #[Computed]
+    public function totalPenggunaHariIni(): int
+    {
+        $userIdDariPinjam = Peminjaman::query()
+            ->whereDate('tanggal_pinjam', today())
+            ->pluck('user_id');
+
+        $userIdDariKembali = Pengembalian::query()
+            ->whereDate('tanggal_kembali', today())
+            ->join('peminjamans', 'pengembalians.peminjaman_id', '=', 'peminjamans.id')
+            ->pluck('peminjamans.user_id');
+
+        return $userIdDariPinjam->merge($userIdDariKembali)->unique()->count();
+    }
+
+    #[Computed]
+    public function riwayatTransaksiHariIni(): Collection
+    {
+        return $this->bangunRiwayatHarian(self::LIMIT_RIWAYAT_TERBARU);
+    }
+
+    #[Computed]
+    public function riwayatLengkapHariIni(): Collection
+    {
+        return $this->bangunRiwayatHarian(null);
+    }
+
+    protected function bangunRiwayatHarian(?int $limit): Collection
+    {
+        $pinjam = Peminjaman::query()
+            ->whereDate('tanggal_pinjam', today())
+            ->with(['user', 'eksemplar.buku', 'diprosesOleh'])
+            ->get()
+            ->map(fn(Peminjaman $p) => [
+                'waktu' => $p->created_at,
+                'aksi' => 'dipinjamkan',
+                'nama_user' => $p->user?->nama ?? '-',
+                'judul_buku' => $p->eksemplar?->buku?->judul ?? '-',
+                'diproses_oleh' => $p->diprosesOleh?->nama ?? '-',
+            ]);
+
+        $kembali = Pengembalian::query()
+            ->whereDate('tanggal_kembali', today())
+            ->with(['peminjaman.user', 'peminjaman.eksemplar.buku', 'diprosesOleh'])
+            ->get()
+            ->map(fn(Pengembalian $pg) => [
+                'waktu' => $pg->created_at,
+                'aksi' => 'dikembalikan',
+                'nama_user' => $pg->peminjaman?->user?->nama ?? '-',
+                'judul_buku' => $pg->peminjaman?->eksemplar?->buku?->judul ?? '-',
+                'diproses_oleh' => $pg->diprosesOleh?->nama ?? '-',
+            ]);
+
+        $gabungan = $pinjam->merge($kembali)->sortByDesc('waktu')->values();
+
+        return $limit ? $gabungan->take($limit) : $gabungan;
+    }
+
+    /**
+     * Dipanggil dari Sirkulasi (Page) lewat $dispatch setiap kali
+     * prosesEksemplar() berhasil (pinjam/kembali) - supaya section 1 & 3
+     * ikut ter-update tanpa perlu polling, TAPI tanpa numpang di siklus
+     * render form scan untuk kasus normal (mengetik/scan yang gagal/masih
+     * mencari tidak memicu query berat ini).
+     */
+    #[\Livewire\Attributes\On('transaksi-sirkulasi-berhasil')]
+    public function refreshRiwayat(): void
+    {
+        unset($this->totalPenggunaHariIni, $this->riwayatTransaksiHariIni, $this->riwayatLengkapHariIni);
+    }
+
+    public function render()
+    {
+        return view('livewire.riwayat-sirkulasi-harian');
+    }
+}
+
+```
+---
+
 ## app/Models/Author.php
 ```php
 <?php
@@ -13088,7 +13338,7 @@ class BukuFile extends Model
      */
     public function url(): string
     {
-        return '/storage/' . $this->path;
+        return '/storage/'.$this->path;
     }
 }
 
@@ -13134,7 +13384,6 @@ class BukuKategori extends Model
 
 namespace App\Models;
 
-use App\Enums\JenisKelamin;
 use App\Enums\StatusEksemplar;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14863,14 +15112,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Author;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class AuthorPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Author');
@@ -14930,8 +15179,8 @@ class AuthorPolicy
     {
         return $authUser->can('Reorder:Author');
     }
-
 }
+
 ```
 ---
 
@@ -14943,14 +15192,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -15010,8 +15259,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-
 }
+
 ```
 ---
 
@@ -15023,14 +15272,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -15090,8 +15339,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-
 }
+
 ```
 ---
 
@@ -15191,14 +15440,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\FirmwareRelease;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class FirmwareReleasePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:FirmwareRelease');
@@ -15258,8 +15507,8 @@ class FirmwareReleasePolicy
     {
         return $authUser->can('Reorder:FirmwareRelease');
     }
-
 }
+
 ```
 ---
 
@@ -15271,14 +15520,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -15338,8 +15587,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-
 }
+
 ```
 ---
 
@@ -15351,14 +15600,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -15418,8 +15667,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-
 }
+
 ```
 ---
 
@@ -15431,14 +15680,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -15498,8 +15747,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-
 }
+
 ```
 ---
 
@@ -15511,14 +15760,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -15578,8 +15827,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -15591,14 +15840,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -15658,8 +15907,8 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-
 }
+
 ```
 ---
 
@@ -15671,14 +15920,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadgeLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgeLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadgeLog');
@@ -15738,8 +15987,8 @@ class LevelBadgeLogPolicy
     {
         return $authUser->can('Reorder:LevelBadgeLog');
     }
-
 }
+
 ```
 ---
 
@@ -15751,14 +16000,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -15818,8 +16067,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-
 }
+
 ```
 ---
 
@@ -15831,14 +16080,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -15898,8 +16147,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-
 }
+
 ```
 ---
 
@@ -15911,14 +16160,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -15978,8 +16227,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-
 }
+
 ```
 ---
 
@@ -15991,14 +16240,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -16058,8 +16307,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-
 }
+
 ```
 ---
 
@@ -16071,14 +16320,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -16138,8 +16387,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-
 }
+
 ```
 ---
 
@@ -16151,14 +16400,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -16218,8 +16467,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-
 }
+
 ```
 ---
 
@@ -16231,14 +16480,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -16298,8 +16547,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-
 }
+
 ```
 ---
 
@@ -16311,14 +16560,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -16378,8 +16627,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-
 }
+
 ```
 ---
 
@@ -16391,14 +16640,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -16458,8 +16707,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-
 }
+
 ```
 ---
 
@@ -16471,14 +16720,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
-use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -16538,8 +16787,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-
 }
+
 ```
 ---
 
@@ -16551,14 +16800,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -16618,8 +16867,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -16631,14 +16880,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -16698,8 +16947,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-
 }
+
 ```
 ---
 
@@ -16709,13 +16958,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -16775,8 +17024,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-
 }
+
 ```
 ---
 
@@ -16883,8 +17132,7 @@ class DashboardPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->topNavigation()
-            // ->profile()
+            ->sidebarWidth('250px')
             ->unsavedChangesAlerts()
             ->favicon(asset('images/favicon.ico'))
             ->simplePageMaxContentWidth(Width::Medium)
@@ -16895,15 +17143,6 @@ class DashboardPanelProvider extends PanelProvider
             ->id('dashboard')
             ->path('dashboard')
             ->login(Login::class)
-            /**
-             * Logo dark/light. brandLogo() menerima Htmlable, dua <img>
-             * dikirim sekaligus; mana yang tampil diatur via CSS
-             * global (renderHook HEAD_END di bawah).
-             * TODO: verifikasi signature terhadap versi package yang
-             * terpasang - brandLogo() menerima string|Htmlable|Closure
-             * di dokumentasi umum Filament v3+; belum diverifikasi
-             * terhadap filament/filament ^5.7 di composer.lock proyek ini.
-             */
             ->brandLogo(new HtmlString(
                 '<img src="'.asset('images/brand-lightmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />'.
                     '<img src="'.asset('images/brand-darkmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
@@ -16918,26 +17157,6 @@ class DashboardPanelProvider extends PanelProvider
                 fn (): string => view('filament.partials.global-logo-style')->render()
                     .view('filament.partials.global-footer-style')->render(),
             )
-            /**
-             * FITUR BARU - footer di BAWAH body, HANYA untuk halaman
-             * NON-auth (mis. Dashboard). Untuk halaman auth (Login,
-             * RequestPasswordReset, ResetPassword), footer disisipkan
-             * manual di ATAS frame form oleh masing-masing halaman
-             * (lihat Login::content() dan view Blade auth terkait) -
-             * DIHINDARI dobel dengan pengecekan routeIs() disini.
-             *
-             * TODO: GAP-SPEC - deteksi "halaman auth" via
-             * request()->routeIs('filament.dashboard.auth.*') diverifikasi
-             * BENAR terhadap route yang sudah dipakai di proyek ini
-             * (ResetPassword::prosesReset() memanggil
-             * route('filament.dashboard.auth.login'), RequestPasswordReset
-             * memakai 'filament.dashboard.auth.password-reset.request'/
-             * '.reset') - pola wildcard 'filament.dashboard.auth.*' AMAN
-             * mencakup ketiganya. Tetap WAJIB dicek visual (poin 12) jika
-             * suatu saat ada halaman auth baru dengan nama route berbeda
-             * (mis. registrasi, email verification) - footer bisa dobel
-             * atau tidak muncul jika pola route-nya tidak tercakup.
-             */
             ->renderHook(
                 PanelsRenderHook::BODY_END,
                 fn (): string => request()->routeIs('filament.dashboard.auth.*')
@@ -16948,6 +17167,28 @@ class DashboardPanelProvider extends PanelProvider
                 PanelsRenderHook::BODY_END,
                 fn (): string => view('filament.partials.chart-export-script')->render(),
             )
+            /**
+             * BARU - tombol akses halaman Sirkulasi di topbar (kanan
+             * atas, bersebelahan icon database notification, sesuai gap
+             * iterasi ini). Disembunyikan otomatis untuk halaman auth
+             * (belum login, topbar tidak relevan) memakai pola
+             * routeIs() yang sama seperti footer di atas.
+             *
+             * TODO: verifikasi signature terhadap versi package yang
+             * terpasang - enum case PanelsRenderHook::TOPBAR_END
+             * diasumsikan tersedia dan posisinya berdekatan dengan
+             * notifikasi database di filament/filament ^5.7 (composer.lock
+             * proyek ini); WAJIB dicek visual (poin 12) - kalau posisi
+             * ternyata tidak bersebelahan icon notification, ganti ke
+             * render hook lain yang tersedia (mis. USER_MENU_BEFORE) atau
+             * sesuaikan CSS margin di partial terkait.
+             */
+            ->renderHook(
+                PanelsRenderHook::TOPBAR_END,
+                fn (): string => request()->routeIs('filament.dashboard.auth.*')
+                    ? ''
+                    : view('filament.partials.sirkulasi-topbar-button')->render(),
+            )
             ->passwordReset(
                 RequestPasswordReset::class,
                 ResetPassword::class,
@@ -16955,12 +17196,6 @@ class DashboardPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Cyan,
             ])
-            // Pakai Lexend yang sudah di-bundle lokal via @fontsource/lexend
-            // (resources/css/app.css), bukan fetch dari Google Fonts CDN.
-            // TODO: verifikasi signature terhadap versi package yang
-            // terpasang - argumen kedua diasumsikan menonaktifkan provider
-            // Google Fonts bawaan Filament v5.7; cek ulang jika behaviour
-            // berbeda (mis. tetap muncul request ke fonts.googleapis.com).
             ->font('Lexend', provider: null)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
@@ -19618,7 +19853,6 @@ Route::post('/dashboard/chart-export/pdf', [ChartExportController::class, 'pdf']
 Route::get('/unduh-bulk-data/{bulkDataJob}', BulkDataJobDownloadController::class)
     ->middleware(['auth'])
     ->name('bulk-data-job.download');
-
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
 
@@ -26987,6 +27221,638 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 ```
 ---
 
+## resources/views/filament/pages/sirkulasi.blade.php
+```blade
+<x-filament-panels::page>
+    <style>
+        .fi-sidebar {
+            display: none !important;
+        }
+
+        .fi-main-ctn {
+            margin-inline-start: 0 !important;
+        }
+
+        .fi-topbar .fi-sidebar-open-btn {
+            display: none !important;
+        }
+
+        .sirkulasi-section {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
+            padding: 1.25rem;
+        }
+
+        html.dark .sirkulasi-section {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                0 20px 50px -12px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(6px);
+        }
+
+        .transaksi-cepat-card {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        html.dark .transaksi-cepat-card {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                0 20px 50px -12px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(6px);
+        }
+
+        .transaksi-cepat-avatar-wrap {
+            position: relative;
+            width: 88px;
+            height: 88px;
+            margin-bottom: 0.75rem;
+        }
+
+        .transaksi-cepat-ring {
+            position: absolute;
+            inset: 0;
+            transform: rotate(-90deg);
+            pointer-events: none;
+        }
+
+        .transaksi-cepat-ring circle {
+            fill: none;
+            stroke-width: 3;
+            transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
+        }
+
+        .jam-analog-svg circle.dial {
+            fill: none;
+            stroke-width: 3;
+        }
+
+        .jam-analog-svg line {
+            stroke-linecap: round;
+        }
+
+        /* BARU: kolom ditukar (1fr utama, 320px jam) - SEBELUMNYA tetap
+           "320px 1fr" walau urutan visual sudah ditukar lewat `order`,
+           akibatnya section utama (order: 1, masuk track pertama) malah
+           kepencet ke 320px dan jam (order: 2) melebar 1fr - kebalik dari
+           yang dimaksud. Ukuran track sekarang ikut ditukar supaya
+           section utama benar-benar lebar (1fr) dan jam tetap ringkas
+           (320px), konsisten dengan posisi visualnya. */
+        .sirkulasi-grid {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 1.25rem;
+            align-items: stretch;
+        }
+
+        @media (max-width: 900px) {
+            .sirkulasi-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .sirkulasi-grid > .jam-analog-wrapper {
+            order: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sirkulasi-grid > .transaksi-cepat-card {
+            order: 1;
+        }
+
+        @media (max-width: 900px) {
+            .sirkulasi-grid > .jam-analog-wrapper,
+            .sirkulasi-grid > .transaksi-cepat-card {
+                order: initial;
+            }
+        }
+
+        /* Wrapper - min-height percobaan sebelumnya DIHAPUS (nilainya
+           tidak akurat, menyebabkan footer terdorong ke luar layar).
+           Footer sekarang fixed ke viewport (lihat app-footer--fixed-
+           sirkulasi), jadi wrapper cukup diberi padding-bottom supaya
+           konten paling bawah tidak tertutup footer fixed tersebut. */
+        .sirkulasi-page-wrapper {
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 3.5rem;
+        }
+
+        .sirkulasi-page-content {
+            flex: 1 0 auto;
+        }
+
+        /* BARU: jam analog dibuat lebih "berkelas" - dial kaca dengan
+           gradient halus, index jam+menit bertingkat, jarum meruncing
+           dengan drop-shadow tipis, cap tengah metalik. Murni visual,
+           TIDAK mengubah binding Alpine (derajatJam/Menit/Detik tetap
+           sama). */
+        .jam-analog-wrapper {
+            position: relative;
+        }
+
+        .jam-analog-svg {
+            filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.12));
+        }
+
+        html.dark .jam-analog-svg {
+            filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.5));
+        }
+
+        .jam-analog-svg .dial-bg {
+            fill: url(#jamGradientLight);
+        }
+
+        html.dark .jam-analog-svg .dial-bg {
+            fill: url(#jamGradientDark);
+        }
+
+        .jam-analog-svg .dial-ring {
+            fill: none;
+            stroke: var(--gray-300);
+            stroke-width: 1.5;
+        }
+
+        html.dark .jam-analog-svg .dial-ring {
+            stroke: rgba(255, 255, 255, 0.18);
+        }
+
+        .jam-analog-svg .tick-jam {
+            stroke: var(--gray-500);
+            stroke-width: 2.5;
+            stroke-linecap: round;
+        }
+
+        .jam-analog-svg .tick-menit {
+            stroke: var(--gray-300);
+            stroke-width: 1;
+            stroke-linecap: round;
+        }
+
+        html.dark .jam-analog-svg .tick-menit {
+            stroke: rgba(255, 255, 255, 0.12);
+        }
+
+        .jam-analog-svg .tangan-jam {
+            stroke: var(--gray-950);
+            stroke-width: 5;
+            stroke-linecap: round;
+        }
+
+        html.dark .jam-analog-svg .tangan-jam {
+            stroke: #fff;
+        }
+
+        .jam-analog-svg .tangan-menit {
+            stroke: var(--gray-700);
+            stroke-width: 3.5;
+            stroke-linecap: round;
+        }
+
+        html.dark .jam-analog-svg .tangan-menit {
+            stroke: rgba(255, 255, 255, 0.75);
+        }
+
+        .jam-analog-svg .tangan-detik {
+            stroke: var(--primary-500);
+            stroke-width: 1.5;
+            stroke-linecap: round;
+        }
+
+        .jam-analog-svg .cap-tengah-luar {
+            fill: var(--primary-500);
+            opacity: 0.18;
+        }
+
+        .jam-analog-svg .cap-tengah-dalam {
+            fill: var(--primary-500);
+        }
+    </style>
+
+    {{-- Alpine idle-timer + jam analog (diwarisi identik dari Transaksi
+         Cepat, Aturan poin 3 - DRY di level JS/Blade). --}}
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('transaksiCepatIdleTimer', () => ({
+                idleTimeoutMs: 10000,
+                tickMs: 100,
+                msLeft: 10000,
+                timerId: null,
+                listenersAttached: false,
+
+                init() {
+                    this.resetTimer();
+
+                    if (! this.listenersAttached) {
+                        const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
+                        this._onActivity = () => this.resetTimer();
+                        activityEvents.forEach(evt => document.addEventListener(evt, this._onActivity));
+
+                        document.addEventListener('livewire:navigating', () => {
+                            this.stopTimer();
+                            activityEvents.forEach(evt => document.removeEventListener(evt, this._onActivity));
+                        }, { once: true });
+
+                        this.listenersAttached = true;
+                    }
+                },
+
+                resetTimer() {
+                    this.msLeft = this.idleTimeoutMs;
+                    if (this.timerId) clearInterval(this.timerId);
+                    this.timerId = setInterval(() => {
+                        this.msLeft -= this.tickMs;
+                        if (this.msLeft <= 0) {
+                            this.stopTimer();
+                            this.msLeft = this.idleTimeoutMs;
+                            this.$wire.selesai();
+                        }
+                    }, this.tickMs);
+                },
+
+                stopTimer() {
+                    if (this.timerId) {
+                        clearInterval(this.timerId);
+                        this.timerId = null;
+                    }
+                },
+
+                get progress() {
+                    return Math.max(0, Math.min(1, this.msLeft / this.idleTimeoutMs));
+                },
+
+                get secondsLeft() {
+                    return Math.ceil(Math.max(0, this.msLeft) / 1000);
+                },
+
+                get ringDashoffset() {
+                    const circumference = 263.89;
+                    return circumference * (1 - this.progress);
+                },
+
+                get ringColor() {
+                    if (this.progress > 0.4) return '#22c55e';
+                    if (this.progress > 0.2) return '#eab308';
+                    return '#ef4444';
+                },
+            }));
+
+            Alpine.data('jamSirkulasi', () => ({
+                now: new Date(),
+                timerId: null,
+
+                init() {
+                    this.timerId = setInterval(() => { this.now = new Date(); }, 1000);
+                    document.addEventListener('livewire:navigating', () => {
+                        if (this.timerId) clearInterval(this.timerId);
+                    }, { once: true });
+                },
+
+                get jamDigital() {
+                    return this.now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                },
+
+                get tanggalHariIni() {
+                    return this.now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                },
+
+                get derajatJam() {
+                    return (this.now.getHours() % 12) * 30 + (this.now.getMinutes() * 0.5);
+                },
+
+                get derajatMenit() {
+                    return this.now.getMinutes() * 6 + (this.now.getSeconds() * 0.1);
+                },
+
+                get derajatDetik() {
+                    return this.now.getSeconds() * 6;
+                },
+            }));
+
+            /**
+             * BARU (gap: autofokus permanen tanpa distraksi) - setiap kali
+             * Livewire selesai me-morph DOM (mis. setelah pilihUser(),
+             * pilihBuku(), selesai(), atau update apapun dari scanKartu/
+             * scanKode), input scan yang SEDANG tampil (ditandai atribut
+             * data-sirkulasi-scan-input, hanya satu yang visible di satu
+             * waktu karena @@if/@@else pada $user) di-refocus otomatis jika
+             * belum jadi activeElement. Juga dipasang pada event 'click'
+             * global (mis. setelah klik salah satu hasil dropdown, yang
+             * secara alami memindahkan fokus ke button tsb) supaya
+             * operator TIDAK PERNAH perlu klik manual ke input untuk siap
+             * scan lagi. Delay kecil dipakai supaya tidak mendahului
+             * proses klik/morph yang sedang berjalan.
+             */
+            Alpine.data('sirkulasiAutoFocus', () => ({
+                init() {
+                    const refocus = () => {
+                        const el = document.querySelector('[data-sirkulasi-scan-input]');
+                        if (el && document.activeElement !== el) {
+                            el.focus();
+                        }
+                    };
+
+                    this._refocus = refocus;
+                    document.addEventListener('livewire:morphed', refocus);
+                    document.addEventListener('click', () => setTimeout(refocus, 60));
+                    setTimeout(refocus, 150);
+
+                    document.addEventListener('livewire:navigating', () => {
+                        document.removeEventListener('livewire:morphed', this._refocus);
+                    }, { once: true });
+                },
+            }));
+        });
+    </script>
+
+    <div class="sirkulasi-page-wrapper" x-data="sirkulasiAutoFocus">
+        <div class="sirkulasi-page-content" style="display: flex; flex-direction: column; gap: 1.25rem; padding: 1.25rem 1rem;">
+
+            <div class="sirkulasi-grid">
+                <div class="sirkulasi-section jam-analog-wrapper" x-data="jamSirkulasi">
+                    <svg class="jam-analog-svg" viewBox="0 0 200 200" width="200" height="200">
+                        <defs>
+                            <radialGradient id="jamGradientLight" cx="50%" cy="42%" r="75%">
+                                <stop offset="0%" stop-color="#ffffff" />
+                                <stop offset="100%" stop-color="#f1f5f9" />
+                            </radialGradient>
+                            <radialGradient id="jamGradientDark" cx="50%" cy="42%" r="75%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.09)" />
+                                <stop offset="100%" stop-color="rgba(255,255,255,0.02)" />
+                            </radialGradient>
+                        </defs>
+
+                        <circle class="dial-bg" cx="100" cy="100" r="94" />
+                        <circle class="dial-ring" cx="100" cy="100" r="94" />
+                        <circle class="dial-ring" cx="100" cy="100" r="86" opacity="0.5" />
+
+                        {{-- Index menit (60, tipis) - statis, dirender server-side. --}}
+                        @for ($i = 0; $i < 60; $i++)
+                            @continue($i % 5 === 0)
+                            @php $sudut = $i * 6 * M_PI / 180; @endphp
+                            <line class="tick-menit"
+                                x1="{{ 100 + 88 * sin($sudut) }}" y1="{{ 100 - 88 * cos($sudut) }}"
+                                x2="{{ 100 + 92 * sin($sudut) }}" y2="{{ 100 - 92 * cos($sudut) }}" />
+                        @endfor
+
+                        {{-- Index jam (12, tebal) - statis, dirender server-side (FIX: sebelumnya
+                             x-for di dalam <svg> menyebabkan Alpine crash karena <template>
+                             kehilangan properti .content di dalam SVG foreign-content). --}}
+                        @for ($i = 1; $i <= 12; $i++)
+                            @php $sudut = $i * 30 * M_PI / 180; @endphp
+                            <line class="tick-jam"
+                                x1="{{ 100 + 80 * sin($sudut) }}" y1="{{ 100 - 80 * cos($sudut) }}"
+                                x2="{{ 100 + 92 * sin($sudut) }}" y2="{{ 100 - 92 * cos($sudut) }}" />
+                        @endfor
+
+                        <line class="tangan-jam" x1="100" y1="100" :x2="100 + 48 * Math.sin(derajatJam * Math.PI / 180)" :y2="100 - 48 * Math.cos(derajatJam * Math.PI / 180)"></line>
+                        <line class="tangan-menit" x1="100" y1="100" :x2="100 + 68 * Math.sin(derajatMenit * Math.PI / 180)" :y2="100 - 68 * Math.cos(derajatMenit * Math.PI / 180)"></line>
+                        <line class="tangan-detik" x1="100" y1="100" :x2="100 + 78 * Math.sin(derajatDetik * Math.PI / 180)" :y2="100 - 78 * Math.cos(derajatDetik * Math.PI / 180)"></line>
+
+                        <circle class="cap-tengah-luar" cx="100" cy="100" r="7" />
+                        <circle class="cap-tengah-dalam" cx="100" cy="100" r="3.5" />
+                    </svg>
+                    <p class="text-gray-950 dark:text-white" style="font-size: 1rem; font-weight: 600; margin-top: 0.75rem; font-variant-numeric: tabular-nums;" x-text="jamDigital"></p>
+                    <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin-top: 0.25rem; text-align: center;" x-text="tanggalHariIni"></p>
+                </div>
+
+                <div class="transaksi-cepat-card" style="border-radius: 20px; padding: 1.75rem;" x-data="transaksiCepatIdleTimer()">
+                    @if (! $user)
+                        <div x-data x-init="$nextTick(() => $refs.kartu.focus())" style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 1rem 0;">
+                            <div style="display: flex; align-items: center; justify-content: center; width: 88px; height: 88px; border-radius: 50%; margin-bottom: 1.25rem; background: linear-gradient(135deg, var(--primary-400), var(--primary-600));">
+                                <x-filament::icon icon="heroicon-o-credit-card" style="width: 40px; height: 40px; color: #fff;" />
+                            </div>
+
+                            <h2 class="text-gray-950 dark:text-white" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem;">Tempelkan kartu atau ketik nama</h2>
+                            <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.875rem; margin-bottom: 1.5rem;">Scan kartu RFID, ketik NISN, atau ketik nama siswa/pegawai.</p>
+
+                            <div style="width: 100%; position: relative; text-align: left;">
+                                <input
+                                    x-ref="kartu"
+                                    type="text"
+                                    data-sirkulasi-scan-input
+                                    wire:model.live.debounce.400ms="kartuInput"
+                                    wire:keydown.enter="scanKartu($event.target.value)"
+                                    autofocus
+                                    class="fi-input"
+                                    style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem;"
+                                    placeholder="Scan kartu / NISN / nama..."
+                                />
+
+                                @if (mb_strlen(trim((string) $kartuInput)) >= 2 && $this->hasilCariUser->isNotEmpty())
+                                    <div
+                                        x-data="{ show: false }"
+                                        x-init="requestAnimationFrame(() => show = true)"
+                                        x-transition:enter="transition ease-out duration-200"
+                                        x-transition:enter-start="opacity-0"
+                                        x-transition:enter-end="opacity-100"
+                                        style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.375rem; max-height: 280px; overflow-y: auto;"
+                                    >
+                                        @foreach ($this->hasilCariUser as $hasil)
+                                            <button type="button" wire:click="pilihUser('{{ $hasil->id }}')" wire:key="hasil-user-{{ $hasil->id }}" class="bg-gray-50 dark:bg-white/5 hover:bg-primary-50 dark:hover:bg-primary-500/10" style="display: flex; align-items: center; gap: 0.625rem; padding: 0.6rem 0.75rem; border-radius: 12px; border: none; cursor: pointer; text-align: left; width: 100%;">
+                                                <div style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; font-weight: 600; font-size: 13px; color: #fff; background: var(--primary-500); flex-shrink: 0;">
+                                                    {{ collect(explode(' ', $hasil->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
+                                                </div>
+                                                <div style="min-width: 0;">
+                                                    <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $hasil->nama }}</p>
+                                                    <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 0;">{{ $hasil->nisn ? "NISN {$hasil->nisn}" : ($hasil->nip ? "NIP {$hasil->nip}" : '-') }}</p>
+                                                </div>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    @else
+                        <div
+                            x-data="{ show: false }"
+                            x-init="requestAnimationFrame(() => show = true)"
+                            x-transition:enter="transition ease-out duration-300"
+                            x-transition:enter-start="opacity-0"
+                            x-transition:enter-end="opacity-100"
+                        >
+                            <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+                                <div class="transaksi-cepat-avatar-wrap">
+                                    @if ($user->avatar)
+                                        <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar) }}" alt="{{ $user->nama }}" width="80" height="80" style="display: block; width: 80px; height: 80px; margin: 4px; border-radius: 50%; object-fit: cover; border: 3px solid {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};" />
+                                    @else
+                                        <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; margin: 4px; border-radius: 50%; font-weight: 600; font-size: 22px; color: #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};">
+                                            {{ collect(explode(' ', $user->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
+                                        </div>
+                                    @endif
+
+                                    <svg class="transaksi-cepat-ring" viewBox="0 0 88 88">
+                                        <circle cx="44" cy="44" r="42" :stroke="ringColor" stroke-dasharray="263.89" :stroke-dashoffset="ringDashoffset" stroke-linecap="round"></circle>
+                                    </svg>
+
+                                    <span style="position: absolute; bottom: 2px; right: 2px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--success-500)' }};">
+                                        <x-filament::icon
+                                            :icon="$user->status_suspend ? 'heroicon-s-lock-closed' : 'heroicon-s-check'"
+                                            style="width: 14px; height: 14px; color: #fff;"
+                                        />
+                                    </span>
+                                </div>
+
+                                <p class="text-gray-400 dark:text-gray-500" style="font-size: 0.6875rem; margin: 0 0 0.25rem; font-variant-numeric: tabular-nums;" x-text="'Reset otomatis dalam ' + secondsLeft + ' detik'"></p>
+
+                                <h2 class="text-gray-950 dark:text-white" style="font-size: 1.125rem; font-weight: 600; line-height: 1.3; margin: 0;">{{ $user->nama }}</h2>
+                                @if ($user->nisn || $user->nip)
+                                    <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">{{ $user->nisn ? "NISN {$user->nisn}" : "NIP {$user->nip}" }}</p>
+                                @endif
+
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                                    <x-filament::badge :color="$user->status_suspend ? 'danger' : 'success'">{{ $user->status_suspend ? 'Suspend' : 'Aktif' }}</x-filament::badge>
+                                    <x-filament::badge :color="$bisaMeminjam ? 'success' : 'gray'">{{ $bisaMeminjam ? 'Bisa meminjam' : 'Tidak bisa meminjam baru' }}</x-filament::badge>
+                                    <x-filament::badge color="warning">{{ $user->akumulasi_point }} Point</x-filament::badge>
+                                </div>
+
+                                @if ($user->status_suspend)
+                                    <div class="bg-warning-50 dark:bg-warning-500/10 text-warning-600 dark:text-warning-400" style="display: flex; align-items: flex-start; gap: 0.5rem; border-radius: 12px; padding: 0.75rem; font-size: 0.875rem; margin-bottom: 1.5rem; text-align: left; width: 100%;">
+                                        <x-filament::icon icon="heroicon-o-exclamation-triangle" style="width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;" />
+                                        <span>User masih bisa mengembalikan buku, tapi tidak bisa meminjam baru sampai Denda lunas.</span>
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div class="dark:border-white/10" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 0.5rem;">
+                                <div x-data x-init="$nextTick(() => $refs.kode.focus())" style="width: 100%; position: relative; text-align: left;">
+                                    <label class="text-gray-950 dark:text-white" style="display: block; text-align: center; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem;">Scan Barcode / ISBN / Ketik Judul Buku</label>
+                                    <input
+                                        x-ref="kode"
+                                        type="text"
+                                        data-sirkulasi-scan-input
+                                        wire:model.live.debounce.400ms="kodeInput"
+                                        wire:keydown.enter="scanKode($event.target.value)"
+                                        autofocus
+                                        class="fi-input"
+                                        style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem; font-size: 1rem;"
+                                        placeholder="Scan barcode/ISBN atau ketik judul buku..."
+                                    />
+                                    <p class="text-gray-400 dark:text-gray-500" style="text-align: center; font-size: 0.75rem; margin-top: 0.5rem;">Sistem otomatis mendeteksi pinjam / kembali per eksemplar.</p>
+
+                                    @if (mb_strlen(trim((string) $kodeInput)) >= 2 && $this->hasilCariBuku->isNotEmpty())
+                                        <div
+                                            x-data="{ show: false }"
+                                            x-init="requestAnimationFrame(() => show = true)"
+                                            x-transition:enter="transition ease-out duration-200"
+                                            x-transition:enter-start="opacity-0"
+                                            x-transition:enter-end="opacity-100"
+                                            style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.375rem; max-height: 240px; overflow-y: auto;"
+                                        >
+                                            @foreach ($this->hasilCariBuku as $hasil)
+                                                <button type="button" wire:click="pilihBuku('{{ $hasil->id }}')" wire:key="hasil-buku-{{ $hasil->id }}" class="bg-gray-50 dark:bg-white/5 hover:bg-primary-50 dark:hover:bg-primary-500/10" style="display: flex; align-items: center; gap: 0.625rem; padding: 0.6rem 0.75rem; border-radius: 12px; border: none; cursor: pointer; text-align: left; width: 100%;">
+                                                    <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--primary-100); flex-shrink: 0;">
+                                                        <x-filament::icon icon="heroicon-o-book-open" style="width: 16px; height: 16px; color: var(--primary-600);" />
+                                                    </div>
+                                                    <div style="min-width: 0;">
+                                                        <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $hasil->judul }}</p>
+                                                        <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 0;">{{ $hasil->penulis ?: '-' }} &middot; stok tersedia: {{ $hasil->stokTersedia() }}</p>
+                                                    </div>
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+
+                                <div style="display: flex; justify-content: center; margin-top: 1.25rem;">
+                                    <x-filament::button wire:click="selesai" color="gray" icon="heroicon-o-arrow-path" size="sm">Ganti user</x-filament::button>
+                                </div>
+                            </div>
+
+                            @php
+                                $totalDipinjam = collect($riwayatScan)->where('aksi', 'dipinjamkan')->where('sukses', true)->count();
+                                $totalDikembalikan = collect($riwayatScan)->where('aksi', 'dikembalikan')->where('sukses', true)->count();
+                                $totalGagal = collect($riwayatScan)->where('sukses', false)->count();
+                            @endphp
+                            @if (count($riwayatScan) > 0)
+                                <div class="dark:border-white/10" style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 1.5rem;">
+                                    <div style="text-align: center;">
+                                        <p class="text-primary-600 dark:text-primary-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDipinjam }}</p>
+                                        <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dipinjamkan</p>
+                                    </div>
+                                    <div class="bg-gray-200 dark:bg-gray-700" style="height: 32px; width: 1px;"></div>
+                                    <div style="text-align: center;">
+                                        <p class="text-success-600 dark:text-success-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDikembalikan }}</p>
+                                        <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dikembalikan</p>
+                                    </div>
+                                    <div class="bg-gray-200 dark:bg-gray-700" style="height: 32px; width: 1px;"></div>
+                                    <div style="text-align: center;">
+                                        <p class="text-danger-600 dark:text-danger-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalGagal }}</p>
+                                        <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Gagal</p>
+                                    </div>
+                                </div>
+                            @endif
+
+                            <div class="dark:border-white/10" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 1.5rem;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                    <p class="text-gray-950 dark:text-white" style="font-size: 0.875rem; font-weight: 600; margin: 0;">Riwayat Scan (sesi ini)</p>
+                                    @if (count($riwayatScan) > 0)
+                                        <x-filament::badge color="gray">{{ count($riwayatScan) }} item</x-filament::badge>
+                                    @endif
+                                </div>
+
+                                <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 260px; overflow-y: auto;">
+                                    @forelse ($riwayatScan as $item)
+                                        <div
+                                            x-data="{ show: false }"
+                                            x-init="requestAnimationFrame(() => show = true)"
+                                            x-transition:enter="transition ease-out duration-300"
+                                            x-transition:enter-start="opacity-0"
+                                            x-transition:enter-end="opacity-100"
+                                            class="bg-gray-50 dark:bg-white/5"
+                                            style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 12px;"
+                                        >
+                                            <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: {{ $item['sukses'] ? 'var(--success-100)' : 'var(--danger-100)' }}; color: {{ $item['sukses'] ? 'var(--success-700)' : 'var(--danger-700)' }};">
+                                                @if (! $item['sukses'])
+                                                    <x-filament::icon icon="heroicon-o-x-mark" style="width: 16px; height: 16px;" />
+                                                @elseif ($item['aksi'] === 'dipinjamkan')
+                                                    <x-filament::icon icon="heroicon-o-arrow-up-circle" style="width: 16px; height: 16px;" />
+                                                @else
+                                                    <x-filament::icon icon="heroicon-o-arrow-down-circle" style="width: 16px; height: 16px;" />
+                                                @endif
+                                            </div>
+                                            <div style="flex: 1; min-width: 0;">
+                                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                                    <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['judul'] }}</p>
+                                                    @if ($item['sukses'])
+                                                        <x-filament::badge :color="$item['aksi'] === 'dipinjamkan' ? 'primary' : 'success'" size="sm">{{ ucfirst($item['aksi']) }}</x-filament::badge>
+                                                    @endif
+                                                </div>
+                                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['barcode'] }} &middot; {{ $item['pesan'] }}</p>
+                                            </div>
+                                        </div>
+                                    @empty
+                                        <div class="text-gray-400 dark:text-gray-500" style="text-align: center; padding: 2rem 0;">
+                                            <x-filament::icon icon="heroicon-o-book-open" style="width: 32px; height: 32px; margin: 0 auto 0.5rem;" />
+                                            <p style="font-size: 0.875rem; margin: 0;">Belum ada buku yang di-scan.</p>
+                                        </div>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            <livewire:riwayat-sirkulasi-harian />
+
+        </div>
+    </div>
+</x-filament-panels::page>
+
+```
+---
+
 ## resources/views/filament/pages/transaksi-cepat.blade.php
 ```blade
 <x-filament-panels::page>
@@ -27404,7 +28270,10 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 
 ## resources/views/filament/partials/app-footer.blade.php
 ```blade
-<div class="app-footer{{ isset($authTop) && $authTop ? ' app-footer--auth-top' : '' }}">
+@php
+    $sirkulasi = request()->routeIs('filament.dashboard.pages.sirkulasi');
+@endphp
+<div class="app-footer{{ isset($authTop) && $authTop ? ' app-footer--auth-top' : '' }}{{ $sirkulasi ? ' app-footer--fixed-sirkulasi' : '' }}">
     &copy; {{ now()->year }} MTs Negeri 1 Pandeglang | built with &#9829;&#65039; by
     <a href="https://github.com/zulfikriyahya" target="_blank" rel="noopener noreferrer">Yahya Zulfikri</a>
 </div>
@@ -27563,10 +28432,6 @@ window.ChartExport = window.ChartExport || (function () {
 ## resources/views/filament/partials/global-footer-style.blade.php
 ```blade
 <style>
-    /* Style footer - didaftarkan SEKALI via renderHook(HEAD_END), dipakai
-       bersama oleh markup footer di halaman auth (bawah frame) maupun
-       Dashboard/halaman non-auth (bawah body) - lihat
-       filament.partials.app-footer untuk markup-nya saja. */
     .app-footer {
         display: block;
         width: 100%;
@@ -27595,25 +28460,39 @@ window.ChartExport = window.ChartExport || (function () {
         text-decoration: underline;
     }
 
-    /* Footer di BAWAH frame form auth - beri jarak ATAS lebih besar
-       supaya tidak menempel ke elemen sebelumnya (tombol aksi/form). */
     .app-footer.app-footer--auth-top {
         margin: 1.5rem 0 0;
     }
 
-/* GAP-SPEC: fi-sc-component (parent dari fi-sc-text) tidak melebar
-       penuh/tidak center secara default di dalam schema grid Login -
-       berbeda dari halaman auth lain yang footernya disisipkan langsung
-       sebagai HTML biasa (di luar sistem grid schema Filament). class
-       app-footer-wrapper digabung LANGSUNG di elemen span.fi-sc-text yg
-       sama (bukan child terpisah) via extraAttributes() pada komponen
-       Text di Login::content() - selector :has() menyasar parent
-       fi-sc-component yang punya child span dengan class tsb.
-    */
     .fi-sc-component:has(> .app-footer-wrapper) {
         display: flex;
         width: 100%;
         justify-content: center;
+    }
+
+    /* BARU: footer khusus halaman Sirkulasi - fixed ke dasar viewport,
+       TIDAK ikut alur normal dokumen, supaya selalu terlihat tanpa
+       tergantung perhitungan tinggi konten (gap: sticky di bawah).
+       Latar SOLID wajib diisi supaya konten yang di-scroll di baliknya
+       (jika konten membesar) tidak tembus terlihat di belakang teks
+       footer. TODO: verifikasi visual - warna berikut adalah
+       pendekatan warna panel Filament light/dark, sesuaikan jika masih
+       ada perbedaan sedikit dengan latar body asli. */
+    .app-footer.app-footer--fixed-sirkulasi {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 30;
+        margin: 0;
+        padding: 0.75rem 0;
+        background-color: #ffffff;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    html.dark .app-footer.app-footer--fixed-sirkulasi {
+        background-color: #0f0f13;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
 </style>
 
@@ -27641,6 +28520,68 @@ window.ChartExport = window.ChartExport || (function () {
         display: inline-block;
     }
 </style>
+
+```
+---
+
+## resources/views/filament/partials/sirkulasi-topbar-button.blade.php
+```blade
+@php
+    $bisaAkses = \App\Filament\Pages\Sirkulasi::canAccess();
+    $sedangDiSirkulasi = request()->routeIs('filament.dashboard.pages.sirkulasi');
+@endphp
+@if ($bisaAkses)
+    <style>
+        .fi-topbar .sirkulasi-topbar-btn {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 0.375rem !important;
+            padding: 0.375rem 0.75rem !important;
+            border-radius: 0.5rem !important;
+            font-size: 0.8125rem !important;
+            font-weight: 500 !important;
+            color: #ffffff !important;
+            background-color: #1f4d2c !important;
+            border: 1px solid transparent !important;
+            flex-shrink: 0 !important;
+            white-space: nowrap !important;
+            margin-inline-start: 1rem !important;
+            text-decoration: none !important;
+        }
+
+        .fi-topbar .sirkulasi-topbar-btn:hover {
+            background-color: #163a20 !important;
+        }
+
+        html.dark .fi-topbar .sirkulasi-topbar-btn {
+            background-color: #2a6b3c !important;
+        }
+
+        html.dark .fi-topbar .sirkulasi-topbar-btn:hover {
+            background-color: #1f4d2c !important;
+        }
+    </style>
+
+    @if ($sedangDiSirkulasi)
+<a
+            href="{{ \App\Filament\Pages\Dashboard::getUrl() }}"
+            wire:navigate
+            class="sirkulasi-topbar-btn"
+        >
+            <x-filament::icon icon="heroicon-o-home" style="width: 1rem; height: 1rem;" />
+            <span>Dashboard</span>
+        </a>
+    @else
+<a
+            href="{{ \App\Filament\Pages\Sirkulasi::getUrl() }}"
+            wire:navigate
+            class="sirkulasi-topbar-btn"
+        >
+            <x-filament::icon icon="heroicon-o-viewfinder-circle" style="width: 1rem; height: 1rem;" />
+            <span>Sirkulasi</span>
+        </a>
+    @endif
+@endif
 
 ```
 ---
@@ -27717,6 +28658,55 @@ window.ChartExport = window.ChartExport || (function () {
         </div>
     </section>
 </x-layout>
+
+```
+---
+
+## resources/views/livewire/riwayat-sirkulasi-harian.blade.php
+```blade
+<div>
+    <div class="sirkulasi-section">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+            <p class="text-gray-950 dark:text-white" style="font-size: 0.9375rem; font-weight: 600; margin: 0;">Riwayat Peminjaman & Pengembalian Hari Ini</p>
+            <x-filament::badge color="gray">{{ $this->riwayatLengkapHariIni->count() }} transaksi</x-filament::badge>
+        </div>
+
+        {{-- BARU: dibatasi max-height + scroll internal - tabel ini
+             sebelumnya tumbuh tanpa batas seiring transaksi hari ini
+             bertambah, ikut mendorong footer di bawah halaman keluar
+             viewport (gap: footer harus terlihat tanpa scroll dahulu). --}}
+        <div style="overflow-x: auto; overflow-y: auto; max-height: 320px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.8125rem;">
+                <thead>
+                    <tr class="text-gray-500 dark:text-gray-400" style="text-align: left; border-bottom: 1px solid rgba(0,0,0,0.08);">
+                        <th style="padding: 0.5rem 0.75rem; font-weight: 500;">Waktu</th>
+                        <th style="padding: 0.5rem 0.75rem; font-weight: 500;">Pengguna</th>
+                        <th style="padding: 0.5rem 0.75rem; font-weight: 500;">Buku</th>
+                        <th style="padding: 0.5rem 0.75rem; font-weight: 500;">Aksi</th>
+                        <th style="padding: 0.5rem 0.75rem; font-weight: 500;">Diproses Oleh</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse ($this->riwayatLengkapHariIni as $item)
+                        <tr class="dark:border-white/10" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
+                            <td class="text-gray-500 dark:text-gray-400" style="padding: 0.5rem 0.75rem; white-space: nowrap;">{{ $item['waktu']?->format('H:i:s') }}</td>
+                            <td class="text-gray-950 dark:text-white" style="padding: 0.5rem 0.75rem;">{{ $item['nama_user'] }}</td>
+                            <td class="text-gray-950 dark:text-white" style="padding: 0.5rem 0.75rem;">{{ $item['judul_buku'] }}</td>
+                            <td style="padding: 0.5rem 0.75rem;">
+                                <x-filament::badge :color="$item['aksi'] === 'dipinjamkan' ? 'primary' : 'success'" size="sm">{{ ucfirst($item['aksi']) }}</x-filament::badge>
+                            </td>
+                            <td class="text-gray-500 dark:text-gray-400" style="padding: 0.5rem 0.75rem;">{{ $item['diproses_oleh'] }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="text-gray-400 dark:text-gray-500" style="padding: 1.5rem 0.75rem; text-align: center;">Belum ada transaksi hari ini.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
 ```
 ---

@@ -100,6 +100,45 @@ class TransaksiCepat extends Page
     protected string $view = 'filament.pages.transaksi-cepat';
 
     /**
+     * GAP iterasi ini - "Transaksi Cepat" digantikan Sirkulasi secara
+     * penuh sebagai satu-satunya pintu akses operator (dok permintaan
+     * user). Class ini TETAP ADA dan TETAP extends Page - dijadikan
+     * dasar logic bagi Sirkulasi (Aturan poin 3, DRY: scanKartu,
+     * scanKode, prosesEksemplar, dst. TIDAK diduplikasi) - hanya
+     * statusnya sebagai halaman yang bisa dikunjungi SENDIRI yang
+     * dicabut, bukan logic-nya.
+     *
+     * Disembunyikan dari navigasi (konsisten dengan Sirkulasi yang juga
+     * shouldRegisterNavigation() => false) - satu-satunya jalan masuk
+     * resmi tetap tombol topbar Sirkulasi (sirkulasi-topbar-button.blade.php).
+     */
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
+    /**
+     * URL lama '/dashboard/transaksi-cepat' (bookmark/link lama operator)
+     * di-redirect ke Sirkulasi. PENTING: guard `static::class !==
+     * self::class` WAJIB ada - method ini terwarisi ke Sirkulasi (child
+     * class) karena Sirkulasi TIDAK override mount(). Tanpa guard ini,
+     * saat Sirkulasi dimuat, ia ikut menjalankan mount() versi ini dan
+     * redirect ke dirinya sendiri lewat Sirkulasi::getUrl() -> infinite
+     * redirect loop (bug yang sempat terjadi). `self::class` di sini
+     * SENGAJA merujuk TransaksiCepat (bukan static/late binding), supaya
+     * hanya request langsung ke TransaksiCepat yang kena redirect,
+     * request ke Sirkulasi lewat tanpa efek apa pun.
+     */
+    public function mount(): void
+    {
+        if (static::class !== self::class) {
+            return;
+        }
+
+        $this->redirect(Sirkulasi::getUrl());
+    }
+
+    /**
      * Window rate limit anti-scan-ganda (detik). Lihat catatan class di atas.
      */
     protected const RATE_LIMIT_DETIK = 300;

@@ -1,8 +1,4 @@
 <style>
-    /* Style footer - didaftarkan SEKALI via renderHook(HEAD_END), dipakai
-       bersama oleh markup footer di halaman auth (bawah frame) maupun
-       Dashboard/halaman non-auth (bawah body) - lihat
-       filament.partials.app-footer untuk markup-nya saja. */
     .app-footer {
         display: block;
         width: 100%;
@@ -31,24 +27,38 @@
         text-decoration: underline;
     }
 
-    /* Footer di BAWAH frame form auth - beri jarak ATAS lebih besar
-       supaya tidak menempel ke elemen sebelumnya (tombol aksi/form). */
     .app-footer.app-footer--auth-top {
         margin: 1.5rem 0 0;
     }
 
-/* GAP-SPEC: fi-sc-component (parent dari fi-sc-text) tidak melebar
-       penuh/tidak center secara default di dalam schema grid Login -
-       berbeda dari halaman auth lain yang footernya disisipkan langsung
-       sebagai HTML biasa (di luar sistem grid schema Filament). class
-       app-footer-wrapper digabung LANGSUNG di elemen span.fi-sc-text yg
-       sama (bukan child terpisah) via extraAttributes() pada komponen
-       Text di Login::content() - selector :has() menyasar parent
-       fi-sc-component yang punya child span dengan class tsb.
-    */
     .fi-sc-component:has(> .app-footer-wrapper) {
         display: flex;
         width: 100%;
         justify-content: center;
+    }
+
+    /* BARU: footer khusus halaman Sirkulasi - fixed ke dasar viewport,
+       TIDAK ikut alur normal dokumen, supaya selalu terlihat tanpa
+       tergantung perhitungan tinggi konten (gap: sticky di bawah).
+       Latar SOLID wajib diisi supaya konten yang di-scroll di baliknya
+       (jika konten membesar) tidak tembus terlihat di belakang teks
+       footer. TODO: verifikasi visual - warna berikut adalah
+       pendekatan warna panel Filament light/dark, sesuaikan jika masih
+       ada perbedaan sedikit dengan latar body asli. */
+    .app-footer.app-footer--fixed-sirkulasi {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 30;
+        margin: 0;
+        padding: 0.75rem 0;
+        background-color: #ffffff;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    html.dark .app-footer.app-footer--fixed-sirkulasi {
+        background-color: #0f0f13;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
 </style>

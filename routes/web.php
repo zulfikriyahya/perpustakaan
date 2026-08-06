@@ -35,5 +35,4 @@ Route::get('/unduh-bulk-data/{bulkDataJob}', BulkDataJobDownloadController::clas
     ->middleware(['auth'])
     ->name('bulk-data-job.download');
 
-
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');

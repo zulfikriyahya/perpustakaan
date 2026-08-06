@@ -23,6 +23,7 @@ EXCLUDE_DIRS=(
 "scripts"
 "bootstrap/cache"
 "public"
+"tests"
 )
 
 EXCLUDE_FILES=(

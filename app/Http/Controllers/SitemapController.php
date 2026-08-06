@@ -20,7 +20,7 @@ class SitemapController extends Controller
         $authorUrls = Author::query()
             ->select('id', 'updated_at')
             ->get()
-            ->map(fn(Author $author) => [
+            ->map(fn (Author $author) => [
                 'loc' => route('authors.show', $author),
                 'priority' => '0.6',
                 'lastmod' => $author->updated_at?->toAtomString(),

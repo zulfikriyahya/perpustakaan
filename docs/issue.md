@@ -100,18 +100,10 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- unggah .mp3 atau .wav di daftar audio-book
-- unggah .epub atau .pdf di daftar e-book
-- fitur baca buku pdf di landing page (kalau bisa menggunakan seperti fliphtml5)
-
-- membuat UI Landing Page
-- halaman FAQ
-- Halaman Tentang Perpustakaan
-- Halaman Authors
-- Metadata LLMS.txt | robots.txt
-- Install PWA
-- SEO Google
-- halaman daftar buku pdf / e-book / audio-book
+- Refactor halaman Sirkulasi tukar ukuran widthnya section jam dengan section utama (rekam sirkulasi) dan samakan tingginya
+- untuk footer halaman sirkulasi jadikan agar terlihat tanpa harus scroll dahulu
+- perbaiki fitur atau fungsi sirkulasi sesuai dengan transaksi cepat (scanningnya, timer mundurnya, auto fokusnya, scan barcodenya dan semuanya sesuai yang berjalan di transaksi cepat)
+- jadikan selalu autofokus ke form isian scan agar selalu ready ketika ada input apapun, tidak perlu klik manual disana (tanpa distraksi)
 
 ---
 

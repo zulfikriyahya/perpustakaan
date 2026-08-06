@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\JenisKelamin;
 use App\Enums\StatusEksemplar;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

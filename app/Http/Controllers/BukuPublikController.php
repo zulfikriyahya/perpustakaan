@@ -11,7 +11,7 @@ class BukuPublikController extends Controller
     public function index()
     {
         $ebooks = Buku::query()
-            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
                 JenisFileBuku::Pdf->value,
                 JenisFileBuku::Epub->value,
             ]))
@@ -19,7 +19,7 @@ class BukuPublikController extends Controller
             ->paginate(12, ['*'], 'ebook_page');
 
         $audiobooks = Buku::query()
-            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
                 JenisFileBuku::AudioMp3->value,
                 JenisFileBuku::AudioWav->value,
             ]))

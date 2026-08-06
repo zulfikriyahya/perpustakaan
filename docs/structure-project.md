@@ -72,6 +72,7 @@
 │   │   │   ├── LaporanBulanan.php
 │   │   │   ├── PengaturanSistem.php
 │   │   │   ├── ProsesKenaikanKelas.php
+│   │   │   ├── Sirkulasi.php
 │   │   │   └── TransaksiCepat.php
 │   │   ├── Resources
 │   │   │   ├── AuthorResource
@@ -270,6 +271,8 @@
 │   │   ├── KirimNotifikasiWhatsapp.php
 │   │   ├── ProcessMasterExportJob.php
 │   │   └── ProcessMasterImportJob.php
+│   ├── Livewire
+│   │   └── RiwayatSirkulasiHarian.php
 │   ├── Models
 │   │   ├── Author.php
 │   │   ├── BukuFile.php
@@ -485,13 +488,17 @@
 │       │   │   ├── laporan-bulanan.blade.php
 │       │   │   ├── pengaturan-sistem.blade.php
 │       │   │   ├── proses-kenaikan-kelas.blade.php
+│       │   │   ├── sirkulasi.blade.php
 │       │   │   └── transaksi-cepat.blade.php
 │       │   └── partials
 │       │       ├── app-footer.blade.php
 │       │       ├── auth-styles.blade.php
 │       │       ├── chart-export-script.blade.php
 │       │       ├── global-footer-style.blade.php
-│       │       └── global-logo-style.blade.php
+│       │       ├── global-logo-style.blade.php
+│       │       └── sirkulasi-topbar-button.blade.php
+│       ├── livewire
+│       │   └── riwayat-sirkulasi-harian.blade.php
 │       ├── partials
 │       │   ├── public-footer.blade.php
 │       │   └── public-nav.blade.php
@@ -532,4 +539,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-121 directories, 412 files
+123 directories, 417 files

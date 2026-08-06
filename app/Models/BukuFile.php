@@ -47,6 +47,6 @@ class BukuFile extends Model
      */
     public function url(): string
     {
-        return '/storage/' . $this->path;
+        return '/storage/'.$this->path;
     }
 }

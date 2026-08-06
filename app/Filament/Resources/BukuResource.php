@@ -33,6 +33,8 @@ use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use App\Enums\JenisFileBuku;
+use Filament\Forms\Components\Repeater;
 
 /**
  * TODO: ASUMSI - dipakai Section (bukan Wizard) untuk mengompakkan form,
@@ -68,6 +70,7 @@ class BukuResource extends Resource
                         ]),
                     FileUpload::make('cover')
                         ->image()
+                        ->disk('public')
                         ->directory('buku-cover'),
                     TextInput::make('penulis')
                         ->maxLength(255)
@@ -81,7 +84,7 @@ class BukuResource extends Resource
                         ]),
                     TextInput::make('isbn')
                         ->label('ISBN')
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
                         ->helperText('1 ISBN = 1 judul. Jumlah eksemplar fisik dikelola di tab Eksemplar setelah buku disimpan.')
                         ->validationMessages([
@@ -120,6 +123,13 @@ class BukuResource extends Resource
                             Textarea::make('deskripsi')
                                 ->columnSpanFull(),
                         ]),
+                    Select::make('authors')
+                        ->label('Penulis (Author)')
+                        ->relationship('authors', 'nama')
+                        ->multiple()
+                        ->preload()
+                        ->searchable()
+                        ->helperText('Terpisah dari kolom "Penulis" lama - dipakai untuk halaman Authors publik.'),
                     TextInput::make('harga_ganti')
                         ->label('Harga Ganti')
                         ->numeric()
@@ -160,10 +170,43 @@ class BukuResource extends Resource
                         ]),
                     Select::make('rak_id_eksemplar_awal')
                         ->label('Rak untuk Eksemplar Awal')
-                        ->options(fn () => Rak::query()->pluck('nama', 'id'))
+                        ->options(fn() => Rak::query()->pluck('nama', 'id'))
                         ->searchable()
                         ->helperText('Rak yang sama dipakaikan ke semua eksemplar awal yang dibuat.')
                         ->dehydrated(false),
+                ]),
+            Section::make('File Digital (E-book / Audiobook)')
+                ->description('Unggah PDF/EPUB untuk e-book atau MP3/WAV untuk audiobook. Bisa lebih dari satu file/jenis.')
+                ->columnSpanFull()
+                ->schema([
+                    Repeater::make('files')
+                        ->relationship('files')
+                        ->schema([
+                            Select::make('jenis')
+                                ->options(collect(JenisFileBuku::cases())->mapWithKeys(
+                                    fn($c) => [$c->value => $c->label()]
+                                ))
+                                ->required(),
+                            TextInput::make('nama_file')
+                                ->label('Nama Tampilan')
+                                ->maxLength(255),
+                            FileUpload::make('path')
+                                ->label('File')
+                                ->disk('public')
+                                ->directory('buku-files')
+                                ->acceptedFileTypes(['application/pdf', 'application/epub+zip', 'audio/mpeg', 'audio/wav'])
+                                ->required()
+                                ->storeFileNamesIn('nama_file_asli')
+                                ->dehydrateStateUsing(fn($state) => $state), // TODO: verifikasi signature FileUpload disk custom terhadap Filament ^5.7
+                            TextInput::make('urutan')
+                                ->numeric()
+                                ->default(0)
+                                ->helperText('Untuk urutan track audiobook.'),
+                        ])
+                        ->columns(2)
+                        ->addActionLabel('Tambah File')
+                        ->reorderable('urutan')
+                        ->collapsible(),
                 ]),
         ]);
     }
@@ -171,19 +214,19 @@ class BukuResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->withCount([
-                'eksemplars as jumlah_eksemplar_aktif' => fn ($q) => $q->where('status', '!=', StatusEksemplar::Hilang),
-                'eksemplars as jumlah_stok_tersedia' => fn ($q) => $q->where('status', StatusEksemplar::Tersedia),
-                'eksemplars as jumlah_eksemplar_rusak' => fn ($q) => $q->where('status', StatusEksemplar::Rusak),
-                'eksemplars as jumlah_eksemplar_hilang' => fn ($q) => $q->where('status', StatusEksemplar::Hilang),
+            ->modifyQueryUsing(fn(Builder $query) => $query->withCount([
+                'eksemplars as jumlah_eksemplar_aktif' => fn($q) => $q->where('status', '!=', StatusEksemplar::Hilang),
+                'eksemplars as jumlah_stok_tersedia' => fn($q) => $q->where('status', StatusEksemplar::Tersedia),
+                'eksemplars as jumlah_eksemplar_rusak' => fn($q) => $q->where('status', StatusEksemplar::Rusak),
+                'eksemplars as jumlah_eksemplar_hilang' => fn($q) => $q->where('status', StatusEksemplar::Hilang),
             ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(BukuImporter::class)
-                    ->authorize(fn () => auth()->user()?->can('create', Buku::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -200,22 +243,22 @@ class BukuResource extends Resource
                     ->toggleable(),
                 TextColumn::make('jumlah_eksemplar_aktif')
                     ->label('Jumlah Buku')
-                    ->description(fn (Buku $record) => $record->jumlah_eksemplar_hilang > 0
+                    ->description(fn(Buku $record) => $record->jumlah_eksemplar_hilang > 0
                         ? "{$record->jumlah_eksemplar_hilang} hilang (tidak dihitung)"
                         : null)
                     ->badge()
-                    ->color(fn (Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
+                    ->color(fn(Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
                     ->sortable(),
                 TextColumn::make('jumlah_stok_tersedia')
                     ->label('Stok Tersedia')
                     ->badge()
-                    ->color(fn (Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
+                    ->color(fn(Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
                     ->sortable(),
                 TextColumn::make('eksemplar_bermasalah')
                     ->label('Rusak/Hilang')
-                    ->state(fn (Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
+                    ->state(fn(Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
                     ->badge()
-                    ->color(fn (Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
+                    ->color(fn(Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
@@ -233,7 +276,7 @@ class BukuResource extends Resource
                         $adaPeminjamanBerjalan = Eksemplar::query()
                             ->withTrashed()
                             ->where('buku_id', $record->id)
-                            ->whereHas('peminjamans', fn ($q) => $q->whereIn('status', [
+                            ->whereHas('peminjamans', fn($q) => $q->whereIn('status', [
                                 StatusPeminjaman::Aktif,
                                 StatusPeminjaman::Terlambat,
                             ]))
@@ -263,7 +306,7 @@ class BukuResource extends Resource
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label Eksemplar')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
                     ->action(function (Collection $records) {
                         $eksemplarIds = Eksemplar::query()
                             ->whereIn('buku_id', $records->pluck('id'))

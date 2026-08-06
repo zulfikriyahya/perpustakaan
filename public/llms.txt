@@ -1,0 +1,10 @@
+# Perpustakaan Digital Sekolah
+
+> Situs katalog perpustakaan sekolah berisi koleksi buku fisik, e-book, dan audiobook yang dapat diakses publik.
+
+## Halaman Utama
+- [Beranda](/): Landing page perpustakaan.
+- [Buku Digital](/buku-digital): Daftar e-book dan audiobook.
+- [Authors](/authors): Daftar penulis dan karya terkait.
+- [FAQ](/faq): Pertanyaan umum.
+- [Tentang](/tentang): Profil perpustakaan.

@@ -7,6 +7,7 @@
 │   ├── Enums
 │   │   ├── EventTypePoint.php
 │   │   ├── GroupSetting.php
+│   │   ├── JenisFileBuku.php
 │   │   ├── JenisKelamin.php
 │   │   ├── JenisTransaksi.php
 │   │   ├── KondisiBuku.php
@@ -73,6 +74,11 @@
 │   │   │   ├── ProsesKenaikanKelas.php
 │   │   │   └── TransaksiCepat.php
 │   │   ├── Resources
+│   │   │   ├── AuthorResource
+│   │   │   │   └── Pages
+│   │   │   │       ├── CreateAuthor.php
+│   │   │   │       ├── EditAuthor.php
+│   │   │   │       └── ListAuthors.php
 │   │   │   ├── BukuResource
 │   │   │   │   ├── Pages
 │   │   │   │   │   ├── CreateBuku.php
@@ -212,6 +218,7 @@
 │   │   │   │   │   └── ListUsers.php
 │   │   │   │   └── Widgets
 │   │   │   │       └── UserStatsWidget.php
+│   │   │   ├── AuthorResource.php
 │   │   │   ├── BukuResource.php
 │   │   │   ├── DendaResource.php
 │   │   │   ├── FirmwareResource.php
@@ -249,9 +256,13 @@
 │   │   ├── Controllers
 │   │   │   ├── Api
 │   │   │   │   └── PerpustakaanDeviceController.php
+│   │   │   ├── AuthorPublikController.php
+│   │   │   ├── BukuPublikController.php
 │   │   │   ├── BulkDataJobDownloadController.php
 │   │   │   ├── ChartExportController.php
-│   │   │   └── Controller.php
+│   │   │   ├── Controller.php
+│   │   │   ├── LandingPageController.php
+│   │   │   └── SitemapController.php
 │   │   └── Middleware
 │   │       └── AuthenticateDeviceApiKey.php
 │   ├── Jobs
@@ -260,6 +271,8 @@
 │   │   ├── ProcessMasterExportJob.php
 │   │   └── ProcessMasterImportJob.php
 │   ├── Models
+│   │   ├── Author.php
+│   │   ├── BukuFile.php
 │   │   ├── BukuKategori.php
 │   │   ├── Buku.php
 │   │   ├── BulkDataJob.php
@@ -296,6 +309,7 @@
 │   │   ├── SettingObserver.php
 │   │   └── UserObserver.php
 │   ├── Policies
+│   │   ├── AuthorPolicy.php
 │   │   ├── BukuPolicy.php
 │   │   ├── DendaPolicy.php
 │   │   ├── EksemplarPolicy.php
@@ -441,7 +455,10 @@
 │   │   ├── 2026_08_03_000002_kelas_wajib_jurusan_unique_per_jurusan.php
 │   │   ├── 2026_08_03_000003_optimalkan_index_query_panas.php
 │   │   ├── 2026_08_04_000001_add_kredensial_ke_settings_table.php
-│   │   └── 2026_08_04_000002_create_bulk_data_jobs_table.php
+│   │   ├── 2026_08_04_000002_create_bulk_data_jobs_table.php
+│   │   ├── 2026_08_05_000001_create_authors_table.php
+│   │   ├── 2026_08_05_000002_create_author_buku_table.php
+│   │   └── 2026_08_05_000003_create_buku_files_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
@@ -454,6 +471,11 @@
 │   │   ├── app.js
 │   │   └── chart-export.js
 │   └── views
+│       ├── buku
+│       │   ├── baca-pdf.blade.php
+│       │   └── index.blade.php
+│       ├── components
+│       │   └── layout.blade.php
 │       ├── filament
 │       │   ├── pages
 │       │   │   ├── auth
@@ -470,11 +492,19 @@
 │       │       ├── chart-export-script.blade.php
 │       │       ├── global-footer-style.blade.php
 │       │       └── global-logo-style.blade.php
+│       ├── partials
+│       │   ├── public-footer.blade.php
+│       │   └── public-nav.blade.php
 │       ├── pdf
 │       │   ├── chart-export.blade.php
 │       │   ├── label-barcode.blade.php
 │       │   └── laporan-bulanan.blade.php
-│       └── welcome.blade.php
+│       ├── author-detail.blade.php
+│       ├── authors.blade.php
+│       ├── faq.blade.php
+│       ├── index.blade.php
+│       ├── sitemap.blade.php
+│       └── tentang.blade.php
 ├── routes
 │   ├── api.php
 │   ├── console.php
@@ -502,4 +532,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-116 directories, 387 files
+121 directories, 412 files

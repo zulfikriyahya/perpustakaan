@@ -1,2 +1,9 @@
 User-agent: *
-Disallow:
+Allow: /
+Allow: /buku-digital
+Allow: /authors
+Allow: /faq
+Allow: /tentang
+Disallow: /dashboard
+
+Sitemap: /sitemap.xml

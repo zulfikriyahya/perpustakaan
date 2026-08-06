@@ -157,6 +157,43 @@ enum GroupSetting: string
 ```
 ---
 
+## app/Enums/JenisFileBuku.php
+```php
+<?php
+
+namespace App\Enums;
+
+enum JenisFileBuku: string
+{
+    case Pdf = 'pdf';
+    case Epub = 'epub';
+    case AudioMp3 = 'audio_mp3';
+    case AudioWav = 'audio_wav';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Pdf => 'PDF',
+            self::Epub => 'EPUB',
+            self::AudioMp3 => 'Audio (MP3)',
+            self::AudioWav => 'Audio (WAV)',
+        };
+    }
+
+    public function isAudio(): bool
+    {
+        return in_array($this, [self::AudioMp3, self::AudioWav], true);
+    }
+
+    public function isEbook(): bool
+    {
+        return in_array($this, [self::Pdf, self::Epub], true);
+    }
+}
+
+```
+---
+
 ## app/Enums/JenisKelamin.php
 ```php
 <?php
@@ -4528,6 +4565,169 @@ class TransaksiCepat extends Page
 ```
 ---
 
+## app/Filament/Resources/AuthorResource/Pages/CreateAuthor.php
+```php
+<?php
+
+namespace App\Filament\Resources\AuthorResource\Pages;
+
+use App\Filament\Resources\AuthorResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateAuthor extends CreateRecord
+{
+    protected static string $resource = AuthorResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/AuthorResource/Pages/EditAuthor.php
+```php
+<?php
+
+namespace App\Filament\Resources\AuthorResource\Pages;
+
+use App\Filament\Resources\AuthorResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditAuthor extends EditRecord
+{
+    protected static string $resource = AuthorResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            DeleteAction::make(),
+        ];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/AuthorResource/Pages/ListAuthors.php
+```php
+<?php
+
+namespace App\Filament\Resources\AuthorResource\Pages;
+
+use App\Filament\Resources\AuthorResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+class ListAuthors extends ListRecords
+{
+    protected static string $resource = AuthorResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make(),
+        ];
+    }
+}
+
+```
+---
+
+## app/Filament/Resources/AuthorResource.php
+```php
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\AuthorResource\Pages;
+use App\Models\Author;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
+use Filament\Tables\Table;
+
+class AuthorResource extends Resource
+{
+    protected static ?string $model = Author::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-circle';
+
+    protected static ?string $navigationLabel = 'Penulis';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Master Data';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('Informasi Penulis')
+                ->columns(2)
+                ->columnSpanFull()
+                ->schema([
+                    TextInput::make('nama')
+                        ->required()
+                        ->maxLength(255)
+                        ->validationMessages([
+                            'required' => 'Nama penulis wajib diisi.',
+                        ]),
+                    FileUpload::make('foto')
+                        ->image()
+                        ->disk('public')
+                        ->directory('author-foto'),
+                    Textarea::make('bio')
+                        ->columnSpanFull()
+                        ->rows(4),
+                ]),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                ImageColumn::make('foto')->circular(),
+                TextColumn::make('nama')->searchable()->sortable(),
+                TextColumn::make('bukus_count')
+                    ->label('Jumlah Buku')
+                    ->counts('bukus')
+                    ->badge(),
+                TextColumn::make('created_at')
+                    ->dateTime('d F Y H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                TrashedFilter::make(),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListAuthors::route('/'),
+            'create' => Pages\CreateAuthor::route('/create'),
+            'edit' => Pages\EditAuthor::route('/{record}/edit'),
+        ];
+    }
+}
+
+```
+---
+
 ## app/Filament/Resources/BukuResource/Pages/CreateBuku.php
 ```php
 <?php
@@ -4680,6 +4880,8 @@ use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use App\Enums\JenisFileBuku;
+use Filament\Forms\Components\Repeater;
 
 /**
  * TODO: ASUMSI - dipakai Section (bukan Wizard) untuk mengompakkan form,
@@ -4715,6 +4917,7 @@ class BukuResource extends Resource
                         ]),
                     FileUpload::make('cover')
                         ->image()
+                        ->disk('public')
                         ->directory('buku-cover'),
                     TextInput::make('penulis')
                         ->maxLength(255)
@@ -4728,7 +4931,7 @@ class BukuResource extends Resource
                         ]),
                     TextInput::make('isbn')
                         ->label('ISBN')
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
                         ->helperText('1 ISBN = 1 judul. Jumlah eksemplar fisik dikelola di tab Eksemplar setelah buku disimpan.')
                         ->validationMessages([
@@ -4767,6 +4970,13 @@ class BukuResource extends Resource
                             Textarea::make('deskripsi')
                                 ->columnSpanFull(),
                         ]),
+                    Select::make('authors')
+                        ->label('Penulis (Author)')
+                        ->relationship('authors', 'nama')
+                        ->multiple()
+                        ->preload()
+                        ->searchable()
+                        ->helperText('Terpisah dari kolom "Penulis" lama - dipakai untuk halaman Authors publik.'),
                     TextInput::make('harga_ganti')
                         ->label('Harga Ganti')
                         ->numeric()
@@ -4807,10 +5017,43 @@ class BukuResource extends Resource
                         ]),
                     Select::make('rak_id_eksemplar_awal')
                         ->label('Rak untuk Eksemplar Awal')
-                        ->options(fn () => Rak::query()->pluck('nama', 'id'))
+                        ->options(fn() => Rak::query()->pluck('nama', 'id'))
                         ->searchable()
                         ->helperText('Rak yang sama dipakaikan ke semua eksemplar awal yang dibuat.')
                         ->dehydrated(false),
+                ]),
+            Section::make('File Digital (E-book / Audiobook)')
+                ->description('Unggah PDF/EPUB untuk e-book atau MP3/WAV untuk audiobook. Bisa lebih dari satu file/jenis.')
+                ->columnSpanFull()
+                ->schema([
+                    Repeater::make('files')
+                        ->relationship('files')
+                        ->schema([
+                            Select::make('jenis')
+                                ->options(collect(JenisFileBuku::cases())->mapWithKeys(
+                                    fn($c) => [$c->value => $c->label()]
+                                ))
+                                ->required(),
+                            TextInput::make('nama_file')
+                                ->label('Nama Tampilan')
+                                ->maxLength(255),
+                            FileUpload::make('path')
+                                ->label('File')
+                                ->disk('public')
+                                ->directory('buku-files')
+                                ->acceptedFileTypes(['application/pdf', 'application/epub+zip', 'audio/mpeg', 'audio/wav'])
+                                ->required()
+                                ->storeFileNamesIn('nama_file_asli')
+                                ->dehydrateStateUsing(fn($state) => $state), // TODO: verifikasi signature FileUpload disk custom terhadap Filament ^5.7
+                            TextInput::make('urutan')
+                                ->numeric()
+                                ->default(0)
+                                ->helperText('Untuk urutan track audiobook.'),
+                        ])
+                        ->columns(2)
+                        ->addActionLabel('Tambah File')
+                        ->reorderable('urutan')
+                        ->collapsible(),
                 ]),
         ]);
     }
@@ -4818,19 +5061,19 @@ class BukuResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->withCount([
-                'eksemplars as jumlah_eksemplar_aktif' => fn ($q) => $q->where('status', '!=', StatusEksemplar::Hilang),
-                'eksemplars as jumlah_stok_tersedia' => fn ($q) => $q->where('status', StatusEksemplar::Tersedia),
-                'eksemplars as jumlah_eksemplar_rusak' => fn ($q) => $q->where('status', StatusEksemplar::Rusak),
-                'eksemplars as jumlah_eksemplar_hilang' => fn ($q) => $q->where('status', StatusEksemplar::Hilang),
+            ->modifyQueryUsing(fn(Builder $query) => $query->withCount([
+                'eksemplars as jumlah_eksemplar_aktif' => fn($q) => $q->where('status', '!=', StatusEksemplar::Hilang),
+                'eksemplars as jumlah_stok_tersedia' => fn($q) => $q->where('status', StatusEksemplar::Tersedia),
+                'eksemplars as jumlah_eksemplar_rusak' => fn($q) => $q->where('status', StatusEksemplar::Rusak),
+                'eksemplars as jumlah_eksemplar_hilang' => fn($q) => $q->where('status', StatusEksemplar::Hilang),
             ]))
             ->headerActions([
                 ImportAction::make()
                     ->importer(BukuImporter::class)
-                    ->authorize(fn () => auth()->user()?->can('create', Buku::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('create', Buku::class) ?? false),
                 ExportAction::make()
                     ->exporter(BukuExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Buku::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Buku::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('cover')
@@ -4847,22 +5090,22 @@ class BukuResource extends Resource
                     ->toggleable(),
                 TextColumn::make('jumlah_eksemplar_aktif')
                     ->label('Jumlah Buku')
-                    ->description(fn (Buku $record) => $record->jumlah_eksemplar_hilang > 0
+                    ->description(fn(Buku $record) => $record->jumlah_eksemplar_hilang > 0
                         ? "{$record->jumlah_eksemplar_hilang} hilang (tidak dihitung)"
                         : null)
                     ->badge()
-                    ->color(fn (Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
+                    ->color(fn(Buku $record) => $record->jumlah_eksemplar_aktif > 0 ? 'gray' : 'danger')
                     ->sortable(),
                 TextColumn::make('jumlah_stok_tersedia')
                     ->label('Stok Tersedia')
                     ->badge()
-                    ->color(fn (Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
+                    ->color(fn(Buku $record) => $record->jumlah_stok_tersedia > 0 ? 'success' : 'danger')
                     ->sortable(),
                 TextColumn::make('eksemplar_bermasalah')
                     ->label('Rusak/Hilang')
-                    ->state(fn (Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
+                    ->state(fn(Buku $record) => $record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang)
                     ->badge()
-                    ->color(fn (Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
+                    ->color(fn(Buku $record) => ($record->jumlah_eksemplar_rusak + $record->jumlah_eksemplar_hilang) > 0 ? 'warning' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('harga_ganti')
                     ->label('Harga Ganti')
@@ -4880,7 +5123,7 @@ class BukuResource extends Resource
                         $adaPeminjamanBerjalan = Eksemplar::query()
                             ->withTrashed()
                             ->where('buku_id', $record->id)
-                            ->whereHas('peminjamans', fn ($q) => $q->whereIn('status', [
+                            ->whereHas('peminjamans', fn($q) => $q->whereIn('status', [
                                 StatusPeminjaman::Aktif,
                                 StatusPeminjaman::Terlambat,
                             ]))
@@ -4910,7 +5153,7 @@ class BukuResource extends Resource
                 BulkAction::make('cetak_label_massal')
                     ->label('Cetak Label Eksemplar')
                     ->icon('heroicon-o-printer')
-                    ->authorize(fn () => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
+                    ->authorize(fn() => auth()->user()?->can('viewAny', Eksemplar::class) ?? false)
                     ->action(function (Collection $records) {
                         $eksemplarIds = Eksemplar::query()
                             ->whereIn('buku_id', $records->pluck('id'))
@@ -11801,6 +12044,86 @@ class PerpustakaanDeviceController extends Controller
 ```
 ---
 
+## app/Http/Controllers/AuthorPublikController.php
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Author;
+
+class AuthorPublikController extends Controller
+{
+    public function index()
+    {
+        $authors = Author::query()->withCount('bukus')->paginate(12);
+
+        return view('authors', compact('authors'));
+    }
+
+    public function show(Author $author)
+    {
+        $author->load('bukus');
+
+        return view('author-detail', compact('author'));
+    }
+}
+
+```
+---
+
+## app/Http/Controllers/BukuPublikController.php
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Enums\JenisFileBuku;
+use App\Models\Buku;
+use App\Models\BukuFile;
+
+class BukuPublikController extends Controller
+{
+    public function index()
+    {
+        $ebooks = Buku::query()
+            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+                JenisFileBuku::Pdf->value,
+                JenisFileBuku::Epub->value,
+            ]))
+            ->with('files')
+            ->paginate(12, ['*'], 'ebook_page');
+
+        $audiobooks = Buku::query()
+            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+                JenisFileBuku::AudioMp3->value,
+                JenisFileBuku::AudioWav->value,
+            ]))
+            ->with('files')
+            ->paginate(12, ['*'], 'audio_page');
+
+        return view('buku.index', compact('ebooks', 'audiobooks'));
+    }
+
+    /**
+     * TODO: GAP-SPEC - reader saat ini publik tanpa batasan (dikonfirmasi
+     * akses publik tanpa login). Jika ke depan perlu dibatasi (mis. hanya
+     * preview N halaman), perlu keputusan eksplisit lanjutan.
+     */
+    public function baca(BukuFile $file)
+    {
+        abort_unless($file->jenis === JenisFileBuku::Pdf, 404);
+
+        return view('buku.baca-pdf', [
+            'file' => $file,
+            'buku' => $file->buku,
+        ]);
+    }
+}
+
+```
+---
+
 ## app/Http/Controllers/BulkDataJobDownloadController.php
 ```php
 <?php
@@ -11988,6 +12311,80 @@ namespace App\Http\Controllers;
 abstract class Controller
 {
     //
+}
+
+```
+---
+
+## app/Http/Controllers/LandingPageController.php
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Author;
+use App\Models\Buku;
+
+class LandingPageController extends Controller
+{
+    public function index()
+    {
+        $bukuTerbaru = Buku::query()->latest()->take(8)->get();
+        $authors = Author::query()->latest()->take(6)->get();
+
+        return view('index', compact('bukuTerbaru', 'authors'));
+    }
+
+    public function faq()
+    {
+        return view('faq');
+    }
+
+    public function tentang()
+    {
+        return view('tentang');
+    }
+}
+
+```
+---
+
+## app/Http/Controllers/SitemapController.php
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Author;
+use Illuminate\Support\Facades\Response;
+
+class SitemapController extends Controller
+{
+    public function index()
+    {
+        $urls = collect([
+            ['loc' => route('home'), 'priority' => '1.0'],
+            ['loc' => route('buku.index'), 'priority' => '0.9'],
+            ['loc' => route('authors.index'), 'priority' => '0.8'],
+            ['loc' => route('faq'), 'priority' => '0.5'],
+            ['loc' => route('tentang'), 'priority' => '0.5'],
+        ]);
+
+        $authorUrls = Author::query()
+            ->select('id', 'updated_at')
+            ->get()
+            ->map(fn(Author $author) => [
+                'loc' => route('authors.show', $author),
+                'priority' => '0.6',
+                'lastmod' => $author->updated_at?->toAtomString(),
+            ]);
+
+        $urls = $urls->concat($authorUrls);
+
+        $xml = view('sitemap', ['urls' => $urls])->render();
+
+        return Response::make($xml, 200, ['Content-Type' => 'application/xml']);
+    }
 }
 
 ```
@@ -12609,6 +13006,95 @@ class ProcessMasterImportJob implements ShouldQueue
 ```
 ---
 
+## app/Models/Author.php
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Author extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $fillable = [
+        'nama',
+        'foto',
+        'bio',
+    ];
+
+    public function bukus(): BelongsToMany
+    {
+        return $this->belongsToMany(Buku::class);
+    }
+}
+
+```
+---
+
+## app/Models/BukuFile.php
+```php
+<?php
+
+namespace App\Models;
+
+use App\Enums\JenisFileBuku;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class BukuFile extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $fillable = [
+        'buku_id',
+        'jenis',
+        'path',
+        'nama_file',
+        'urutan',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'jenis' => JenisFileBuku::class,
+            'urutan' => 'integer',
+        ];
+    }
+
+    public function buku(): BelongsTo
+    {
+        return $this->belongsTo(Buku::class);
+    }
+
+    /**
+     * BARU - path RELATIF ('/storage/xxx'), BUKAN Storage::disk('public')->url()
+     * yang menghasilkan URL absolut dari config APP_URL. Alasan: jika
+     * APP_URL di .env berbeda hostname dengan yang dipakai browser saat
+     * akses (mis. APP_URL=127.0.0.1 tapi browser buka localhost), browser
+     * menganggap keduanya origin BERBEDA dan pdf.js gagal fetch karena
+     * diblokir CORS meski server-nya sama persis.
+     * TODO: GAP-SPEC - jika nanti disk 'public' dipindah ke S3/CDN
+     * eksternal, method ini WAJIB diubah kembali ke Storage::url() dan
+     * CORS di sisi storage eksternal harus dikonfigurasi eksplisit.
+     */
+    public function url(): string
+    {
+        return '/storage/' . $this->path;
+    }
+}
+
+```
+---
+
 ## app/Models/BukuKategori.php
 ```php
 <?php
@@ -12648,6 +13134,7 @@ class BukuKategori extends Model
 
 namespace App\Models;
 
+use App\Enums\JenisKelamin;
 use App\Enums\StatusEksemplar;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12689,19 +13176,32 @@ class Buku extends Model
         return $this->hasMany(Eksemplar::class);
     }
 
-    // dihitung on-the-fly, bukan field statis lagi
+    /**
+     * BARU - relasi many-to-many ke Author. Kolom string 'penulis'
+     * SENGAJA dipertahankan (legacy/fallback display) - TIDAK dihapus,
+     * TIDAK di-backfill otomatis ke tabel authors.
+     * TODO: GAP-SPEC - migrasi data 'penulis' (string) ke tabel authors
+     * belum diputuskan; keduanya berjalan independen untuk saat ini.
+     */
+    public function authors(): BelongsToMany
+    {
+        return $this->belongsToMany(Author::class);
+    }
+
+    /**
+     * BARU - file digital (PDF/EPUB/audio). 1 buku boleh punya banyak
+     * file lintas jenis sekaligus (dikonfirmasi).
+     */
+    public function files(): HasMany
+    {
+        return $this->hasMany(BukuFile::class)->orderBy('urutan');
+    }
+
     public function stokTersedia(): int
     {
         return $this->eksemplars()->where('status', StatusEksemplar::Tersedia)->count();
     }
 
-    /**
-     * BARU - jumlah eksemplar yang masih dianggap bagian koleksi aktif
-     * (Tersedia + Dipinjam + Rusak). Eksemplar Hilang SENGAJA dikeluarkan
-     * dari hitungan ini (dikonfirmasi) - dipakai BukuResource kolom
-     * 'Jumlah Buku' supaya angka tidak menyesatkan (buku hilang bukan lagi
-     * bagian koleksi yang bisa dipinjam/ditemukan kembali fisiknya).
-     */
     public function jumlahEksemplarAktif(): int
     {
         return $this->eksemplars()->where('status', '!=', StatusEksemplar::Hilang)->count();
@@ -14355,6 +14855,86 @@ class UserObserver
 ```
 ---
 
+## app/Policies/AuthorPolicy.php
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\Author;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class AuthorPolicy
+{
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ViewAny:Author');
+    }
+
+    public function view(AuthUser $authUser, Author $author): bool
+    {
+        return $authUser->can('View:Author');
+    }
+
+    public function create(AuthUser $authUser): bool
+    {
+        return $authUser->can('Create:Author');
+    }
+
+    public function update(AuthUser $authUser, Author $author): bool
+    {
+        return $authUser->can('Update:Author');
+    }
+
+    public function delete(AuthUser $authUser, Author $author): bool
+    {
+        return $authUser->can('Delete:Author');
+    }
+
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Author');
+    }
+
+    public function restore(AuthUser $authUser, Author $author): bool
+    {
+        return $authUser->can('Restore:Author');
+    }
+
+    public function forceDelete(AuthUser $authUser, Author $author): bool
+    {
+        return $authUser->can('ForceDelete:Author');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Author');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Author');
+    }
+
+    public function replicate(AuthUser $authUser, Author $author): bool
+    {
+        return $authUser->can('Replicate:Author');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Author');
+    }
+
+}
+```
+---
+
 ## app/Policies/BukuPolicy.php
 ```php
 <?php
@@ -14363,14 +14943,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -14430,8 +15010,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-}
 
+}
 ```
 ---
 
@@ -14443,14 +15023,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -14510,8 +15090,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-}
 
+}
 ```
 ---
 
@@ -14611,14 +15191,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\FirmwareRelease;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class FirmwareReleasePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:FirmwareRelease');
@@ -14678,8 +15258,8 @@ class FirmwareReleasePolicy
     {
         return $authUser->can('Reorder:FirmwareRelease');
     }
-}
 
+}
 ```
 ---
 
@@ -14691,14 +15271,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -14758,8 +15338,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-}
 
+}
 ```
 ---
 
@@ -14771,14 +15351,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -14838,8 +15418,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-}
 
+}
 ```
 ---
 
@@ -14851,14 +15431,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -14918,8 +15498,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-}
 
+}
 ```
 ---
 
@@ -14931,14 +15511,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -14998,8 +15578,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -15011,14 +15591,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -15078,8 +15658,8 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-}
 
+}
 ```
 ---
 
@@ -15091,14 +15671,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadgeLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgeLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadgeLog');
@@ -15158,8 +15738,8 @@ class LevelBadgeLogPolicy
     {
         return $authUser->can('Reorder:LevelBadgeLog');
     }
-}
 
+}
 ```
 ---
 
@@ -15171,14 +15751,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -15238,8 +15818,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-}
 
+}
 ```
 ---
 
@@ -15251,14 +15831,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -15318,8 +15898,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-}
 
+}
 ```
 ---
 
@@ -15331,14 +15911,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -15398,8 +15978,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-}
 
+}
 ```
 ---
 
@@ -15411,14 +15991,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -15478,8 +16058,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-}
 
+}
 ```
 ---
 
@@ -15491,14 +16071,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -15558,8 +16138,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-}
 
+}
 ```
 ---
 
@@ -15571,14 +16151,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -15638,8 +16218,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-}
 
+}
 ```
 ---
 
@@ -15651,14 +16231,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -15718,8 +16298,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-}
 
+}
 ```
 ---
 
@@ -15731,14 +16311,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -15798,8 +16378,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-}
 
+}
 ```
 ---
 
@@ -15811,14 +16391,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -15878,8 +16458,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-}
 
+}
 ```
 ---
 
@@ -15891,14 +16471,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -15958,8 +16538,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-}
 
+}
 ```
 ---
 
@@ -15971,14 +16551,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -16038,8 +16618,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -16051,14 +16631,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -16118,8 +16698,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-}
 
+}
 ```
 ---
 
@@ -16129,13 +16709,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -16195,8 +16775,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-}
 
+}
 ```
 ---
 
@@ -19004,13 +19584,32 @@ Schedule::command('perpustakaan:cron-harian')
 ```php
 <?php
 
+use App\Http\Controllers\AuthorPublikController;
+use App\Http\Controllers\BukuPublikController;
 use App\Http\Controllers\BulkDataJobDownloadController;
 use App\Http\Controllers\ChartExportController;
+use App\Http\Controllers\LandingPageController;
+use App\Http\Controllers\SitemapController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return redirect('dashboard/transaksi-cepat');
-});
+    // Sesuai keputusan: user sudah login -> langsung transaksi-cepat,
+    // guest -> landing page publik.
+    if (auth()->check()) {
+        return redirect('dashboard/transaksi-cepat');
+    }
+
+    return app(LandingPageController::class)->index();
+})->name('home');
+
+Route::get('/faq', [LandingPageController::class, 'faq'])->name('faq');
+Route::get('/tentang', [LandingPageController::class, 'tentang'])->name('tentang');
+
+Route::get('/authors', [AuthorPublikController::class, 'index'])->name('authors.index');
+Route::get('/authors/{author}', [AuthorPublikController::class, 'show'])->name('authors.show');
+
+Route::get('/buku-digital', [BukuPublikController::class, 'index'])->name('buku.index');
+Route::get('/buku-digital/baca/{file}', [BukuPublikController::class, 'baca'])->name('buku.baca');
 
 Route::post('/dashboard/chart-export/pdf', [ChartExportController::class, 'pdf'])
     ->middleware(['web', 'auth'])
@@ -19019,6 +19618,9 @@ Route::post('/dashboard/chart-export/pdf', [ChartExportController::class, 'pdf']
 Route::get('/unduh-bulk-data/{bulkDataJob}', BulkDataJobDownloadController::class)
     ->middleware(['auth'])
     ->name('bulk-data-job.download');
+
+
+Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
 
 ```
 ---
@@ -24362,6 +24964,100 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_08_05_000001_create_authors_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('authors', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('nama');
+            $table->string('foto')->nullable();
+            $table->text('bio')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('authors');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_05_000002_create_author_buku_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('author_buku', function (Blueprint $table) {
+            $table->foreignUuid('author_id')->constrained('authors')->cascadeOnDelete();
+            $table->foreignUuid('buku_id')->constrained('bukus')->cascadeOnDelete();
+            $table->primary(['author_id', 'buku_id']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('author_buku');
+    }
+};
+
+```
+---
+
+## database/migrations/2026_08_05_000003_create_buku_files_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('buku_files', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('buku_id')->constrained('bukus')->cascadeOnDelete();
+            $table->string('jenis'); // lihat App\Enums\JenisFileBuku
+            $table->string('path'); // relatif terhadap disk 'public'
+            $table->string('nama_file')->nullable(); // nama tampilan, mis. judul track audio
+            $table->unsignedInteger('urutan')->default(0); // untuk multi-track audiobook
+            $table->timestamps();
+            $table->softDeletes();
+
+            $table->index(['buku_id', 'jenis']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('buku_files');
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -25474,6 +26170,275 @@ function downloadChartPdf(canvas, filename) {
 }
 
 window.ChartExport = { downloadChartImage, downloadChartPdf };
+
+```
+---
+
+## resources/views/author-detail.blade.php
+```blade
+<x-layout :title="$author->nama">
+    <section class="max-w-3xl mx-auto px-4 py-16">
+        <div class="bg-white border rounded-lg p-6 flex items-center gap-6">
+            <div class="w-24 h-24 rounded-full bg-slate-100 overflow-hidden border shrink-0">
+                @if ($author->foto)
+                    <img src="{{ asset('storage/'.$author->foto) }}"
+                         alt="{{ $author->nama }}"
+                         class="w-full h-full object-cover">
+                @else
+                    <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+                        {{ mb_substr($author->nama, 0, 1) }}
+                    </div>
+                @endif
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-teal-900">{{ $author->nama }}</h1>
+                <p class="mt-2 text-slate-600">{{ $author->bio }}</p>
+            </div>
+        </div>
+
+        <h2 class="text-xl font-semibold text-teal-900 mt-10 mb-4">Buku</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            @forelse ($author->bukus as $buku)
+                <div class="bg-white border rounded-lg overflow-hidden">
+                    <div class="aspect-[3/4] bg-slate-100">
+                        @if ($buku->cover)
+                            <img src="{{ asset('storage/'.$buku->cover) }}"
+                                 alt="{{ $buku->judul }}"
+                                 class="w-full h-full object-cover">
+                        @endif
+                    </div>
+                    <p class="p-2 text-sm font-medium text-slate-700 truncate">{{ $buku->judul }}</p>
+                </div>
+            @empty
+                <p class="col-span-full text-slate-500">Belum ada buku terkait.</p>
+            @endforelse
+        </div>
+    </section>
+</x-layout>
+
+```
+---
+
+## resources/views/authors.blade.php
+```blade
+<x-layout :title="'Authors'">
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <h1 class="text-3xl font-bold text-teal-900 mb-8">Penulis</h1>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            @forelse ($authors as $author)
+                <a href="{{ route('authors.show', $author) }}"
+                   class="bg-white border rounded-lg p-5 text-center hover:shadow-md transition">
+                    <div class="w-24 h-24 rounded-full mx-auto bg-slate-100 overflow-hidden border">
+                        @if ($author->foto)
+                            <img src="{{ asset('storage/'.$author->foto) }}"
+                                 alt="{{ $author->nama }}"
+                                 class="w-full h-full object-cover">
+                        @else
+                            <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+                                {{ mb_substr($author->nama, 0, 1) }}
+                            </div>
+                        @endif
+                    </div>
+                    <p class="mt-3 font-medium text-slate-800">{{ $author->nama }}</p>
+                    <p class="text-sm text-slate-500">{{ $author->bukus_count }} buku</p>
+                </a>
+            @empty
+                <p class="col-span-full text-center text-slate-500">Belum ada penulis.</p>
+            @endforelse
+        </div>
+        {{ $authors->links() }}
+    </section>
+</x-layout>
+
+```
+---
+
+## resources/views/buku/baca-pdf.blade.php
+```blade
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <title>Baca {{ $buku->judul }}</title>
+    @vite('resources/css/app.css')
+</head>
+<body class="bg-slate-900 text-white">
+    <div class="flex justify-between items-center p-4">
+        <h1 class="text-lg font-semibold">{{ $buku->judul }}</h1>
+        <a href="{{ route('buku.index') }}" class="text-sm underline">Kembali</a>
+    </div>
+
+    <div id="flipbook-container" class="flex flex-col items-center gap-4 pb-12">
+        <canvas id="pdf-canvas" class="shadow-lg bg-white"></canvas>
+        <div class="flex gap-4">
+            <button id="prev-page" class="px-4 py-2 bg-teal-600 rounded">Sebelumnya</button>
+            <span id="page-info" class="self-center"></span>
+            <button id="next-page" class="px-4 py-2 bg-teal-600 rounded">Selanjutnya</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.min.mjs';
+        // TODO: GAP-SPEC - saat ini pdf.js dimuat via CDN untuk iterasi awal;
+        // rencana build lokal via package.json (pdfjs-dist) + Vite belum
+        // diintegrasikan penuh (worker path perlu konfigurasi khusus Vite).
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.worker.min.mjs';
+
+        const url = @json($file->url());
+        let pdfDoc = null;
+        let pageNum = 1;
+
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function renderPage(num) {
+            pdfDoc.getPage(num).then(function (page) {
+                const viewport = page.getViewport({ scale: 1.3 });
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                page.render({ canvasContext: ctx, viewport });
+                document.getElementById('page-info').textContent = `Halaman ${num} / ${pdfDoc.numPages}`;
+            });
+        }
+
+        pdfjsLib.getDocument(url).promise.then(function (doc) {
+            pdfDoc = doc;
+            renderPage(pageNum);
+        });
+
+        document.getElementById('prev-page').addEventListener('click', () => {
+            if (pageNum <= 1) return;
+            pageNum--;
+            renderPage(pageNum);
+        });
+
+        document.getElementById('next-page').addEventListener('click', () => {
+            if (pdfDoc && pageNum >= pdfDoc.numPages) return;
+            pageNum++;
+            renderPage(pageNum);
+        });
+    </script>
+</body>
+</html>
+
+```
+---
+
+## resources/views/buku/index.blade.php
+```blade
+<x-layout :title="'Buku Digital'">
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <h1 class="text-3xl font-bold text-teal-900 mb-8">E-Book</h1>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            @forelse ($ebooks as $buku)
+                <div class="bg-white border rounded-lg overflow-hidden">
+                    <div class="aspect-[3/4] bg-slate-100">
+                        @if ($buku->cover)
+                            <img src="{{ asset('storage/'.$buku->cover) }}"
+                                 alt="{{ $buku->judul }}"
+                                 class="w-full h-full object-cover">
+                        @endif
+                    </div>
+                    <div class="p-3">
+                        <p class="font-medium text-sm text-slate-700 truncate">{{ $buku->judul }}</p>
+                        @foreach ($buku->files->where('jenis', \App\Enums\JenisFileBuku::Pdf) as $file)
+                            <a href="{{ route('buku.baca', $file) }}"
+                               class="inline-block mt-2 text-sm text-teal-700 hover:underline">
+                                Baca PDF
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            @empty
+                <p class="col-span-full text-center text-slate-500">Belum ada e-book.</p>
+            @endforelse
+        </div>
+        {{ $ebooks->links() }}
+
+        <h1 class="text-3xl font-bold text-teal-900 mt-16 mb-8">Audiobook</h1>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            @forelse ($audiobooks as $buku)
+                <div class="bg-white border rounded-lg overflow-hidden">
+                    <div class="aspect-[3/4] bg-slate-100">
+                        @if ($buku->cover)
+                            <img src="{{ asset('storage/'.$buku->cover) }}"
+                                 alt="{{ $buku->judul }}"
+                                 class="w-full h-full object-cover">
+                        @endif
+                    </div>
+                    <div class="p-3">
+                        <p class="font-medium text-sm text-slate-700 truncate">{{ $buku->judul }}</p>
+                        @foreach ($buku->files->filter(fn ($f) => $f->jenis->isAudio()) as $file)
+                            <audio controls class="w-full mt-2">
+                                <source src="{{ $file->url() }}">
+                            </audio>
+                        @endforeach
+                    </div>
+                </div>
+            @empty
+                <p class="col-span-full text-center text-slate-500">Belum ada audiobook.</p>
+            @endforelse
+        </div>
+        {{ $audiobooks->links() }}
+    </section>
+</x-layout>
+
+```
+---
+
+## resources/views/components/layout.blade.php
+```blade
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ $title ?? 'Perpustakaan Digital' }} - MTs Negeri 1 Pandeglang</title>
+    <meta name="description" content="{{ $description ?? 'Perpustakaan digital MTs Negeri 1 Pandeglang - katalog buku, e-book, dan audiobook.' }}">
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <link rel="icon" href="{{ asset('images/favicon.ico') }}">
+    @vite('resources/css/app.css')
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+    @include('partials.public-nav')
+
+    <main class="flex-1">
+        {{ $slot }}
+    </main>
+
+    @include('partials.public-footer')
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('{{ asset('sw.js') }}', { scope: '/' });
+        }
+    </script>
+</body>
+</html>
+
+```
+---
+
+## resources/views/faq.blade.php
+```blade
+<x-layout :title="'FAQ'">
+    <section class="max-w-3xl mx-auto px-4 py-16">
+        <h1 class="text-3xl font-bold text-teal-900 mb-8">Pertanyaan yang Sering Diajukan</h1>
+
+        <div class="space-y-6">
+            <div class="bg-white border rounded-lg p-5">
+                <h3 class="font-semibold text-slate-800">Bagaimana cara meminjam buku?</h3>
+                <p class="text-slate-600 mt-1">Kunjungi perpustakaan dan lakukan tap kartu RFID di meja pustakawan.</p>
+            </div>
+            <div class="bg-white border rounded-lg p-5">
+                <h3 class="font-semibold text-slate-800">Apakah e-book dan audiobook bisa diakses siapa saja?</h3>
+                <p class="text-slate-600 mt-1">Ya, koleksi digital dapat diakses publik tanpa perlu login.</p>
+            </div>
+            {{-- TODO: GAP-SPEC - konten FAQ masih placeholder, tunggu materi resmi dari sekolah --}}
+        </div>
+    </section>
+</x-layout>
 
 ```
 ---
@@ -26680,6 +27645,137 @@ window.ChartExport = window.ChartExport || (function () {
 ```
 ---
 
+## resources/views/index.blade.php
+```blade
+<x-layout :title="'Beranda'">
+    <section class="bg-white border-b">
+        <div class="max-w-6xl mx-auto px-4 py-20 text-center">
+            <h1 class="text-4xl font-bold text-teal-900">Perpustakaan Digital Sekolah</h1>
+            <p class="mt-4 text-slate-600 max-w-xl mx-auto">
+                Jelajahi koleksi buku fisik, e-book, dan audiobook MTs Negeri 1 Pandeglang.
+            </p>
+            <a href="{{ route('buku.index') }}"
+               class="inline-block mt-8 px-6 py-3 bg-teal-700 text-white rounded-md font-medium hover:bg-teal-800">
+                Lihat Buku Digital
+            </a>
+        </div>
+    </section>
+
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="flex justify-between items-end mb-8">
+            <h2 class="text-2xl font-semibold text-teal-900">Buku Terbaru</h2>
+            <a href="{{ route('buku.index') }}" class="text-sm text-teal-700 hover:underline">Lihat semua</a>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            @forelse ($bukuTerbaru as $buku)
+                <div class="bg-white border rounded-lg overflow-hidden shadow-sm">
+                    <div class="aspect-[3/4] bg-slate-100">
+                        @if ($buku->cover)
+                            <img src="{{ asset('storage/'.$buku->cover) }}"
+                                 alt="{{ $buku->judul }}"
+                                 class="w-full h-full object-cover">
+                        @else
+                            <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+                                Tanpa Sampul
+                            </div>
+                        @endif
+                    </div>
+                    <p class="p-3 font-medium text-sm text-slate-700 truncate">{{ $buku->judul }}</p>
+                </div>
+            @empty
+                <p class="col-span-full text-center text-slate-500">Belum ada buku.</p>
+            @endforelse
+        </div>
+    </section>
+
+    <section class="bg-white border-t">
+        <div class="max-w-6xl mx-auto px-4 py-16">
+            <div class="flex justify-between items-end mb-8">
+                <h2 class="text-2xl font-semibold text-teal-900">Penulis</h2>
+                <a href="{{ route('authors.index') }}" class="text-sm text-teal-700 hover:underline">Lihat semua</a>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-6 text-center">
+                @forelse ($authors as $author)
+                    <a href="{{ route('authors.show', $author) }}" class="group">
+                        <div class="w-20 h-20 rounded-full mx-auto bg-slate-100 overflow-hidden border">
+                            @if ($author->foto)
+                                <img src="{{ asset('storage/'.$author->foto) }}"
+                                     alt="{{ $author->nama }}"
+                                     class="w-full h-full object-cover">
+                            @else
+                                <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+                                    {{ mb_substr($author->nama, 0, 1) }}
+                                </div>
+                            @endif
+                        </div>
+                        <p class="mt-2 text-sm text-slate-700 group-hover:text-teal-700">{{ $author->nama }}</p>
+                    </a>
+                @empty
+                    <p class="col-span-full text-center text-slate-500">Belum ada penulis.</p>
+                @endforelse
+            </div>
+        </div>
+    </section>
+</x-layout>
+
+```
+---
+
+## resources/views/partials/public-footer.blade.php
+```blade
+<footer class="bg-teal-900 text-teal-100 mt-16">
+    <div class="max-w-6xl mx-auto px-4 py-10 grid grid-cols-1 md:grid-cols-3 gap-8 text-sm">
+        <div>
+            <h3 class="font-semibold text-white mb-2">MTs Negeri 1 Pandeglang</h3>
+            <p class="text-teal-200">Perpustakaan digital - koleksi fisik, e-book, dan audiobook.</p>
+        </div>
+        <div>
+            <h3 class="font-semibold text-white mb-2">Tautan</h3>
+            <ul class="space-y-1 text-teal-200">
+                <li><a href="{{ route('buku.index') }}" class="hover:text-white">Buku Digital</a></li>
+                <li><a href="{{ route('authors.index') }}" class="hover:text-white">Authors</a></li>
+                <li><a href="{{ route('faq') }}" class="hover:text-white">FAQ</a></li>
+                <li><a href="{{ route('tentang') }}" class="hover:text-white">Tentang Perpustakaan</a></li>
+            </ul>
+        </div>
+        <div>
+            <h3 class="font-semibold text-white mb-2">Kontak</h3>
+            {{-- TODO: GAP-SPEC - alamat/kontak resmi belum tersedia, isi placeholder --}}
+            <p class="text-teal-200">Jl. Raya Labuan Km 5,7 Palurahan, Kaduhejo, Pandeglang, Banten</p>
+        </div>
+    </div>
+    <div class="border-t border-teal-800 text-center text-xs text-teal-300 py-4">
+        &copy; {{ date('Y') }} MTs Negeri 1 Pandeglang. Seluruh hak cipta dilindungi.
+    </div>
+</footer>
+
+```
+---
+
+## resources/views/partials/public-nav.blade.php
+```blade
+<header class="bg-teal-800 text-white">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+        <a href="{{ route('home') }}" class="flex items-center gap-3">
+            <img src="{{ asset('images/brand-lightmode.png') }}" alt="Logo" class="h-10 w-auto">
+        </a>
+        <nav class="hidden md:flex gap-8 text-sm font-medium">
+            <a href="{{ route('home') }}" class="hover:text-teal-200">Beranda</a>
+            <a href="{{ route('buku.index') }}" class="hover:text-teal-200">Buku Digital</a>
+            <a href="{{ route('authors.index') }}" class="hover:text-teal-200">Authors</a>
+            <a href="{{ route('faq') }}" class="hover:text-teal-200">FAQ</a>
+            <a href="{{ route('tentang') }}" class="hover:text-teal-200">Tentang</a>
+        </nav>
+        <a href="{{ url('dashboard') }}"
+           class="bg-white text-teal-800 px-4 py-2 rounded-md text-sm font-semibold hover:bg-teal-50">
+            Masuk
+        </a>
+    </div>
+</header>
+
+```
+---
+
 ## resources/views/pdf/chart-export.blade.php
 ```blade
 <!DOCTYPE html>
@@ -27181,8 +28277,39 @@ window.ChartExport = window.ChartExport || (function () {
 ```
 ---
 
-## resources/views/welcome.blade.php
+## resources/views/sitemap.blade.php
 ```blade
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    @foreach ($urls as $url)
+        <url>
+            <loc>{{ $url['loc'] }}</loc>
+            @if (!empty($url['lastmod']))
+                <lastmod>{{ $url['lastmod'] }}</lastmod>
+            @endif
+            <priority>{{ $url['priority'] }}</priority>
+        </url>
+    @endforeach
+</urlset>
+
+```
+---
+
+## resources/views/tentang.blade.php
+```blade
+<x-layout :title="'Tentang Perpustakaan'">
+    <section class="max-w-3xl mx-auto px-4 py-16">
+        <h1 class="text-3xl font-bold text-teal-900 mb-6">Tentang Perpustakaan</h1>
+        <div class="bg-white border rounded-lg p-6 text-slate-600 leading-relaxed">
+            {{-- TODO: GAP-SPEC - deskripsi resmi belum tersedia, isi placeholder --}}
+            <p>
+                Perpustakaan digital MTs Negeri 1 Pandeglang melayani siswa dan pegawai dalam
+                mengakses koleksi buku fisik maupun digital (e-book dan audiobook), sebagai bagian
+                dari upaya sekolah meningkatkan minat baca dan mempermudah akses literasi.
+            </p>
+        </div>
+    </section>
+</x-layout>
 
 ```
 ---

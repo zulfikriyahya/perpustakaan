@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\JenisKelamin;
 use App\Enums\StatusEksemplar;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -43,19 +44,32 @@ class Buku extends Model
         return $this->hasMany(Eksemplar::class);
     }
 
-    // dihitung on-the-fly, bukan field statis lagi
+    /**
+     * BARU - relasi many-to-many ke Author. Kolom string 'penulis'
+     * SENGAJA dipertahankan (legacy/fallback display) - TIDAK dihapus,
+     * TIDAK di-backfill otomatis ke tabel authors.
+     * TODO: GAP-SPEC - migrasi data 'penulis' (string) ke tabel authors
+     * belum diputuskan; keduanya berjalan independen untuk saat ini.
+     */
+    public function authors(): BelongsToMany
+    {
+        return $this->belongsToMany(Author::class);
+    }
+
+    /**
+     * BARU - file digital (PDF/EPUB/audio). 1 buku boleh punya banyak
+     * file lintas jenis sekaligus (dikonfirmasi).
+     */
+    public function files(): HasMany
+    {
+        return $this->hasMany(BukuFile::class)->orderBy('urutan');
+    }
+
     public function stokTersedia(): int
     {
         return $this->eksemplars()->where('status', StatusEksemplar::Tersedia)->count();
     }
 
-    /**
-     * BARU - jumlah eksemplar yang masih dianggap bagian koleksi aktif
-     * (Tersedia + Dipinjam + Rusak). Eksemplar Hilang SENGAJA dikeluarkan
-     * dari hitungan ini (dikonfirmasi) - dipakai BukuResource kolom
-     * 'Jumlah Buku' supaya angka tidak menyesatkan (buku hilang bukan lagi
-     * bagian koleksi yang bisa dipinjam/ditemukan kembali fisiknya).
-     */
     public function jumlahEksemplarAktif(): int
     {
         return $this->eksemplars()->where('status', '!=', StatusEksemplar::Hilang)->count();

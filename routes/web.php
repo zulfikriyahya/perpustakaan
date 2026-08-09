@@ -34,5 +34,17 @@ Route::post('/dashboard/chart-export/pdf', [ChartExportController::class, 'pdf']
 Route::get('/unduh-bulk-data/{bulkDataJob}', BulkDataJobDownloadController::class)
     ->middleware(['auth'])
     ->name('bulk-data-job.download');
+Route::get('/robots.txt', function () {
+    $lines = [
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /dashboard',
+        'Disallow: /unduh-bulk-data',
+        '',
+        'Sitemap: ' . route('sitemap'),
+    ];
+
+    return response(implode("\n", $lines), 200, ['Content-Type' => 'text/plain']);
+})->name('robots');
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');

@@ -1,4 +1,22 @@
-<x-layout :title="'Beranda'">
+<x-layout
+    :title="'Beranda'"
+    :description="'Perpustakaan digital MTs Negeri 1 Pandeglang - jelajahi koleksi buku fisik, e-book, dan audiobook untuk siswa dan pegawai.'"
+>
+    @push('jsonld')
+    <script type="application/ld+json">
+    {!! json_encode([
+        '@context' => 'https://schema.org',
+        '@type' => 'WebSite',
+        'name' => 'Perpustakaan Digital MTs Negeri 1 Pandeglang',
+        'url' => route('home'),
+        'potentialAction' => [
+            '@type' => 'SearchAction',
+            'target' => route('buku.index').'?q={search_term_string}',
+            'query-input' => 'required name=search_term_string',
+        ],
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}
+    </script>
+    @endpush
     <section class="bg-white border-b">
         <div class="max-w-6xl mx-auto px-4 py-20 text-center">
             <h1 class="text-4xl font-bold text-teal-900">Perpustakaan Digital Sekolah</h1>

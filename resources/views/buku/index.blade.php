@@ -1,4 +1,7 @@
-<x-layout :title="'Buku Digital'">
+<x-layout
+    :title="'Buku Digital'"
+    :description="'Koleksi e-book dan audiobook digital Perpustakaan MTs Negeri 1 Pandeglang, dapat diakses publik tanpa login.'"
+>
     <section class="max-w-6xl mx-auto px-4 py-16">
         <h1 class="text-3xl font-bold text-teal-900 mb-8">E-Book</h1>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-6">

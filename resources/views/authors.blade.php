@@ -1,4 +1,7 @@
-<x-layout :title="'Authors'">
+<x-layout
+    :title="'Daftar Penulis'"
+    :description="'Daftar penulis buku yang tersedia di koleksi Perpustakaan Digital MTs Negeri 1 Pandeglang.'"
+>
     <section class="max-w-6xl mx-auto px-4 py-16">
         <h1 class="text-3xl font-bold text-teal-900 mb-8">Penulis</h1>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-6">

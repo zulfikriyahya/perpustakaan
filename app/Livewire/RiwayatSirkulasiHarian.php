@@ -69,6 +69,8 @@ class RiwayatSirkulasiHarian extends Component
                 'waktu' => $p->created_at,
                 'aksi' => 'dipinjamkan',
                 'nama_user' => $p->user?->nama ?? '-',
+                'avatar_url' => $p->user?->getFilamentAvatarUrl(),
+                'point_user' => $p->user?->akumulasi_point,
                 'judul_buku' => $p->eksemplar?->buku?->judul ?? '-',
                 'diproses_oleh' => $p->diprosesOleh?->nama ?? '-',
             ]);
@@ -81,6 +83,8 @@ class RiwayatSirkulasiHarian extends Component
                 'waktu' => $pg->created_at,
                 'aksi' => 'dikembalikan',
                 'nama_user' => $pg->peminjaman?->user?->nama ?? '-',
+                'avatar_url' => $pg->peminjaman?->user?->getFilamentAvatarUrl(),
+                'point_user' => $pg->peminjaman?->user?->akumulasi_point,
                 'judul_buku' => $pg->peminjaman?->eksemplar?->buku?->judul ?? '-',
                 'diproses_oleh' => $pg->diprosesOleh?->nama ?? '-',
             ]);

@@ -361,8 +361,13 @@
 │   ├── cache
 │   │   ├── filament
 │   │   │   └── panels
+│   │   │       └── dashboard.php
+│   │   ├── blade-icons.php
+│   │   ├── config.php
+│   │   ├── events.php
 │   │   ├── .gitignore
 │   │   ├── packages.php
+│   │   ├── routes-v7.php
 │   │   └── services.php
 │   ├── app.php
 │   └── providers.php
@@ -488,8 +493,7 @@
 │       │   │   ├── laporan-bulanan.blade.php
 │       │   │   ├── pengaturan-sistem.blade.php
 │       │   │   ├── proses-kenaikan-kelas.blade.php
-│       │   │   ├── sirkulasi.blade.php
-│       │   │   └── transaksi-cepat.blade.php
+│       │   │   └── sirkulasi.blade.php
 │       │   └── partials
 │       │       ├── app-footer.blade.php
 │       │       ├── auth-styles.blade.php
@@ -539,4 +543,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-123 directories, 417 files
+123 directories, 421 files

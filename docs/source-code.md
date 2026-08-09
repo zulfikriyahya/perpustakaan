@@ -25732,6 +25732,3134 @@ return Application::configure(basePath: dirname(__DIR__))
 ```
 ---
 
+## bootstrap/cache/blade-icons.php
+```php
+<?php return array (
+  'heroicons' => 
+  array (
+    '/home/zulfikriyahya/blueprint/perpustakaan/vendor/blade-ui-kit/blade-heroicons/src/../resources/svg' => 
+    array (
+      0 => 'c-academic-cap',
+      1 => 'c-adjustments-horizontal',
+      2 => 'c-adjustments-vertical',
+      3 => 'c-archive-box',
+      4 => 'c-archive-box-arrow-down',
+      5 => 'c-archive-box-x-mark',
+      6 => 'c-arrow-down',
+      7 => 'c-arrow-down-circle',
+      8 => 'c-arrow-down-left',
+      9 => 'c-arrow-down-on-square',
+      10 => 'c-arrow-down-on-square-stack',
+      11 => 'c-arrow-down-right',
+      12 => 'c-arrow-down-tray',
+      13 => 'c-arrow-left',
+      14 => 'c-arrow-left-circle',
+      15 => 'c-arrow-left-end-on-rectangle',
+      16 => 'c-arrow-left-start-on-rectangle',
+      17 => 'c-arrow-long-down',
+      18 => 'c-arrow-long-left',
+      19 => 'c-arrow-long-right',
+      20 => 'c-arrow-long-up',
+      21 => 'c-arrow-path',
+      22 => 'c-arrow-path-rounded-square',
+      23 => 'c-arrow-right',
+      24 => 'c-arrow-right-circle',
+      25 => 'c-arrow-right-end-on-rectangle',
+      26 => 'c-arrow-right-start-on-rectangle',
+      27 => 'c-arrow-top-right-on-square',
+      28 => 'c-arrow-trending-down',
+      29 => 'c-arrow-trending-up',
+      30 => 'c-arrow-turn-down-left',
+      31 => 'c-arrow-turn-down-right',
+      32 => 'c-arrow-turn-left-down',
+      33 => 'c-arrow-turn-left-up',
+      34 => 'c-arrow-turn-right-down',
+      35 => 'c-arrow-turn-right-up',
+      36 => 'c-arrow-turn-up-left',
+      37 => 'c-arrow-turn-up-right',
+      38 => 'c-arrow-up',
+      39 => 'c-arrow-up-circle',
+      40 => 'c-arrow-up-left',
+      41 => 'c-arrow-up-on-square',
+      42 => 'c-arrow-up-on-square-stack',
+      43 => 'c-arrow-up-right',
+      44 => 'c-arrow-up-tray',
+      45 => 'c-arrow-uturn-down',
+      46 => 'c-arrow-uturn-left',
+      47 => 'c-arrow-uturn-right',
+      48 => 'c-arrow-uturn-up',
+      49 => 'c-arrows-pointing-in',
+      50 => 'c-arrows-pointing-out',
+      51 => 'c-arrows-right-left',
+      52 => 'c-arrows-up-down',
+      53 => 'c-at-symbol',
+      54 => 'c-backspace',
+      55 => 'c-backward',
+      56 => 'c-banknotes',
+      57 => 'c-bars-2',
+      58 => 'c-bars-3',
+      59 => 'c-bars-3-bottom-left',
+      60 => 'c-bars-3-bottom-right',
+      61 => 'c-bars-3-center-left',
+      62 => 'c-bars-4',
+      63 => 'c-bars-arrow-down',
+      64 => 'c-bars-arrow-up',
+      65 => 'c-battery-0',
+      66 => 'c-battery-100',
+      67 => 'c-battery-50',
+      68 => 'c-beaker',
+      69 => 'c-bell',
+      70 => 'c-bell-alert',
+      71 => 'c-bell-slash',
+      72 => 'c-bell-snooze',
+      73 => 'c-bold',
+      74 => 'c-bolt',
+      75 => 'c-bolt-slash',
+      76 => 'c-book-open',
+      77 => 'c-bookmark',
+      78 => 'c-bookmark-slash',
+      79 => 'c-bookmark-square',
+      80 => 'c-briefcase',
+      81 => 'c-bug-ant',
+      82 => 'c-building-library',
+      83 => 'c-building-office',
+      84 => 'c-building-office-2',
+      85 => 'c-building-storefront',
+      86 => 'c-cake',
+      87 => 'c-calculator',
+      88 => 'c-calendar',
+      89 => 'c-calendar-date-range',
+      90 => 'c-calendar-days',
+      91 => 'c-camera',
+      92 => 'c-chart-bar',
+      93 => 'c-chart-bar-square',
+      94 => 'c-chart-pie',
+      95 => 'c-chat-bubble-bottom-center',
+      96 => 'c-chat-bubble-bottom-center-text',
+      97 => 'c-chat-bubble-left',
+      98 => 'c-chat-bubble-left-ellipsis',
+      99 => 'c-chat-bubble-left-right',
+      100 => 'c-chat-bubble-oval-left',
+      101 => 'c-chat-bubble-oval-left-ellipsis',
+      102 => 'c-check',
+      103 => 'c-check-badge',
+      104 => 'c-check-circle',
+      105 => 'c-chevron-double-down',
+      106 => 'c-chevron-double-left',
+      107 => 'c-chevron-double-right',
+      108 => 'c-chevron-double-up',
+      109 => 'c-chevron-down',
+      110 => 'c-chevron-left',
+      111 => 'c-chevron-right',
+      112 => 'c-chevron-up',
+      113 => 'c-chevron-up-down',
+      114 => 'c-circle-stack',
+      115 => 'c-clipboard',
+      116 => 'c-clipboard-document',
+      117 => 'c-clipboard-document-check',
+      118 => 'c-clipboard-document-list',
+      119 => 'c-clock',
+      120 => 'c-cloud',
+      121 => 'c-cloud-arrow-down',
+      122 => 'c-cloud-arrow-up',
+      123 => 'c-code-bracket',
+      124 => 'c-code-bracket-square',
+      125 => 'c-cog',
+      126 => 'c-cog-6-tooth',
+      127 => 'c-cog-8-tooth',
+      128 => 'c-command-line',
+      129 => 'c-computer-desktop',
+      130 => 'c-cpu-chip',
+      131 => 'c-credit-card',
+      132 => 'c-cube',
+      133 => 'c-cube-transparent',
+      134 => 'c-currency-bangladeshi',
+      135 => 'c-currency-dollar',
+      136 => 'c-currency-euro',
+      137 => 'c-currency-pound',
+      138 => 'c-currency-rupee',
+      139 => 'c-currency-yen',
+      140 => 'c-cursor-arrow-rays',
+      141 => 'c-cursor-arrow-ripple',
+      142 => 'c-device-phone-mobile',
+      143 => 'c-device-tablet',
+      144 => 'c-divide',
+      145 => 'c-document',
+      146 => 'c-document-arrow-down',
+      147 => 'c-document-arrow-up',
+      148 => 'c-document-chart-bar',
+      149 => 'c-document-check',
+      150 => 'c-document-currency-bangladeshi',
+      151 => 'c-document-currency-dollar',
+      152 => 'c-document-currency-euro',
+      153 => 'c-document-currency-pound',
+      154 => 'c-document-currency-rupee',
+      155 => 'c-document-currency-yen',
+      156 => 'c-document-duplicate',
+      157 => 'c-document-magnifying-glass',
+      158 => 'c-document-minus',
+      159 => 'c-document-plus',
+      160 => 'c-document-text',
+      161 => 'c-ellipsis-horizontal',
+      162 => 'c-ellipsis-horizontal-circle',
+      163 => 'c-ellipsis-vertical',
+      164 => 'c-envelope',
+      165 => 'c-envelope-open',
+      166 => 'c-equals',
+      167 => 'c-exclamation-circle',
+      168 => 'c-exclamation-triangle',
+      169 => 'c-eye',
+      170 => 'c-eye-dropper',
+      171 => 'c-eye-slash',
+      172 => 'c-face-frown',
+      173 => 'c-face-smile',
+      174 => 'c-film',
+      175 => 'c-finger-print',
+      176 => 'c-fire',
+      177 => 'c-flag',
+      178 => 'c-folder',
+      179 => 'c-folder-arrow-down',
+      180 => 'c-folder-minus',
+      181 => 'c-folder-open',
+      182 => 'c-folder-plus',
+      183 => 'c-forward',
+      184 => 'c-funnel',
+      185 => 'c-gif',
+      186 => 'c-gift',
+      187 => 'c-gift-top',
+      188 => 'c-globe-alt',
+      189 => 'c-globe-americas',
+      190 => 'c-globe-asia-australia',
+      191 => 'c-globe-europe-africa',
+      192 => 'c-h1',
+      193 => 'c-h2',
+      194 => 'c-h3',
+      195 => 'c-hand-raised',
+      196 => 'c-hand-thumb-down',
+      197 => 'c-hand-thumb-up',
+      198 => 'c-hashtag',
+      199 => 'c-heart',
+      200 => 'c-home',
+      201 => 'c-home-modern',
+      202 => 'c-identification',
+      203 => 'c-inbox',
+      204 => 'c-inbox-arrow-down',
+      205 => 'c-inbox-stack',
+      206 => 'c-information-circle',
+      207 => 'c-italic',
+      208 => 'c-key',
+      209 => 'c-language',
+      210 => 'c-lifebuoy',
+      211 => 'c-light-bulb',
+      212 => 'c-link',
+      213 => 'c-link-slash',
+      214 => 'c-list-bullet',
+      215 => 'c-lock-closed',
+      216 => 'c-lock-open',
+      217 => 'c-magnifying-glass',
+      218 => 'c-magnifying-glass-circle',
+      219 => 'c-magnifying-glass-minus',
+      220 => 'c-magnifying-glass-plus',
+      221 => 'c-map',
+      222 => 'c-map-pin',
+      223 => 'c-megaphone',
+      224 => 'c-microphone',
+      225 => 'c-minus',
+      226 => 'c-minus-circle',
+      227 => 'c-moon',
+      228 => 'c-musical-note',
+      229 => 'c-newspaper',
+      230 => 'c-no-symbol',
+      231 => 'c-numbered-list',
+      232 => 'c-paint-brush',
+      233 => 'c-paper-airplane',
+      234 => 'c-paper-clip',
+      235 => 'c-pause',
+      236 => 'c-pause-circle',
+      237 => 'c-pencil',
+      238 => 'c-pencil-square',
+      239 => 'c-percent-badge',
+      240 => 'c-phone',
+      241 => 'c-phone-arrow-down-left',
+      242 => 'c-phone-arrow-up-right',
+      243 => 'c-phone-x-mark',
+      244 => 'c-photo',
+      245 => 'c-play',
+      246 => 'c-play-circle',
+      247 => 'c-play-pause',
+      248 => 'c-plus',
+      249 => 'c-plus-circle',
+      250 => 'c-power',
+      251 => 'c-presentation-chart-bar',
+      252 => 'c-presentation-chart-line',
+      253 => 'c-printer',
+      254 => 'c-puzzle-piece',
+      255 => 'c-qr-code',
+      256 => 'c-question-mark-circle',
+      257 => 'c-queue-list',
+      258 => 'c-radio',
+      259 => 'c-receipt-percent',
+      260 => 'c-receipt-refund',
+      261 => 'c-rectangle-group',
+      262 => 'c-rectangle-stack',
+      263 => 'c-rocket-launch',
+      264 => 'c-rss',
+      265 => 'c-scale',
+      266 => 'c-scissors',
+      267 => 'c-server',
+      268 => 'c-server-stack',
+      269 => 'c-share',
+      270 => 'c-shield-check',
+      271 => 'c-shield-exclamation',
+      272 => 'c-shopping-bag',
+      273 => 'c-shopping-cart',
+      274 => 'c-signal',
+      275 => 'c-signal-slash',
+      276 => 'c-slash',
+      277 => 'c-sparkles',
+      278 => 'c-speaker-wave',
+      279 => 'c-speaker-x-mark',
+      280 => 'c-square-2-stack',
+      281 => 'c-square-3-stack-3d',
+      282 => 'c-squares-2x2',
+      283 => 'c-squares-plus',
+      284 => 'c-star',
+      285 => 'c-stop',
+      286 => 'c-stop-circle',
+      287 => 'c-strikethrough',
+      288 => 'c-sun',
+      289 => 'c-swatch',
+      290 => 'c-table-cells',
+      291 => 'c-tag',
+      292 => 'c-ticket',
+      293 => 'c-trash',
+      294 => 'c-trophy',
+      295 => 'c-truck',
+      296 => 'c-tv',
+      297 => 'c-underline',
+      298 => 'c-user',
+      299 => 'c-user-circle',
+      300 => 'c-user-group',
+      301 => 'c-user-minus',
+      302 => 'c-user-plus',
+      303 => 'c-users',
+      304 => 'c-variable',
+      305 => 'c-video-camera',
+      306 => 'c-video-camera-slash',
+      307 => 'c-view-columns',
+      308 => 'c-viewfinder-circle',
+      309 => 'c-wallet',
+      310 => 'c-wifi',
+      311 => 'c-window',
+      312 => 'c-wrench',
+      313 => 'c-wrench-screwdriver',
+      314 => 'c-x-circle',
+      315 => 'c-x-mark',
+      316 => 'm-academic-cap',
+      317 => 'm-adjustments-horizontal',
+      318 => 'm-adjustments-vertical',
+      319 => 'm-archive-box',
+      320 => 'm-archive-box-arrow-down',
+      321 => 'm-archive-box-x-mark',
+      322 => 'm-arrow-down',
+      323 => 'm-arrow-down-circle',
+      324 => 'm-arrow-down-left',
+      325 => 'm-arrow-down-on-square',
+      326 => 'm-arrow-down-on-square-stack',
+      327 => 'm-arrow-down-right',
+      328 => 'm-arrow-down-tray',
+      329 => 'm-arrow-left',
+      330 => 'm-arrow-left-circle',
+      331 => 'm-arrow-left-end-on-rectangle',
+      332 => 'm-arrow-left-on-rectangle',
+      333 => 'm-arrow-left-start-on-rectangle',
+      334 => 'm-arrow-long-down',
+      335 => 'm-arrow-long-left',
+      336 => 'm-arrow-long-right',
+      337 => 'm-arrow-long-up',
+      338 => 'm-arrow-path',
+      339 => 'm-arrow-path-rounded-square',
+      340 => 'm-arrow-right',
+      341 => 'm-arrow-right-circle',
+      342 => 'm-arrow-right-end-on-rectangle',
+      343 => 'm-arrow-right-on-rectangle',
+      344 => 'm-arrow-right-start-on-rectangle',
+      345 => 'm-arrow-small-down',
+      346 => 'm-arrow-small-left',
+      347 => 'm-arrow-small-right',
+      348 => 'm-arrow-small-up',
+      349 => 'm-arrow-top-right-on-square',
+      350 => 'm-arrow-trending-down',
+      351 => 'm-arrow-trending-up',
+      352 => 'm-arrow-turn-down-left',
+      353 => 'm-arrow-turn-down-right',
+      354 => 'm-arrow-turn-left-down',
+      355 => 'm-arrow-turn-left-up',
+      356 => 'm-arrow-turn-right-down',
+      357 => 'm-arrow-turn-right-up',
+      358 => 'm-arrow-turn-up-left',
+      359 => 'm-arrow-turn-up-right',
+      360 => 'm-arrow-up',
+      361 => 'm-arrow-up-circle',
+      362 => 'm-arrow-up-left',
+      363 => 'm-arrow-up-on-square',
+      364 => 'm-arrow-up-on-square-stack',
+      365 => 'm-arrow-up-right',
+      366 => 'm-arrow-up-tray',
+      367 => 'm-arrow-uturn-down',
+      368 => 'm-arrow-uturn-left',
+      369 => 'm-arrow-uturn-right',
+      370 => 'm-arrow-uturn-up',
+      371 => 'm-arrows-pointing-in',
+      372 => 'm-arrows-pointing-out',
+      373 => 'm-arrows-right-left',
+      374 => 'm-arrows-up-down',
+      375 => 'm-at-symbol',
+      376 => 'm-backspace',
+      377 => 'm-backward',
+      378 => 'm-banknotes',
+      379 => 'm-bars-2',
+      380 => 'm-bars-3',
+      381 => 'm-bars-3-bottom-left',
+      382 => 'm-bars-3-bottom-right',
+      383 => 'm-bars-3-center-left',
+      384 => 'm-bars-4',
+      385 => 'm-bars-arrow-down',
+      386 => 'm-bars-arrow-up',
+      387 => 'm-battery-0',
+      388 => 'm-battery-100',
+      389 => 'm-battery-50',
+      390 => 'm-beaker',
+      391 => 'm-bell',
+      392 => 'm-bell-alert',
+      393 => 'm-bell-slash',
+      394 => 'm-bell-snooze',
+      395 => 'm-bold',
+      396 => 'm-bolt',
+      397 => 'm-bolt-slash',
+      398 => 'm-book-open',
+      399 => 'm-bookmark',
+      400 => 'm-bookmark-slash',
+      401 => 'm-bookmark-square',
+      402 => 'm-briefcase',
+      403 => 'm-bug-ant',
+      404 => 'm-building-library',
+      405 => 'm-building-office',
+      406 => 'm-building-office-2',
+      407 => 'm-building-storefront',
+      408 => 'm-cake',
+      409 => 'm-calculator',
+      410 => 'm-calendar',
+      411 => 'm-calendar-date-range',
+      412 => 'm-calendar-days',
+      413 => 'm-camera',
+      414 => 'm-chart-bar',
+      415 => 'm-chart-bar-square',
+      416 => 'm-chart-pie',
+      417 => 'm-chat-bubble-bottom-center',
+      418 => 'm-chat-bubble-bottom-center-text',
+      419 => 'm-chat-bubble-left',
+      420 => 'm-chat-bubble-left-ellipsis',
+      421 => 'm-chat-bubble-left-right',
+      422 => 'm-chat-bubble-oval-left',
+      423 => 'm-chat-bubble-oval-left-ellipsis',
+      424 => 'm-check',
+      425 => 'm-check-badge',
+      426 => 'm-check-circle',
+      427 => 'm-chevron-double-down',
+      428 => 'm-chevron-double-left',
+      429 => 'm-chevron-double-right',
+      430 => 'm-chevron-double-up',
+      431 => 'm-chevron-down',
+      432 => 'm-chevron-left',
+      433 => 'm-chevron-right',
+      434 => 'm-chevron-up',
+      435 => 'm-chevron-up-down',
+      436 => 'm-circle-stack',
+      437 => 'm-clipboard',
+      438 => 'm-clipboard-document',
+      439 => 'm-clipboard-document-check',
+      440 => 'm-clipboard-document-list',
+      441 => 'm-clock',
+      442 => 'm-cloud',
+      443 => 'm-cloud-arrow-down',
+      444 => 'm-cloud-arrow-up',
+      445 => 'm-code-bracket',
+      446 => 'm-code-bracket-square',
+      447 => 'm-cog',
+      448 => 'm-cog-6-tooth',
+      449 => 'm-cog-8-tooth',
+      450 => 'm-command-line',
+      451 => 'm-computer-desktop',
+      452 => 'm-cpu-chip',
+      453 => 'm-credit-card',
+      454 => 'm-cube',
+      455 => 'm-cube-transparent',
+      456 => 'm-currency-bangladeshi',
+      457 => 'm-currency-dollar',
+      458 => 'm-currency-euro',
+      459 => 'm-currency-pound',
+      460 => 'm-currency-rupee',
+      461 => 'm-currency-yen',
+      462 => 'm-cursor-arrow-rays',
+      463 => 'm-cursor-arrow-ripple',
+      464 => 'm-device-phone-mobile',
+      465 => 'm-device-tablet',
+      466 => 'm-divide',
+      467 => 'm-document',
+      468 => 'm-document-arrow-down',
+      469 => 'm-document-arrow-up',
+      470 => 'm-document-chart-bar',
+      471 => 'm-document-check',
+      472 => 'm-document-currency-bangladeshi',
+      473 => 'm-document-currency-dollar',
+      474 => 'm-document-currency-euro',
+      475 => 'm-document-currency-pound',
+      476 => 'm-document-currency-rupee',
+      477 => 'm-document-currency-yen',
+      478 => 'm-document-duplicate',
+      479 => 'm-document-magnifying-glass',
+      480 => 'm-document-minus',
+      481 => 'm-document-plus',
+      482 => 'm-document-text',
+      483 => 'm-ellipsis-horizontal',
+      484 => 'm-ellipsis-horizontal-circle',
+      485 => 'm-ellipsis-vertical',
+      486 => 'm-envelope',
+      487 => 'm-envelope-open',
+      488 => 'm-equals',
+      489 => 'm-exclamation-circle',
+      490 => 'm-exclamation-triangle',
+      491 => 'm-eye',
+      492 => 'm-eye-dropper',
+      493 => 'm-eye-slash',
+      494 => 'm-face-frown',
+      495 => 'm-face-smile',
+      496 => 'm-film',
+      497 => 'm-finger-print',
+      498 => 'm-fire',
+      499 => 'm-flag',
+      500 => 'm-folder',
+      501 => 'm-folder-arrow-down',
+      502 => 'm-folder-minus',
+      503 => 'm-folder-open',
+      504 => 'm-folder-plus',
+      505 => 'm-forward',
+      506 => 'm-funnel',
+      507 => 'm-gif',
+      508 => 'm-gift',
+      509 => 'm-gift-top',
+      510 => 'm-globe-alt',
+      511 => 'm-globe-americas',
+      512 => 'm-globe-asia-australia',
+      513 => 'm-globe-europe-africa',
+      514 => 'm-h1',
+      515 => 'm-h2',
+      516 => 'm-h3',
+      517 => 'm-hand-raised',
+      518 => 'm-hand-thumb-down',
+      519 => 'm-hand-thumb-up',
+      520 => 'm-hashtag',
+      521 => 'm-heart',
+      522 => 'm-home',
+      523 => 'm-home-modern',
+      524 => 'm-identification',
+      525 => 'm-inbox',
+      526 => 'm-inbox-arrow-down',
+      527 => 'm-inbox-stack',
+      528 => 'm-information-circle',
+      529 => 'm-italic',
+      530 => 'm-key',
+      531 => 'm-language',
+      532 => 'm-lifebuoy',
+      533 => 'm-light-bulb',
+      534 => 'm-link',
+      535 => 'm-link-slash',
+      536 => 'm-list-bullet',
+      537 => 'm-lock-closed',
+      538 => 'm-lock-open',
+      539 => 'm-magnifying-glass',
+      540 => 'm-magnifying-glass-circle',
+      541 => 'm-magnifying-glass-minus',
+      542 => 'm-magnifying-glass-plus',
+      543 => 'm-map',
+      544 => 'm-map-pin',
+      545 => 'm-megaphone',
+      546 => 'm-microphone',
+      547 => 'm-minus',
+      548 => 'm-minus-circle',
+      549 => 'm-minus-small',
+      550 => 'm-moon',
+      551 => 'm-musical-note',
+      552 => 'm-newspaper',
+      553 => 'm-no-symbol',
+      554 => 'm-numbered-list',
+      555 => 'm-paint-brush',
+      556 => 'm-paper-airplane',
+      557 => 'm-paper-clip',
+      558 => 'm-pause',
+      559 => 'm-pause-circle',
+      560 => 'm-pencil',
+      561 => 'm-pencil-square',
+      562 => 'm-percent-badge',
+      563 => 'm-phone',
+      564 => 'm-phone-arrow-down-left',
+      565 => 'm-phone-arrow-up-right',
+      566 => 'm-phone-x-mark',
+      567 => 'm-photo',
+      568 => 'm-play',
+      569 => 'm-play-circle',
+      570 => 'm-play-pause',
+      571 => 'm-plus',
+      572 => 'm-plus-circle',
+      573 => 'm-plus-small',
+      574 => 'm-power',
+      575 => 'm-presentation-chart-bar',
+      576 => 'm-presentation-chart-line',
+      577 => 'm-printer',
+      578 => 'm-puzzle-piece',
+      579 => 'm-qr-code',
+      580 => 'm-question-mark-circle',
+      581 => 'm-queue-list',
+      582 => 'm-radio',
+      583 => 'm-receipt-percent',
+      584 => 'm-receipt-refund',
+      585 => 'm-rectangle-group',
+      586 => 'm-rectangle-stack',
+      587 => 'm-rocket-launch',
+      588 => 'm-rss',
+      589 => 'm-scale',
+      590 => 'm-scissors',
+      591 => 'm-server',
+      592 => 'm-server-stack',
+      593 => 'm-share',
+      594 => 'm-shield-check',
+      595 => 'm-shield-exclamation',
+      596 => 'm-shopping-bag',
+      597 => 'm-shopping-cart',
+      598 => 'm-signal',
+      599 => 'm-signal-slash',
+      600 => 'm-slash',
+      601 => 'm-sparkles',
+      602 => 'm-speaker-wave',
+      603 => 'm-speaker-x-mark',
+      604 => 'm-square-2-stack',
+      605 => 'm-square-3-stack-3d',
+      606 => 'm-squares-2x2',
+      607 => 'm-squares-plus',
+      608 => 'm-star',
+      609 => 'm-stop',
+      610 => 'm-stop-circle',
+      611 => 'm-strikethrough',
+      612 => 'm-sun',
+      613 => 'm-swatch',
+      614 => 'm-table-cells',
+      615 => 'm-tag',
+      616 => 'm-ticket',
+      617 => 'm-trash',
+      618 => 'm-trophy',
+      619 => 'm-truck',
+      620 => 'm-tv',
+      621 => 'm-underline',
+      622 => 'm-user',
+      623 => 'm-user-circle',
+      624 => 'm-user-group',
+      625 => 'm-user-minus',
+      626 => 'm-user-plus',
+      627 => 'm-users',
+      628 => 'm-variable',
+      629 => 'm-video-camera',
+      630 => 'm-video-camera-slash',
+      631 => 'm-view-columns',
+      632 => 'm-viewfinder-circle',
+      633 => 'm-wallet',
+      634 => 'm-wifi',
+      635 => 'm-window',
+      636 => 'm-wrench',
+      637 => 'm-wrench-screwdriver',
+      638 => 'm-x-circle',
+      639 => 'm-x-mark',
+      640 => 'o-academic-cap',
+      641 => 'o-adjustments-horizontal',
+      642 => 'o-adjustments-vertical',
+      643 => 'o-archive-box',
+      644 => 'o-archive-box-arrow-down',
+      645 => 'o-archive-box-x-mark',
+      646 => 'o-arrow-down',
+      647 => 'o-arrow-down-circle',
+      648 => 'o-arrow-down-left',
+      649 => 'o-arrow-down-on-square',
+      650 => 'o-arrow-down-on-square-stack',
+      651 => 'o-arrow-down-right',
+      652 => 'o-arrow-down-tray',
+      653 => 'o-arrow-left',
+      654 => 'o-arrow-left-circle',
+      655 => 'o-arrow-left-end-on-rectangle',
+      656 => 'o-arrow-left-on-rectangle',
+      657 => 'o-arrow-left-start-on-rectangle',
+      658 => 'o-arrow-long-down',
+      659 => 'o-arrow-long-left',
+      660 => 'o-arrow-long-right',
+      661 => 'o-arrow-long-up',
+      662 => 'o-arrow-path',
+      663 => 'o-arrow-path-rounded-square',
+      664 => 'o-arrow-right',
+      665 => 'o-arrow-right-circle',
+      666 => 'o-arrow-right-end-on-rectangle',
+      667 => 'o-arrow-right-on-rectangle',
+      668 => 'o-arrow-right-start-on-rectangle',
+      669 => 'o-arrow-small-down',
+      670 => 'o-arrow-small-left',
+      671 => 'o-arrow-small-right',
+      672 => 'o-arrow-small-up',
+      673 => 'o-arrow-top-right-on-square',
+      674 => 'o-arrow-trending-down',
+      675 => 'o-arrow-trending-up',
+      676 => 'o-arrow-turn-down-left',
+      677 => 'o-arrow-turn-down-right',
+      678 => 'o-arrow-turn-left-down',
+      679 => 'o-arrow-turn-left-up',
+      680 => 'o-arrow-turn-right-down',
+      681 => 'o-arrow-turn-right-up',
+      682 => 'o-arrow-turn-up-left',
+      683 => 'o-arrow-turn-up-right',
+      684 => 'o-arrow-up',
+      685 => 'o-arrow-up-circle',
+      686 => 'o-arrow-up-left',
+      687 => 'o-arrow-up-on-square',
+      688 => 'o-arrow-up-on-square-stack',
+      689 => 'o-arrow-up-right',
+      690 => 'o-arrow-up-tray',
+      691 => 'o-arrow-uturn-down',
+      692 => 'o-arrow-uturn-left',
+      693 => 'o-arrow-uturn-right',
+      694 => 'o-arrow-uturn-up',
+      695 => 'o-arrows-pointing-in',
+      696 => 'o-arrows-pointing-out',
+      697 => 'o-arrows-right-left',
+      698 => 'o-arrows-up-down',
+      699 => 'o-at-symbol',
+      700 => 'o-backspace',
+      701 => 'o-backward',
+      702 => 'o-banknotes',
+      703 => 'o-bars-2',
+      704 => 'o-bars-3',
+      705 => 'o-bars-3-bottom-left',
+      706 => 'o-bars-3-bottom-right',
+      707 => 'o-bars-3-center-left',
+      708 => 'o-bars-4',
+      709 => 'o-bars-arrow-down',
+      710 => 'o-bars-arrow-up',
+      711 => 'o-battery-0',
+      712 => 'o-battery-100',
+      713 => 'o-battery-50',
+      714 => 'o-beaker',
+      715 => 'o-bell',
+      716 => 'o-bell-alert',
+      717 => 'o-bell-slash',
+      718 => 'o-bell-snooze',
+      719 => 'o-bold',
+      720 => 'o-bolt',
+      721 => 'o-bolt-slash',
+      722 => 'o-book-open',
+      723 => 'o-bookmark',
+      724 => 'o-bookmark-slash',
+      725 => 'o-bookmark-square',
+      726 => 'o-briefcase',
+      727 => 'o-bug-ant',
+      728 => 'o-building-library',
+      729 => 'o-building-office',
+      730 => 'o-building-office-2',
+      731 => 'o-building-storefront',
+      732 => 'o-cake',
+      733 => 'o-calculator',
+      734 => 'o-calendar',
+      735 => 'o-calendar-date-range',
+      736 => 'o-calendar-days',
+      737 => 'o-camera',
+      738 => 'o-chart-bar',
+      739 => 'o-chart-bar-square',
+      740 => 'o-chart-pie',
+      741 => 'o-chat-bubble-bottom-center',
+      742 => 'o-chat-bubble-bottom-center-text',
+      743 => 'o-chat-bubble-left',
+      744 => 'o-chat-bubble-left-ellipsis',
+      745 => 'o-chat-bubble-left-right',
+      746 => 'o-chat-bubble-oval-left',
+      747 => 'o-chat-bubble-oval-left-ellipsis',
+      748 => 'o-check',
+      749 => 'o-check-badge',
+      750 => 'o-check-circle',
+      751 => 'o-chevron-double-down',
+      752 => 'o-chevron-double-left',
+      753 => 'o-chevron-double-right',
+      754 => 'o-chevron-double-up',
+      755 => 'o-chevron-down',
+      756 => 'o-chevron-left',
+      757 => 'o-chevron-right',
+      758 => 'o-chevron-up',
+      759 => 'o-chevron-up-down',
+      760 => 'o-circle-stack',
+      761 => 'o-clipboard',
+      762 => 'o-clipboard-document',
+      763 => 'o-clipboard-document-check',
+      764 => 'o-clipboard-document-list',
+      765 => 'o-clock',
+      766 => 'o-cloud',
+      767 => 'o-cloud-arrow-down',
+      768 => 'o-cloud-arrow-up',
+      769 => 'o-code-bracket',
+      770 => 'o-code-bracket-square',
+      771 => 'o-cog',
+      772 => 'o-cog-6-tooth',
+      773 => 'o-cog-8-tooth',
+      774 => 'o-command-line',
+      775 => 'o-computer-desktop',
+      776 => 'o-cpu-chip',
+      777 => 'o-credit-card',
+      778 => 'o-cube',
+      779 => 'o-cube-transparent',
+      780 => 'o-currency-bangladeshi',
+      781 => 'o-currency-dollar',
+      782 => 'o-currency-euro',
+      783 => 'o-currency-pound',
+      784 => 'o-currency-rupee',
+      785 => 'o-currency-yen',
+      786 => 'o-cursor-arrow-rays',
+      787 => 'o-cursor-arrow-ripple',
+      788 => 'o-device-phone-mobile',
+      789 => 'o-device-tablet',
+      790 => 'o-divide',
+      791 => 'o-document',
+      792 => 'o-document-arrow-down',
+      793 => 'o-document-arrow-up',
+      794 => 'o-document-chart-bar',
+      795 => 'o-document-check',
+      796 => 'o-document-currency-bangladeshi',
+      797 => 'o-document-currency-dollar',
+      798 => 'o-document-currency-euro',
+      799 => 'o-document-currency-pound',
+      800 => 'o-document-currency-rupee',
+      801 => 'o-document-currency-yen',
+      802 => 'o-document-duplicate',
+      803 => 'o-document-magnifying-glass',
+      804 => 'o-document-minus',
+      805 => 'o-document-plus',
+      806 => 'o-document-text',
+      807 => 'o-ellipsis-horizontal',
+      808 => 'o-ellipsis-horizontal-circle',
+      809 => 'o-ellipsis-vertical',
+      810 => 'o-envelope',
+      811 => 'o-envelope-open',
+      812 => 'o-equals',
+      813 => 'o-exclamation-circle',
+      814 => 'o-exclamation-triangle',
+      815 => 'o-eye',
+      816 => 'o-eye-dropper',
+      817 => 'o-eye-slash',
+      818 => 'o-face-frown',
+      819 => 'o-face-smile',
+      820 => 'o-film',
+      821 => 'o-finger-print',
+      822 => 'o-fire',
+      823 => 'o-flag',
+      824 => 'o-folder',
+      825 => 'o-folder-arrow-down',
+      826 => 'o-folder-minus',
+      827 => 'o-folder-open',
+      828 => 'o-folder-plus',
+      829 => 'o-forward',
+      830 => 'o-funnel',
+      831 => 'o-gif',
+      832 => 'o-gift',
+      833 => 'o-gift-top',
+      834 => 'o-globe-alt',
+      835 => 'o-globe-americas',
+      836 => 'o-globe-asia-australia',
+      837 => 'o-globe-europe-africa',
+      838 => 'o-h1',
+      839 => 'o-h2',
+      840 => 'o-h3',
+      841 => 'o-hand-raised',
+      842 => 'o-hand-thumb-down',
+      843 => 'o-hand-thumb-up',
+      844 => 'o-hashtag',
+      845 => 'o-heart',
+      846 => 'o-home',
+      847 => 'o-home-modern',
+      848 => 'o-identification',
+      849 => 'o-inbox',
+      850 => 'o-inbox-arrow-down',
+      851 => 'o-inbox-stack',
+      852 => 'o-information-circle',
+      853 => 'o-italic',
+      854 => 'o-key',
+      855 => 'o-language',
+      856 => 'o-lifebuoy',
+      857 => 'o-light-bulb',
+      858 => 'o-link',
+      859 => 'o-link-slash',
+      860 => 'o-list-bullet',
+      861 => 'o-lock-closed',
+      862 => 'o-lock-open',
+      863 => 'o-magnifying-glass',
+      864 => 'o-magnifying-glass-circle',
+      865 => 'o-magnifying-glass-minus',
+      866 => 'o-magnifying-glass-plus',
+      867 => 'o-map',
+      868 => 'o-map-pin',
+      869 => 'o-megaphone',
+      870 => 'o-microphone',
+      871 => 'o-minus',
+      872 => 'o-minus-circle',
+      873 => 'o-minus-small',
+      874 => 'o-moon',
+      875 => 'o-musical-note',
+      876 => 'o-newspaper',
+      877 => 'o-no-symbol',
+      878 => 'o-numbered-list',
+      879 => 'o-paint-brush',
+      880 => 'o-paper-airplane',
+      881 => 'o-paper-clip',
+      882 => 'o-pause',
+      883 => 'o-pause-circle',
+      884 => 'o-pencil',
+      885 => 'o-pencil-square',
+      886 => 'o-percent-badge',
+      887 => 'o-phone',
+      888 => 'o-phone-arrow-down-left',
+      889 => 'o-phone-arrow-up-right',
+      890 => 'o-phone-x-mark',
+      891 => 'o-photo',
+      892 => 'o-play',
+      893 => 'o-play-circle',
+      894 => 'o-play-pause',
+      895 => 'o-plus',
+      896 => 'o-plus-circle',
+      897 => 'o-plus-small',
+      898 => 'o-power',
+      899 => 'o-presentation-chart-bar',
+      900 => 'o-presentation-chart-line',
+      901 => 'o-printer',
+      902 => 'o-puzzle-piece',
+      903 => 'o-qr-code',
+      904 => 'o-question-mark-circle',
+      905 => 'o-queue-list',
+      906 => 'o-radio',
+      907 => 'o-receipt-percent',
+      908 => 'o-receipt-refund',
+      909 => 'o-rectangle-group',
+      910 => 'o-rectangle-stack',
+      911 => 'o-rocket-launch',
+      912 => 'o-rss',
+      913 => 'o-scale',
+      914 => 'o-scissors',
+      915 => 'o-server',
+      916 => 'o-server-stack',
+      917 => 'o-share',
+      918 => 'o-shield-check',
+      919 => 'o-shield-exclamation',
+      920 => 'o-shopping-bag',
+      921 => 'o-shopping-cart',
+      922 => 'o-signal',
+      923 => 'o-signal-slash',
+      924 => 'o-slash',
+      925 => 'o-sparkles',
+      926 => 'o-speaker-wave',
+      927 => 'o-speaker-x-mark',
+      928 => 'o-square-2-stack',
+      929 => 'o-square-3-stack-3d',
+      930 => 'o-squares-2x2',
+      931 => 'o-squares-plus',
+      932 => 'o-star',
+      933 => 'o-stop',
+      934 => 'o-stop-circle',
+      935 => 'o-strikethrough',
+      936 => 'o-sun',
+      937 => 'o-swatch',
+      938 => 'o-table-cells',
+      939 => 'o-tag',
+      940 => 'o-ticket',
+      941 => 'o-trash',
+      942 => 'o-trophy',
+      943 => 'o-truck',
+      944 => 'o-tv',
+      945 => 'o-underline',
+      946 => 'o-user',
+      947 => 'o-user-circle',
+      948 => 'o-user-group',
+      949 => 'o-user-minus',
+      950 => 'o-user-plus',
+      951 => 'o-users',
+      952 => 'o-variable',
+      953 => 'o-video-camera',
+      954 => 'o-video-camera-slash',
+      955 => 'o-view-columns',
+      956 => 'o-viewfinder-circle',
+      957 => 'o-wallet',
+      958 => 'o-wifi',
+      959 => 'o-window',
+      960 => 'o-wrench',
+      961 => 'o-wrench-screwdriver',
+      962 => 'o-x-circle',
+      963 => 'o-x-mark',
+      964 => 's-academic-cap',
+      965 => 's-adjustments-horizontal',
+      966 => 's-adjustments-vertical',
+      967 => 's-archive-box',
+      968 => 's-archive-box-arrow-down',
+      969 => 's-archive-box-x-mark',
+      970 => 's-arrow-down',
+      971 => 's-arrow-down-circle',
+      972 => 's-arrow-down-left',
+      973 => 's-arrow-down-on-square',
+      974 => 's-arrow-down-on-square-stack',
+      975 => 's-arrow-down-right',
+      976 => 's-arrow-down-tray',
+      977 => 's-arrow-left',
+      978 => 's-arrow-left-circle',
+      979 => 's-arrow-left-end-on-rectangle',
+      980 => 's-arrow-left-on-rectangle',
+      981 => 's-arrow-left-start-on-rectangle',
+      982 => 's-arrow-long-down',
+      983 => 's-arrow-long-left',
+      984 => 's-arrow-long-right',
+      985 => 's-arrow-long-up',
+      986 => 's-arrow-path',
+      987 => 's-arrow-path-rounded-square',
+      988 => 's-arrow-right',
+      989 => 's-arrow-right-circle',
+      990 => 's-arrow-right-end-on-rectangle',
+      991 => 's-arrow-right-on-rectangle',
+      992 => 's-arrow-right-start-on-rectangle',
+      993 => 's-arrow-small-down',
+      994 => 's-arrow-small-left',
+      995 => 's-arrow-small-right',
+      996 => 's-arrow-small-up',
+      997 => 's-arrow-top-right-on-square',
+      998 => 's-arrow-trending-down',
+      999 => 's-arrow-trending-up',
+      1000 => 's-arrow-turn-down-left',
+      1001 => 's-arrow-turn-down-right',
+      1002 => 's-arrow-turn-left-down',
+      1003 => 's-arrow-turn-left-up',
+      1004 => 's-arrow-turn-right-down',
+      1005 => 's-arrow-turn-right-up',
+      1006 => 's-arrow-turn-up-left',
+      1007 => 's-arrow-turn-up-right',
+      1008 => 's-arrow-up',
+      1009 => 's-arrow-up-circle',
+      1010 => 's-arrow-up-left',
+      1011 => 's-arrow-up-on-square',
+      1012 => 's-arrow-up-on-square-stack',
+      1013 => 's-arrow-up-right',
+      1014 => 's-arrow-up-tray',
+      1015 => 's-arrow-uturn-down',
+      1016 => 's-arrow-uturn-left',
+      1017 => 's-arrow-uturn-right',
+      1018 => 's-arrow-uturn-up',
+      1019 => 's-arrows-pointing-in',
+      1020 => 's-arrows-pointing-out',
+      1021 => 's-arrows-right-left',
+      1022 => 's-arrows-up-down',
+      1023 => 's-at-symbol',
+      1024 => 's-backspace',
+      1025 => 's-backward',
+      1026 => 's-banknotes',
+      1027 => 's-bars-2',
+      1028 => 's-bars-3',
+      1029 => 's-bars-3-bottom-left',
+      1030 => 's-bars-3-bottom-right',
+      1031 => 's-bars-3-center-left',
+      1032 => 's-bars-4',
+      1033 => 's-bars-arrow-down',
+      1034 => 's-bars-arrow-up',
+      1035 => 's-battery-0',
+      1036 => 's-battery-100',
+      1037 => 's-battery-50',
+      1038 => 's-beaker',
+      1039 => 's-bell',
+      1040 => 's-bell-alert',
+      1041 => 's-bell-slash',
+      1042 => 's-bell-snooze',
+      1043 => 's-bold',
+      1044 => 's-bolt',
+      1045 => 's-bolt-slash',
+      1046 => 's-book-open',
+      1047 => 's-bookmark',
+      1048 => 's-bookmark-slash',
+      1049 => 's-bookmark-square',
+      1050 => 's-briefcase',
+      1051 => 's-bug-ant',
+      1052 => 's-building-library',
+      1053 => 's-building-office',
+      1054 => 's-building-office-2',
+      1055 => 's-building-storefront',
+      1056 => 's-cake',
+      1057 => 's-calculator',
+      1058 => 's-calendar',
+      1059 => 's-calendar-date-range',
+      1060 => 's-calendar-days',
+      1061 => 's-camera',
+      1062 => 's-chart-bar',
+      1063 => 's-chart-bar-square',
+      1064 => 's-chart-pie',
+      1065 => 's-chat-bubble-bottom-center',
+      1066 => 's-chat-bubble-bottom-center-text',
+      1067 => 's-chat-bubble-left',
+      1068 => 's-chat-bubble-left-ellipsis',
+      1069 => 's-chat-bubble-left-right',
+      1070 => 's-chat-bubble-oval-left',
+      1071 => 's-chat-bubble-oval-left-ellipsis',
+      1072 => 's-check',
+      1073 => 's-check-badge',
+      1074 => 's-check-circle',
+      1075 => 's-chevron-double-down',
+      1076 => 's-chevron-double-left',
+      1077 => 's-chevron-double-right',
+      1078 => 's-chevron-double-up',
+      1079 => 's-chevron-down',
+      1080 => 's-chevron-left',
+      1081 => 's-chevron-right',
+      1082 => 's-chevron-up',
+      1083 => 's-chevron-up-down',
+      1084 => 's-circle-stack',
+      1085 => 's-clipboard',
+      1086 => 's-clipboard-document',
+      1087 => 's-clipboard-document-check',
+      1088 => 's-clipboard-document-list',
+      1089 => 's-clock',
+      1090 => 's-cloud',
+      1091 => 's-cloud-arrow-down',
+      1092 => 's-cloud-arrow-up',
+      1093 => 's-code-bracket',
+      1094 => 's-code-bracket-square',
+      1095 => 's-cog',
+      1096 => 's-cog-6-tooth',
+      1097 => 's-cog-8-tooth',
+      1098 => 's-command-line',
+      1099 => 's-computer-desktop',
+      1100 => 's-cpu-chip',
+      1101 => 's-credit-card',
+      1102 => 's-cube',
+      1103 => 's-cube-transparent',
+      1104 => 's-currency-bangladeshi',
+      1105 => 's-currency-dollar',
+      1106 => 's-currency-euro',
+      1107 => 's-currency-pound',
+      1108 => 's-currency-rupee',
+      1109 => 's-currency-yen',
+      1110 => 's-cursor-arrow-rays',
+      1111 => 's-cursor-arrow-ripple',
+      1112 => 's-device-phone-mobile',
+      1113 => 's-device-tablet',
+      1114 => 's-divide',
+      1115 => 's-document',
+      1116 => 's-document-arrow-down',
+      1117 => 's-document-arrow-up',
+      1118 => 's-document-chart-bar',
+      1119 => 's-document-check',
+      1120 => 's-document-currency-bangladeshi',
+      1121 => 's-document-currency-dollar',
+      1122 => 's-document-currency-euro',
+      1123 => 's-document-currency-pound',
+      1124 => 's-document-currency-rupee',
+      1125 => 's-document-currency-yen',
+      1126 => 's-document-duplicate',
+      1127 => 's-document-magnifying-glass',
+      1128 => 's-document-minus',
+      1129 => 's-document-plus',
+      1130 => 's-document-text',
+      1131 => 's-ellipsis-horizontal',
+      1132 => 's-ellipsis-horizontal-circle',
+      1133 => 's-ellipsis-vertical',
+      1134 => 's-envelope',
+      1135 => 's-envelope-open',
+      1136 => 's-equals',
+      1137 => 's-exclamation-circle',
+      1138 => 's-exclamation-triangle',
+      1139 => 's-eye',
+      1140 => 's-eye-dropper',
+      1141 => 's-eye-slash',
+      1142 => 's-face-frown',
+      1143 => 's-face-smile',
+      1144 => 's-film',
+      1145 => 's-finger-print',
+      1146 => 's-fire',
+      1147 => 's-flag',
+      1148 => 's-folder',
+      1149 => 's-folder-arrow-down',
+      1150 => 's-folder-minus',
+      1151 => 's-folder-open',
+      1152 => 's-folder-plus',
+      1153 => 's-forward',
+      1154 => 's-funnel',
+      1155 => 's-gif',
+      1156 => 's-gift',
+      1157 => 's-gift-top',
+      1158 => 's-globe-alt',
+      1159 => 's-globe-americas',
+      1160 => 's-globe-asia-australia',
+      1161 => 's-globe-europe-africa',
+      1162 => 's-h1',
+      1163 => 's-h2',
+      1164 => 's-h3',
+      1165 => 's-hand-raised',
+      1166 => 's-hand-thumb-down',
+      1167 => 's-hand-thumb-up',
+      1168 => 's-hashtag',
+      1169 => 's-heart',
+      1170 => 's-home',
+      1171 => 's-home-modern',
+      1172 => 's-identification',
+      1173 => 's-inbox',
+      1174 => 's-inbox-arrow-down',
+      1175 => 's-inbox-stack',
+      1176 => 's-information-circle',
+      1177 => 's-italic',
+      1178 => 's-key',
+      1179 => 's-language',
+      1180 => 's-lifebuoy',
+      1181 => 's-light-bulb',
+      1182 => 's-link',
+      1183 => 's-link-slash',
+      1184 => 's-list-bullet',
+      1185 => 's-lock-closed',
+      1186 => 's-lock-open',
+      1187 => 's-magnifying-glass',
+      1188 => 's-magnifying-glass-circle',
+      1189 => 's-magnifying-glass-minus',
+      1190 => 's-magnifying-glass-plus',
+      1191 => 's-map',
+      1192 => 's-map-pin',
+      1193 => 's-megaphone',
+      1194 => 's-microphone',
+      1195 => 's-minus',
+      1196 => 's-minus-circle',
+      1197 => 's-minus-small',
+      1198 => 's-moon',
+      1199 => 's-musical-note',
+      1200 => 's-newspaper',
+      1201 => 's-no-symbol',
+      1202 => 's-numbered-list',
+      1203 => 's-paint-brush',
+      1204 => 's-paper-airplane',
+      1205 => 's-paper-clip',
+      1206 => 's-pause',
+      1207 => 's-pause-circle',
+      1208 => 's-pencil',
+      1209 => 's-pencil-square',
+      1210 => 's-percent-badge',
+      1211 => 's-phone',
+      1212 => 's-phone-arrow-down-left',
+      1213 => 's-phone-arrow-up-right',
+      1214 => 's-phone-x-mark',
+      1215 => 's-photo',
+      1216 => 's-play',
+      1217 => 's-play-circle',
+      1218 => 's-play-pause',
+      1219 => 's-plus',
+      1220 => 's-plus-circle',
+      1221 => 's-plus-small',
+      1222 => 's-power',
+      1223 => 's-presentation-chart-bar',
+      1224 => 's-presentation-chart-line',
+      1225 => 's-printer',
+      1226 => 's-puzzle-piece',
+      1227 => 's-qr-code',
+      1228 => 's-question-mark-circle',
+      1229 => 's-queue-list',
+      1230 => 's-radio',
+      1231 => 's-receipt-percent',
+      1232 => 's-receipt-refund',
+      1233 => 's-rectangle-group',
+      1234 => 's-rectangle-stack',
+      1235 => 's-rocket-launch',
+      1236 => 's-rss',
+      1237 => 's-scale',
+      1238 => 's-scissors',
+      1239 => 's-server',
+      1240 => 's-server-stack',
+      1241 => 's-share',
+      1242 => 's-shield-check',
+      1243 => 's-shield-exclamation',
+      1244 => 's-shopping-bag',
+      1245 => 's-shopping-cart',
+      1246 => 's-signal',
+      1247 => 's-signal-slash',
+      1248 => 's-slash',
+      1249 => 's-sparkles',
+      1250 => 's-speaker-wave',
+      1251 => 's-speaker-x-mark',
+      1252 => 's-square-2-stack',
+      1253 => 's-square-3-stack-3d',
+      1254 => 's-squares-2x2',
+      1255 => 's-squares-plus',
+      1256 => 's-star',
+      1257 => 's-stop',
+      1258 => 's-stop-circle',
+      1259 => 's-strikethrough',
+      1260 => 's-sun',
+      1261 => 's-swatch',
+      1262 => 's-table-cells',
+      1263 => 's-tag',
+      1264 => 's-ticket',
+      1265 => 's-trash',
+      1266 => 's-trophy',
+      1267 => 's-truck',
+      1268 => 's-tv',
+      1269 => 's-underline',
+      1270 => 's-user',
+      1271 => 's-user-circle',
+      1272 => 's-user-group',
+      1273 => 's-user-minus',
+      1274 => 's-user-plus',
+      1275 => 's-users',
+      1276 => 's-variable',
+      1277 => 's-video-camera',
+      1278 => 's-video-camera-slash',
+      1279 => 's-view-columns',
+      1280 => 's-viewfinder-circle',
+      1281 => 's-wallet',
+      1282 => 's-wifi',
+      1283 => 's-window',
+      1284 => 's-wrench',
+      1285 => 's-wrench-screwdriver',
+      1286 => 's-x-circle',
+      1287 => 's-x-mark',
+    ),
+  ),
+  'filament' => 
+  array (
+    '/home/zulfikriyahya/blueprint/perpustakaan/vendor/filament/support/src/../resources/svg' => 
+    array (
+      0 => 'm-pencil-slash',
+      1 => 'o-align-center',
+      2 => 'o-align-end',
+      3 => 'o-align-justify',
+      4 => 'o-align-start',
+      5 => 'o-arrows-move',
+      6 => 'o-clear-formatting',
+      7 => 'o-code',
+      8 => 'o-code-block',
+      9 => 'o-columns',
+      10 => 'o-columns-delete',
+      11 => 'o-crop',
+      12 => 'o-details',
+      13 => 'o-flip-horizontal',
+      14 => 'o-flip-vertical',
+      15 => 'o-h1',
+      16 => 'o-h2',
+      17 => 'o-h3',
+      18 => 'o-h4',
+      19 => 'o-h5',
+      20 => 'o-h6',
+      21 => 'o-heading',
+      22 => 'o-highlight',
+      23 => 'o-lead',
+      24 => 'o-merge-tag',
+      25 => 'o-paragraph',
+      26 => 'o-small',
+      27 => 'o-subscript',
+      28 => 'o-superscript',
+      29 => 'o-table',
+      30 => 'o-table-add-column-after',
+      31 => 'o-table-add-column-before',
+      32 => 'o-table-add-row-after',
+      33 => 'o-table-add-row-before',
+      34 => 'o-table-delete',
+      35 => 'o-table-delete-column',
+      36 => 'o-table-delete-row',
+      37 => 'o-table-merge-cells',
+      38 => 'o-table-split-cell',
+      39 => 'o-table-toggle-header-cell',
+      40 => 'o-table-toggle-header-row',
+    ),
+  ),
+);
+```
+---
+
+## bootstrap/cache/config.php
+```php
+<?php return array (
+  'concurrency' => 
+  array (
+    'default' => 'process',
+  ),
+  'view' => 
+  array (
+    'paths' => 
+    array (
+      0 => '/home/zulfikriyahya/blueprint/perpustakaan/resources/views',
+    ),
+    'compiled' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/framework/views',
+  ),
+  'broadcasting' => 
+  array (
+    'default' => 'log',
+    'connections' => 
+    array (
+      'reverb' => 
+      array (
+        'driver' => 'reverb',
+        'key' => NULL,
+        'secret' => NULL,
+        'app_id' => NULL,
+        'options' => 
+        array (
+          'host' => NULL,
+          'port' => 443,
+          'scheme' => 'https',
+          'useTLS' => true,
+        ),
+        'client_options' => 
+        array (
+        ),
+      ),
+      'pusher' => 
+      array (
+        'driver' => 'pusher',
+        'key' => NULL,
+        'secret' => NULL,
+        'app_id' => NULL,
+        'options' => 
+        array (
+          'cluster' => NULL,
+          'host' => 'api-mt1.pusher.com',
+          'port' => 443,
+          'scheme' => 'https',
+          'encrypted' => true,
+          'useTLS' => true,
+        ),
+        'client_options' => 
+        array (
+        ),
+      ),
+      'ably' => 
+      array (
+        'driver' => 'ably',
+        'key' => NULL,
+      ),
+      'log' => 
+      array (
+        'driver' => 'log',
+      ),
+      'null' => 
+      array (
+        'driver' => 'null',
+      ),
+    ),
+  ),
+  'cors' => 
+  array (
+    'paths' => 
+    array (
+      0 => 'api/*',
+      1 => 'sanctum/csrf-cookie',
+    ),
+    'allowed_methods' => 
+    array (
+      0 => '*',
+    ),
+    'allowed_origins' => 
+    array (
+      0 => '*',
+    ),
+    'allowed_origins_patterns' => 
+    array (
+    ),
+    'allowed_headers' => 
+    array (
+      0 => '*',
+    ),
+    'exposed_headers' => 
+    array (
+    ),
+    'max_age' => 0,
+    'supports_credentials' => false,
+  ),
+  'hashing' => 
+  array (
+    'driver' => 'bcrypt',
+    'bcrypt' => 
+    array (
+      'rounds' => '12',
+      'verify' => true,
+      'limit' => NULL,
+    ),
+    'argon' => 
+    array (
+      'memory' => 65536,
+      'threads' => 1,
+      'time' => 4,
+      'verify' => true,
+    ),
+    'rehash_on_login' => true,
+  ),
+  'images' => 
+  array (
+    'default' => 'gd',
+  ),
+  'app' => 
+  array (
+    'name' => 'Perpustakaan MTs Negeri 1 Pandeglang',
+    'env' => 'local',
+    'debug' => true,
+    'url' => 'http://127.0.0.1:8000',
+    'frontend_url' => 'http://localhost:3000',
+    'asset_url' => NULL,
+    'timezone' => 'Asia/Jakarta',
+    'locale' => 'id',
+    'fallback_locale' => 'id',
+    'faker_locale' => 'id_ID',
+    'cipher' => 'AES-256-CBC',
+    'key' => 'base64:TyWwaZkZFNUCu2hs8Vfp8K5IUIR1xDS3Oq6ZuOFy7tA=',
+    'previous_keys' => 
+    array (
+    ),
+    'maintenance' => 
+    array (
+      'driver' => 'file',
+      'store' => 'database',
+    ),
+    'providers' => 
+    array (
+      0 => 'Illuminate\\Auth\\AuthServiceProvider',
+      1 => 'Illuminate\\Broadcasting\\BroadcastServiceProvider',
+      2 => 'Illuminate\\Bus\\BusServiceProvider',
+      3 => 'Illuminate\\Cache\\CacheServiceProvider',
+      4 => 'Illuminate\\Foundation\\Providers\\ConsoleSupportServiceProvider',
+      5 => 'Illuminate\\Concurrency\\ConcurrencyServiceProvider',
+      6 => 'Illuminate\\Cookie\\CookieServiceProvider',
+      7 => 'Illuminate\\Database\\DatabaseServiceProvider',
+      8 => 'Illuminate\\Encryption\\EncryptionServiceProvider',
+      9 => 'Illuminate\\Filesystem\\FilesystemServiceProvider',
+      10 => 'Illuminate\\Image\\ImageServiceProvider',
+      11 => 'Illuminate\\Foundation\\Providers\\FoundationServiceProvider',
+      12 => 'Illuminate\\Hashing\\HashServiceProvider',
+      13 => 'Illuminate\\Mail\\MailServiceProvider',
+      14 => 'Illuminate\\Notifications\\NotificationServiceProvider',
+      15 => 'Illuminate\\Pagination\\PaginationServiceProvider',
+      16 => 'Illuminate\\Auth\\Passwords\\PasswordResetServiceProvider',
+      17 => 'Illuminate\\Pipeline\\PipelineServiceProvider',
+      18 => 'Illuminate\\Queue\\QueueServiceProvider',
+      19 => 'Illuminate\\Redis\\RedisServiceProvider',
+      20 => 'Illuminate\\Session\\SessionServiceProvider',
+      21 => 'Illuminate\\Translation\\TranslationServiceProvider',
+      22 => 'Illuminate\\Validation\\ValidationServiceProvider',
+      23 => 'Illuminate\\View\\ViewServiceProvider',
+      24 => 'App\\Providers\\AppServiceProvider',
+      25 => 'App\\Providers\\Filament\\DashboardPanelProvider',
+    ),
+    'aliases' => 
+    array (
+      'App' => 'Illuminate\\Support\\Facades\\App',
+      'Arr' => 'Illuminate\\Support\\Arr',
+      'Artisan' => 'Illuminate\\Support\\Facades\\Artisan',
+      'Auth' => 'Illuminate\\Support\\Facades\\Auth',
+      'Benchmark' => 'Illuminate\\Support\\Benchmark',
+      'Blade' => 'Illuminate\\Support\\Facades\\Blade',
+      'Broadcast' => 'Illuminate\\Support\\Facades\\Broadcast',
+      'Bus' => 'Illuminate\\Support\\Facades\\Bus',
+      'Cache' => 'Illuminate\\Support\\Facades\\Cache',
+      'Concurrency' => 'Illuminate\\Support\\Facades\\Concurrency',
+      'Config' => 'Illuminate\\Support\\Facades\\Config',
+      'Context' => 'Illuminate\\Support\\Facades\\Context',
+      'Cookie' => 'Illuminate\\Support\\Facades\\Cookie',
+      'Crypt' => 'Illuminate\\Support\\Facades\\Crypt',
+      'Date' => 'Illuminate\\Support\\Facades\\Date',
+      'DB' => 'Illuminate\\Support\\Facades\\DB',
+      'Eloquent' => 'Illuminate\\Database\\Eloquent\\Model',
+      'Event' => 'Illuminate\\Support\\Facades\\Event',
+      'File' => 'Illuminate\\Support\\Facades\\File',
+      'Gate' => 'Illuminate\\Support\\Facades\\Gate',
+      'Hash' => 'Illuminate\\Support\\Facades\\Hash',
+      'Http' => 'Illuminate\\Support\\Facades\\Http',
+      'Image' => 'Illuminate\\Support\\Facades\\Image',
+      'Js' => 'Illuminate\\Support\\Js',
+      'Lang' => 'Illuminate\\Support\\Facades\\Lang',
+      'Log' => 'Illuminate\\Support\\Facades\\Log',
+      'Mail' => 'Illuminate\\Support\\Facades\\Mail',
+      'Notification' => 'Illuminate\\Support\\Facades\\Notification',
+      'Number' => 'Illuminate\\Support\\Number',
+      'Password' => 'Illuminate\\Support\\Facades\\Password',
+      'Process' => 'Illuminate\\Support\\Facades\\Process',
+      'Queue' => 'Illuminate\\Support\\Facades\\Queue',
+      'RateLimiter' => 'Illuminate\\Support\\Facades\\RateLimiter',
+      'Redirect' => 'Illuminate\\Support\\Facades\\Redirect',
+      'Request' => 'Illuminate\\Support\\Facades\\Request',
+      'Response' => 'Illuminate\\Support\\Facades\\Response',
+      'Route' => 'Illuminate\\Support\\Facades\\Route',
+      'Schedule' => 'Illuminate\\Support\\Facades\\Schedule',
+      'Schema' => 'Illuminate\\Support\\Facades\\Schema',
+      'Session' => 'Illuminate\\Support\\Facades\\Session',
+      'Storage' => 'Illuminate\\Support\\Facades\\Storage',
+      'Str' => 'Illuminate\\Support\\Str',
+      'Uri' => 'Illuminate\\Support\\Uri',
+      'URL' => 'Illuminate\\Support\\Facades\\URL',
+      'Validator' => 'Illuminate\\Support\\Facades\\Validator',
+      'View' => 'Illuminate\\Support\\Facades\\View',
+      'Vite' => 'Illuminate\\Support\\Facades\\Vite',
+    ),
+  ),
+  'auth' => 
+  array (
+    'defaults' => 
+    array (
+      'guard' => 'web',
+      'passwords' => 'users',
+    ),
+    'guards' => 
+    array (
+      'web' => 
+      array (
+        'driver' => 'session',
+        'provider' => 'users',
+      ),
+    ),
+    'providers' => 
+    array (
+      'users' => 
+      array (
+        'driver' => 'eloquent',
+        'model' => 'App\\Models\\User',
+      ),
+    ),
+    'passwords' => 
+    array (
+      'users' => 
+      array (
+        'provider' => 'users',
+        'table' => 'password_reset_tokens',
+        'expire' => 60,
+        'throttle' => 60,
+      ),
+    ),
+    'password_timeout' => 10800,
+  ),
+  'cache' => 
+  array (
+    'default' => 'redis',
+    'stores' => 
+    array (
+      'array' => 
+      array (
+        'driver' => 'array',
+        'serialize' => false,
+      ),
+      'session' => 
+      array (
+        'driver' => 'session',
+        'key' => '_cache',
+      ),
+      'database' => 
+      array (
+        'driver' => 'database',
+        'connection' => NULL,
+        'table' => 'cache',
+        'lock_connection' => NULL,
+        'lock_table' => NULL,
+      ),
+      'file' => 
+      array (
+        'driver' => 'file',
+        'path' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/framework/cache/data',
+        'lock_path' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/framework/cache/data',
+      ),
+      'storage' => 
+      array (
+        'driver' => 'storage',
+        'disk' => NULL,
+        'path' => 'framework/cache/data',
+      ),
+      'memcached' => 
+      array (
+        'driver' => 'memcached',
+        'persistent_id' => NULL,
+        'sasl' => 
+        array (
+          0 => NULL,
+          1 => NULL,
+        ),
+        'options' => 
+        array (
+        ),
+        'servers' => 
+        array (
+          0 => 
+          array (
+            'host' => '127.0.0.1',
+            'port' => 11211,
+            'weight' => 100,
+          ),
+        ),
+      ),
+      'redis' => 
+      array (
+        'driver' => 'redis',
+        'connection' => 'cache',
+        'lock_connection' => 'default',
+      ),
+      'dynamodb' => 
+      array (
+        'driver' => 'dynamodb',
+        'key' => NULL,
+        'secret' => NULL,
+        'region' => 'us-east-1',
+        'table' => 'cache',
+        'endpoint' => NULL,
+      ),
+      'octane' => 
+      array (
+        'driver' => 'octane',
+      ),
+      'failover' => 
+      array (
+        'driver' => 'failover',
+        'stores' => 
+        array (
+          0 => 'database',
+          1 => 'array',
+        ),
+      ),
+    ),
+    'prefix' => 'perpustakaan-mtsn1pandeglang_',
+    'serializable_classes' => false,
+  ),
+  'database' => 
+  array (
+    'default' => 'mysql',
+    'connections' => 
+    array (
+      'sqlite' => 
+      array (
+        'driver' => 'sqlite',
+        'url' => NULL,
+        'database' => 'perpustakaan_mtsn1pandeglang',
+        'prefix' => '',
+        'foreign_key_constraints' => true,
+        'busy_timeout' => NULL,
+        'journal_mode' => NULL,
+        'synchronous' => NULL,
+        'transaction_mode' => 'DEFERRED',
+      ),
+      'mysql' => 
+      array (
+        'driver' => 'mysql',
+        'url' => NULL,
+        'host' => '127.0.0.1',
+        'port' => '3306',
+        'database' => 'perpustakaan_mtsn1pandeglang',
+        'username' => 'root',
+        'password' => '18012000',
+        'unix_socket' => '',
+        'charset' => 'utf8mb4',
+        'collation' => 'utf8mb4_unicode_ci',
+        'prefix' => '',
+        'prefix_indexes' => true,
+        'strict' => true,
+        'engine' => NULL,
+        'options' => 
+        array (
+        ),
+      ),
+      'mariadb' => 
+      array (
+        'driver' => 'mariadb',
+        'url' => NULL,
+        'host' => '127.0.0.1',
+        'port' => '3306',
+        'database' => 'perpustakaan_mtsn1pandeglang',
+        'username' => 'root',
+        'password' => '18012000',
+        'unix_socket' => '',
+        'charset' => 'utf8mb4',
+        'collation' => 'utf8mb4_unicode_ci',
+        'prefix' => '',
+        'prefix_indexes' => true,
+        'strict' => true,
+        'engine' => NULL,
+        'options' => 
+        array (
+        ),
+      ),
+      'pgsql' => 
+      array (
+        'driver' => 'pgsql',
+        'url' => NULL,
+        'host' => '127.0.0.1',
+        'port' => '3306',
+        'database' => 'perpustakaan_mtsn1pandeglang',
+        'username' => 'root',
+        'password' => '18012000',
+        'charset' => 'utf8',
+        'prefix' => '',
+        'prefix_indexes' => true,
+        'search_path' => 'public',
+        'sslmode' => 'prefer',
+      ),
+      'sqlsrv' => 
+      array (
+        'driver' => 'sqlsrv',
+        'url' => NULL,
+        'host' => '127.0.0.1',
+        'port' => '3306',
+        'database' => 'perpustakaan_mtsn1pandeglang',
+        'username' => 'root',
+        'password' => '18012000',
+        'charset' => 'utf8',
+        'prefix' => '',
+        'prefix_indexes' => true,
+      ),
+    ),
+    'migrations' => 
+    array (
+      'table' => 'migrations',
+      'update_date_on_publish' => true,
+    ),
+    'redis' => 
+    array (
+      'client' => 'phpredis',
+      'options' => 
+      array (
+        'cluster' => 'redis',
+        'prefix' => 'perpustakaan-mtsn1pandeglang_',
+        'persistent' => false,
+      ),
+      'default' => 
+      array (
+        'url' => NULL,
+        'host' => '127.0.0.1',
+        'username' => NULL,
+        'password' => NULL,
+        'port' => '6379',
+        'database' => '20',
+        'max_retries' => 3,
+        'backoff_algorithm' => 'decorrelated_jitter',
+        'backoff_base' => 100,
+        'backoff_cap' => 1000,
+      ),
+      'cache' => 
+      array (
+        'url' => NULL,
+        'host' => '127.0.0.1',
+        'username' => NULL,
+        'password' => NULL,
+        'port' => '6379',
+        'database' => '21',
+        'max_retries' => 3,
+        'backoff_algorithm' => 'decorrelated_jitter',
+        'backoff_base' => 100,
+        'backoff_cap' => 1000,
+      ),
+    ),
+  ),
+  'filament' => 
+  array (
+    'broadcasting' => 
+    array (
+    ),
+    'default_filesystem_disk' => 'local',
+    'temporary_file_url_expiry_minutes' => 30,
+    'assets_path' => NULL,
+    'cache_path' => '/home/zulfikriyahya/blueprint/perpustakaan/bootstrap/cache/filament',
+    'livewire_loading_delay' => 'default',
+    'file_generation' => 
+    array (
+      'flags' => 
+      array (
+      ),
+    ),
+    'system_route_prefix' => 'filament',
+  ),
+  'filament-shield' => 
+  array (
+    'shield_resource' => 
+    array (
+      'slug' => 'shield/roles',
+      'show_model_path' => true,
+      'cluster' => NULL,
+      'tabs' => 
+      array (
+        'pages' => true,
+        'widgets' => true,
+        'resources' => true,
+        'custom_permissions' => false,
+      ),
+    ),
+    'tenant_model' => NULL,
+    'auth_provider_model' => 'App\\Models\\User',
+    'super_admin' => 
+    array (
+      'enabled' => true,
+      'name' => 'super_admin',
+      'define_via_gate' => false,
+      'intercept_gate' => 'before',
+    ),
+    'panel_user' => 
+    array (
+      'enabled' => true,
+      'name' => 'panel_user',
+    ),
+    'permissions' => 
+    array (
+      'separator' => ':',
+      'case' => 'pascal',
+      'generate' => true,
+      'format_custom_permission_keys' => true,
+    ),
+    'policies' => 
+    array (
+      'path' => '/home/zulfikriyahya/blueprint/perpustakaan/app/Policies',
+      'merge' => true,
+      'generate' => true,
+      'methods' => 
+      array (
+        0 => 'viewAny',
+        1 => 'view',
+        2 => 'create',
+        3 => 'update',
+        4 => 'delete',
+        5 => 'deleteAny',
+        6 => 'restore',
+        7 => 'forceDelete',
+        8 => 'forceDeleteAny',
+        9 => 'restoreAny',
+        10 => 'replicate',
+        11 => 'reorder',
+      ),
+      'single_parameter_methods' => 
+      array (
+        0 => 'viewAny',
+        1 => 'create',
+        2 => 'deleteAny',
+        3 => 'forceDeleteAny',
+        4 => 'restoreAny',
+        5 => 'reorder',
+      ),
+    ),
+    'localization' => 
+    array (
+      'enabled' => false,
+      'key' => 'filament-shield::filament-shield.resource_permission_prefixes_labels',
+    ),
+    'resources' => 
+    array (
+      'subject' => 'model',
+      'manage' => 
+      array (
+        'BezhanSalleh\\FilamentShield\\Resources\\Roles\\RoleResource' => 
+        array (
+          0 => 'viewAny',
+          1 => 'view',
+          2 => 'create',
+          3 => 'update',
+          4 => 'delete',
+        ),
+      ),
+      'exclude' => 
+      array (
+      ),
+    ),
+    'pages' => 
+    array (
+      'subject' => 'class',
+      'prefix' => 'view',
+      'exclude' => 
+      array (
+        0 => 'Filament\\Pages\\Dashboard',
+      ),
+    ),
+    'widgets' => 
+    array (
+      'subject' => 'class',
+      'prefix' => 'view',
+      'exclude' => 
+      array (
+        0 => 'Filament\\Widgets\\AccountWidget',
+        1 => 'Filament\\Widgets\\FilamentInfoWidget',
+      ),
+    ),
+    'custom_permissions' => 
+    array (
+    ),
+    'discovery' => 
+    array (
+      'discover_all_resources' => false,
+      'discover_all_widgets' => false,
+      'discover_all_pages' => false,
+    ),
+    'register_role_policy' => true,
+  ),
+  'filesystems' => 
+  array (
+    'default' => 'local',
+    'disks' => 
+    array (
+      'local' => 
+      array (
+        'driver' => 'local',
+        'root' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/app/private',
+        'serve' => true,
+        'throw' => false,
+        'report' => false,
+      ),
+      'public' => 
+      array (
+        'driver' => 'local',
+        'root' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/app/public',
+        'url' => 'http://127.0.0.1:8000/storage',
+        'visibility' => 'public',
+        'throw' => false,
+        'report' => false,
+      ),
+      's3' => 
+      array (
+        'driver' => 's3',
+        'key' => NULL,
+        'secret' => NULL,
+        'region' => NULL,
+        'bucket' => NULL,
+        'url' => NULL,
+        'endpoint' => NULL,
+        'use_path_style_endpoint' => false,
+        'throw' => false,
+        'report' => false,
+      ),
+    ),
+    'links' => 
+    array (
+      '/home/zulfikriyahya/blueprint/perpustakaan/public/storage' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/app/public',
+    ),
+  ),
+  'logging' => 
+  array (
+    'default' => 'stack',
+    'deprecations' => 
+    array (
+      'channel' => NULL,
+      'trace' => false,
+    ),
+    'channels' => 
+    array (
+      'stack' => 
+      array (
+        'driver' => 'stack',
+        'channels' => 
+        array (
+          0 => 'single',
+        ),
+        'ignore_exceptions' => false,
+      ),
+      'single' => 
+      array (
+        'driver' => 'single',
+        'path' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/logs/laravel.log',
+        'level' => 'error',
+        'replace_placeholders' => true,
+      ),
+      'daily' => 
+      array (
+        'driver' => 'daily',
+        'path' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/logs/laravel.log',
+        'level' => 'error',
+        'days' => 14,
+        'replace_placeholders' => true,
+      ),
+      'monthly' => 
+      array (
+        'driver' => 'monthly',
+        'path' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/logs/laravel.log',
+        'level' => 'error',
+        'max_files' => 3,
+        'replace_placeholders' => true,
+      ),
+      'slack' => 
+      array (
+        'driver' => 'slack',
+        'url' => NULL,
+        'username' => 'Perpustakaan MTs Negeri 1 Pandeglang',
+        'emoji' => ':boom:',
+        'level' => 'error',
+        'replace_placeholders' => true,
+      ),
+      'papertrail' => 
+      array (
+        'driver' => 'monolog',
+        'level' => 'error',
+        'handler' => 'Monolog\\Handler\\SyslogUdpHandler',
+        'handler_with' => 
+        array (
+          'host' => NULL,
+          'port' => NULL,
+          'connectionString' => 'tls://:',
+        ),
+        'processors' => 
+        array (
+          0 => 'Monolog\\Processor\\PsrLogMessageProcessor',
+        ),
+      ),
+      'stderr' => 
+      array (
+        'driver' => 'monolog',
+        'level' => 'error',
+        'handler' => 'Monolog\\Handler\\StreamHandler',
+        'handler_with' => 
+        array (
+          'stream' => 'php://stderr',
+        ),
+        'formatter' => NULL,
+        'processors' => 
+        array (
+          0 => 'Monolog\\Processor\\PsrLogMessageProcessor',
+        ),
+      ),
+      'syslog' => 
+      array (
+        'driver' => 'syslog',
+        'level' => 'error',
+        'facility' => 8,
+        'replace_placeholders' => true,
+      ),
+      'errorlog' => 
+      array (
+        'driver' => 'errorlog',
+        'level' => 'error',
+        'replace_placeholders' => true,
+      ),
+      'null' => 
+      array (
+        'driver' => 'monolog',
+        'handler' => 'Monolog\\Handler\\NullHandler',
+      ),
+      'emergency' => 
+      array (
+        'path' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/logs/laravel.log',
+      ),
+    ),
+  ),
+  'mail' => 
+  array (
+    'default' => 'log',
+    'mailers' => 
+    array (
+      'smtp' => 
+      array (
+        'transport' => 'smtp',
+        'scheme' => NULL,
+        'url' => NULL,
+        'host' => '127.0.0.1',
+        'port' => '2525',
+        'username' => NULL,
+        'password' => NULL,
+        'timeout' => NULL,
+        'local_domain' => '127.0.0.1',
+      ),
+      'ses' => 
+      array (
+        'transport' => 'ses',
+      ),
+      'postmark' => 
+      array (
+        'transport' => 'postmark',
+      ),
+      'resend' => 
+      array (
+        'transport' => 'resend',
+      ),
+      'sendmail' => 
+      array (
+        'transport' => 'sendmail',
+        'path' => '/usr/sbin/sendmail -bs -i',
+      ),
+      'log' => 
+      array (
+        'transport' => 'log',
+        'channel' => NULL,
+      ),
+      'array' => 
+      array (
+        'transport' => 'array',
+      ),
+      'failover' => 
+      array (
+        'transport' => 'failover',
+        'mailers' => 
+        array (
+          0 => 'smtp',
+          1 => 'log',
+        ),
+        'retry_after' => 60,
+      ),
+      'roundrobin' => 
+      array (
+        'transport' => 'roundrobin',
+        'mailers' => 
+        array (
+          0 => 'ses',
+          1 => 'postmark',
+        ),
+        'retry_after' => 60,
+      ),
+    ),
+    'from' => 
+    array (
+      'address' => 'admin@zedlabs.id',
+      'name' => 'Perpustakaan MTs Negeri 1 Pandeglang',
+    ),
+    'markdown' => 
+    array (
+      'theme' => 'default',
+      'paths' => 
+      array (
+        0 => '/home/zulfikriyahya/blueprint/perpustakaan/resources/views/vendor/mail',
+      ),
+      'extensions' => 
+      array (
+      ),
+    ),
+  ),
+  'octane' => 
+  array (
+    'server' => 'frankenphp',
+    'https' => false,
+    'listeners' => 
+    array (
+      'Laravel\\Octane\\Events\\WorkerStarting' => 
+      array (
+        0 => 'Laravel\\Octane\\Listeners\\EnsureUploadedFilesAreValid',
+        1 => 'Laravel\\Octane\\Listeners\\EnsureUploadedFilesCanBeMoved',
+      ),
+      'Laravel\\Octane\\Events\\RequestReceived' => 
+      array (
+        0 => 'Laravel\\Octane\\Listeners\\CreateConfigurationSandbox',
+        1 => 'Laravel\\Octane\\Listeners\\CreateUrlGeneratorSandbox',
+        2 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToAuthorizationGate',
+        3 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToBroadcastManager',
+        4 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToDatabaseManager',
+        5 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToDatabaseSessionHandler',
+        6 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToFilesystemManager',
+        7 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToHttpKernel',
+        8 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToLogManager',
+        9 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToMailManager',
+        10 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToNotificationChannelManager',
+        11 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToPipelineHub',
+        12 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToCacheManager',
+        13 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToSessionManager',
+        14 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToQueueManager',
+        15 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToRouter',
+        16 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToValidationFactory',
+        17 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToViewFactory',
+        18 => 'Laravel\\Octane\\Listeners\\FlushDatabaseRecordModificationState',
+        19 => 'Laravel\\Octane\\Listeners\\FlushDatabaseQueryLog',
+        20 => 'Laravel\\Octane\\Listeners\\RefreshQueryDurationHandling',
+        21 => 'Laravel\\Octane\\Listeners\\FlushArrayCache',
+        22 => 'Laravel\\Octane\\Listeners\\FlushLogContext',
+        23 => 'Laravel\\Octane\\Listeners\\FlushMonologState',
+        24 => 'Laravel\\Octane\\Listeners\\FlushStrCache',
+        25 => 'Laravel\\Octane\\Listeners\\FlushTranslatorCache',
+        26 => 'Laravel\\Octane\\Listeners\\FlushVite',
+        27 => 'Laravel\\Octane\\Listeners\\PrepareInertiaForNextOperation',
+        28 => 'Laravel\\Octane\\Listeners\\PrepareLivewireForNextOperation',
+        29 => 'Laravel\\Octane\\Listeners\\PrepareScoutForNextOperation',
+        30 => 'Laravel\\Octane\\Listeners\\PrepareSocialiteForNextOperation',
+        31 => 'Laravel\\Octane\\Listeners\\FlushLocaleState',
+        32 => 'Laravel\\Octane\\Listeners\\FlushQueuedCookies',
+        33 => 'Laravel\\Octane\\Listeners\\FlushSessionState',
+        34 => 'Laravel\\Octane\\Listeners\\FlushAuthenticationState',
+        35 => 'Laravel\\Octane\\Listeners\\EnforceRequestScheme',
+        36 => 'Laravel\\Octane\\Listeners\\EnsureRequestServerPortMatchesScheme',
+        37 => 'Laravel\\Octane\\Listeners\\GiveNewRequestInstanceToApplication',
+        38 => 'Laravel\\Octane\\Listeners\\GiveNewRequestInstanceToPaginator',
+      ),
+      'Laravel\\Octane\\Events\\RequestHandled' => 
+      array (
+      ),
+      'Laravel\\Octane\\Events\\RequestTerminated' => 
+      array (
+      ),
+      'Laravel\\Octane\\Events\\TaskReceived' => 
+      array (
+        0 => 'Laravel\\Octane\\Listeners\\CreateConfigurationSandbox',
+        1 => 'Laravel\\Octane\\Listeners\\CreateUrlGeneratorSandbox',
+        2 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToAuthorizationGate',
+        3 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToBroadcastManager',
+        4 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToDatabaseManager',
+        5 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToDatabaseSessionHandler',
+        6 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToFilesystemManager',
+        7 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToHttpKernel',
+        8 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToLogManager',
+        9 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToMailManager',
+        10 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToNotificationChannelManager',
+        11 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToPipelineHub',
+        12 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToCacheManager',
+        13 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToSessionManager',
+        14 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToQueueManager',
+        15 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToRouter',
+        16 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToValidationFactory',
+        17 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToViewFactory',
+        18 => 'Laravel\\Octane\\Listeners\\FlushDatabaseRecordModificationState',
+        19 => 'Laravel\\Octane\\Listeners\\FlushDatabaseQueryLog',
+        20 => 'Laravel\\Octane\\Listeners\\RefreshQueryDurationHandling',
+        21 => 'Laravel\\Octane\\Listeners\\FlushArrayCache',
+        22 => 'Laravel\\Octane\\Listeners\\FlushLogContext',
+        23 => 'Laravel\\Octane\\Listeners\\FlushMonologState',
+        24 => 'Laravel\\Octane\\Listeners\\FlushStrCache',
+        25 => 'Laravel\\Octane\\Listeners\\FlushTranslatorCache',
+        26 => 'Laravel\\Octane\\Listeners\\FlushVite',
+        27 => 'Laravel\\Octane\\Listeners\\PrepareInertiaForNextOperation',
+        28 => 'Laravel\\Octane\\Listeners\\PrepareLivewireForNextOperation',
+        29 => 'Laravel\\Octane\\Listeners\\PrepareScoutForNextOperation',
+        30 => 'Laravel\\Octane\\Listeners\\PrepareSocialiteForNextOperation',
+      ),
+      'Laravel\\Octane\\Events\\TaskTerminated' => 
+      array (
+      ),
+      'Laravel\\Octane\\Events\\TickReceived' => 
+      array (
+        0 => 'Laravel\\Octane\\Listeners\\CreateConfigurationSandbox',
+        1 => 'Laravel\\Octane\\Listeners\\CreateUrlGeneratorSandbox',
+        2 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToAuthorizationGate',
+        3 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToBroadcastManager',
+        4 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToDatabaseManager',
+        5 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToDatabaseSessionHandler',
+        6 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToFilesystemManager',
+        7 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToHttpKernel',
+        8 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToLogManager',
+        9 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToMailManager',
+        10 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToNotificationChannelManager',
+        11 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToPipelineHub',
+        12 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToCacheManager',
+        13 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToSessionManager',
+        14 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToQueueManager',
+        15 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToRouter',
+        16 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToValidationFactory',
+        17 => 'Laravel\\Octane\\Listeners\\GiveNewApplicationInstanceToViewFactory',
+        18 => 'Laravel\\Octane\\Listeners\\FlushDatabaseRecordModificationState',
+        19 => 'Laravel\\Octane\\Listeners\\FlushDatabaseQueryLog',
+        20 => 'Laravel\\Octane\\Listeners\\RefreshQueryDurationHandling',
+        21 => 'Laravel\\Octane\\Listeners\\FlushArrayCache',
+        22 => 'Laravel\\Octane\\Listeners\\FlushLogContext',
+        23 => 'Laravel\\Octane\\Listeners\\FlushMonologState',
+        24 => 'Laravel\\Octane\\Listeners\\FlushStrCache',
+        25 => 'Laravel\\Octane\\Listeners\\FlushTranslatorCache',
+        26 => 'Laravel\\Octane\\Listeners\\FlushVite',
+        27 => 'Laravel\\Octane\\Listeners\\PrepareInertiaForNextOperation',
+        28 => 'Laravel\\Octane\\Listeners\\PrepareLivewireForNextOperation',
+        29 => 'Laravel\\Octane\\Listeners\\PrepareScoutForNextOperation',
+        30 => 'Laravel\\Octane\\Listeners\\PrepareSocialiteForNextOperation',
+      ),
+      'Laravel\\Octane\\Events\\TickTerminated' => 
+      array (
+      ),
+      'Laravel\\Octane\\Contracts\\OperationTerminated' => 
+      array (
+        0 => 'Laravel\\Octane\\Listeners\\FlushOnce',
+        1 => 'Laravel\\Octane\\Listeners\\FlushTemporaryContainerInstances',
+      ),
+      'Laravel\\Octane\\Events\\WorkerErrorOccurred' => 
+      array (
+        0 => 'Laravel\\Octane\\Listeners\\ReportException',
+        1 => 'Laravel\\Octane\\Listeners\\StopWorkerIfNecessary',
+      ),
+      'Laravel\\Octane\\Events\\WorkerStopping' => 
+      array (
+        0 => 'Laravel\\Octane\\Listeners\\CloseMonologHandlers',
+      ),
+    ),
+    'warm' => 
+    array (
+      0 => 'auth',
+      1 => 'cache',
+      2 => 'cache.store',
+      3 => 'config',
+      4 => 'cookie',
+      5 => 'db',
+      6 => 'db.factory',
+      7 => 'db.transactions',
+      8 => 'encrypter',
+      9 => 'files',
+      10 => 'hash',
+      11 => 'log',
+      12 => 'router',
+      13 => 'routes',
+      14 => 'session',
+      15 => 'session.store',
+      16 => 'translator',
+      17 => 'url',
+      18 => 'view',
+    ),
+    'flush' => 
+    array (
+    ),
+    'tables' => 
+    array (
+      'example:1000' => 
+      array (
+        'name' => 'string:1000',
+        'votes' => 'int',
+      ),
+    ),
+    'cache' => 
+    array (
+      'rows' => 1000,
+      'bytes' => 10000,
+    ),
+    'watch' => 
+    array (
+      0 => 'app',
+      1 => 'bootstrap',
+      2 => 'config/**/*.php',
+      3 => 'database/**/*.php',
+      4 => 'public/**/*.php',
+      5 => 'resources/**/*.php',
+      6 => 'routes',
+      7 => 'composer.lock',
+      8 => '.env',
+    ),
+    'garbage' => 50,
+    'max_execution_time' => 30,
+    'state_file' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/logs/octane-server-state.json',
+  ),
+  'permission' => 
+  array (
+    'models' => 
+    array (
+      'permission' => 'Spatie\\Permission\\Models\\Permission',
+      'role' => 'Spatie\\Permission\\Models\\Role',
+      'team' => NULL,
+      'default_model' => NULL,
+    ),
+    'table_names' => 
+    array (
+      'roles' => 'roles',
+      'permissions' => 'permissions',
+      'model_has_permissions' => 'model_has_permissions',
+      'model_has_roles' => 'model_has_roles',
+      'role_has_permissions' => 'role_has_permissions',
+    ),
+    'column_names' => 
+    array (
+      'role_pivot_key' => NULL,
+      'permission_pivot_key' => NULL,
+      'model_morph_key' => 'model_id',
+      'team_foreign_key' => 'team_id',
+    ),
+    'register_permission_check_method' => true,
+    'register_octane_reset_listener' => false,
+    'events_enabled' => false,
+    'teams' => false,
+    'team_resolver' => 'Spatie\\Permission\\DefaultTeamResolver',
+    'use_passport_client_credentials' => false,
+    'display_permission_in_exception' => false,
+    'display_role_in_exception' => false,
+    'enable_wildcard_permission' => false,
+    'cache' => 
+    array (
+      'expiration_time' => 
+      \DateInterval::__set_state(array(
+         'from_string' => true,
+         'date_string' => '24 hours',
+      )),
+      'key' => 'spatie.permission.cache',
+      'store' => 'default',
+    ),
+  ),
+  'queue' => 
+  array (
+    'default' => 'redis',
+    'connections' => 
+    array (
+      'sync' => 
+      array (
+        'driver' => 'sync',
+      ),
+      'database' => 
+      array (
+        'driver' => 'database',
+        'connection' => NULL,
+        'table' => 'jobs',
+        'queue' => 'default',
+        'retry_after' => 90,
+        'after_commit' => false,
+      ),
+      'beanstalkd' => 
+      array (
+        'driver' => 'beanstalkd',
+        'host' => 'localhost',
+        'queue' => 'default',
+        'retry_after' => 90,
+        'block_for' => 0,
+        'after_commit' => false,
+      ),
+      'sqs' => 
+      array (
+        'driver' => 'sqs',
+        'key' => NULL,
+        'secret' => NULL,
+        'prefix' => 'https://sqs.us-east-1.amazonaws.com/your-account-id',
+        'queue' => 'default',
+        'suffix' => NULL,
+        'region' => 'us-east-1',
+        'after_commit' => false,
+      ),
+      'redis' => 
+      array (
+        'driver' => 'redis',
+        'connection' => 'default',
+        'queue' => 'default',
+        'retry_after' => 90,
+        'block_for' => NULL,
+        'after_commit' => false,
+      ),
+      'deferred' => 
+      array (
+        'driver' => 'deferred',
+      ),
+      'failover' => 
+      array (
+        'driver' => 'failover',
+        'connections' => 
+        array (
+          0 => 'database',
+          1 => 'deferred',
+        ),
+      ),
+      'background' => 
+      array (
+        'driver' => 'background',
+      ),
+    ),
+    'batching' => 
+    array (
+      'database' => 'mysql',
+      'table' => 'job_batches',
+    ),
+    'failed' => 
+    array (
+      'driver' => 'database-uuids',
+      'database' => 'mysql',
+      'table' => 'failed_jobs',
+    ),
+  ),
+  'services' => 
+  array (
+    'postmark' => 
+    array (
+      'token' => NULL,
+    ),
+    'resend' => 
+    array (
+      'key' => NULL,
+    ),
+    'ses' => 
+    array (
+      'key' => NULL,
+      'secret' => NULL,
+      'region' => 'us-east-1',
+    ),
+    'slack' => 
+    array (
+      'notifications' => 
+      array (
+        'bot_user_oauth_token' => NULL,
+        'channel' => NULL,
+      ),
+    ),
+    'whatsapp_gateway' => 
+    array (
+      'base_url' => 'https://whatsapp.zedlabs.id',
+      'api_key_id' => 'key_4u2za6a4vki642qmplovqy62i4',
+      'secret' => 'OXTK5ENNULXVWIYEIJ2NOIKOU2G5D7GL655NUNMYI2SKA5BTAP7A',
+      'timeout' => '15',
+    ),
+    'device_gateway' => 
+    array (
+      'api_key' => 'P@ndegl@ng_14012000*',
+    ),
+  ),
+  'session' => 
+  array (
+    'driver' => 'redis',
+    'lifetime' => 525600,
+    'expire_on_close' => false,
+    'encrypt' => false,
+    'files' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/framework/sessions',
+    'connection' => NULL,
+    'table' => 'sessions',
+    'store' => NULL,
+    'lottery' => 
+    array (
+      0 => 2,
+      1 => 100,
+    ),
+    'cookie' => 'perpustakaan-mts-negeri-1-pandeglang-session',
+    'path' => '/',
+    'domain' => NULL,
+    'secure' => true,
+    'http_only' => true,
+    'same_site' => 'lax',
+    'partitioned' => false,
+    'serialization' => 'json',
+  ),
+  'dompdf' => 
+  array (
+    'show_warnings' => false,
+    'public_path' => NULL,
+    'convert_entities' => true,
+    'options' => 
+    array (
+      'font_dir' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/fonts',
+      'font_cache' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/fonts',
+      'temp_dir' => '/tmp',
+      'chroot' => '/home/zulfikriyahya/blueprint/perpustakaan',
+      'allowed_protocols' => 
+      array (
+        'data://' => 
+        array (
+          'rules' => 
+          array (
+          ),
+        ),
+        'file://' => 
+        array (
+          'rules' => 
+          array (
+          ),
+        ),
+        'http://' => 
+        array (
+          'rules' => 
+          array (
+          ),
+        ),
+        'https://' => 
+        array (
+          'rules' => 
+          array (
+          ),
+        ),
+      ),
+      'artifactPathValidation' => NULL,
+      'log_output_file' => NULL,
+      'enable_font_subsetting' => false,
+      'pdf_backend' => 'CPDF',
+      'default_media_type' => 'screen',
+      'default_paper_size' => 'a4',
+      'default_paper_orientation' => 'portrait',
+      'default_font' => 'serif',
+      'dpi' => 96,
+      'enable_php' => false,
+      'enable_javascript' => true,
+      'enable_remote' => false,
+      'allowed_remote_hosts' => NULL,
+      'font_height_ratio' => 1.1,
+      'enable_html5_parser' => true,
+    ),
+  ),
+  'blade-heroicons' => 
+  array (
+    'prefix' => 'heroicon',
+    'fallback' => '',
+    'class' => '',
+    'attributes' => 
+    array (
+    ),
+  ),
+  'blade-icons' => 
+  array (
+    'sets' => 
+    array (
+    ),
+    'class' => '',
+    'attributes' => 
+    array (
+    ),
+    'fallback' => '',
+    'components' => 
+    array (
+      'disabled' => false,
+      'default' => 'icon',
+    ),
+  ),
+  'livewire' => 
+  array (
+    'component_locations' => 
+    array (
+      0 => '/home/zulfikriyahya/blueprint/perpustakaan/resources/views/components',
+      1 => '/home/zulfikriyahya/blueprint/perpustakaan/resources/views/livewire',
+    ),
+    'component_namespaces' => 
+    array (
+      'layouts' => '/home/zulfikriyahya/blueprint/perpustakaan/resources/views/layouts',
+      'pages' => '/home/zulfikriyahya/blueprint/perpustakaan/resources/views/pages',
+    ),
+    'component_layout' => 'layouts::app',
+    'component_placeholder' => NULL,
+    'make_command' => 
+    array (
+      'type' => 'sfc',
+      'emoji' => true,
+      'with' => 
+      array (
+        'js' => false,
+        'css' => false,
+        'test' => false,
+      ),
+    ),
+    'class_namespace' => 'App\\Livewire',
+    'class_path' => '/home/zulfikriyahya/blueprint/perpustakaan/app/Livewire',
+    'view_path' => '/home/zulfikriyahya/blueprint/perpustakaan/resources/views/livewire',
+    'temporary_file_upload' => 
+    array (
+      'disk' => NULL,
+      'rules' => NULL,
+      'directory' => NULL,
+      'middleware' => NULL,
+      'preview_mimes' => 
+      array (
+        0 => 'png',
+        1 => 'gif',
+        2 => 'bmp',
+        3 => 'svg',
+        4 => 'wav',
+        5 => 'mp4',
+        6 => 'mov',
+        7 => 'avi',
+        8 => 'wmv',
+        9 => 'mp3',
+        10 => 'm4a',
+        11 => 'jpg',
+        12 => 'jpeg',
+        13 => 'mpga',
+        14 => 'webp',
+        15 => 'wma',
+      ),
+      'max_upload_time' => 5,
+      'cleanup' => true,
+    ),
+    'render_on_redirect' => false,
+    'legacy_model_binding' => false,
+    'inject_assets' => true,
+    'navigate' => 
+    array (
+      'show_progress_bar' => true,
+      'progress_bar_color' => '#2299dd',
+    ),
+    'inject_morph_markers' => true,
+    'smart_wire_keys' => true,
+    'pagination_theme' => 'tailwind',
+    'release_token' => 'a',
+    'csp_safe' => false,
+    'payload' => 
+    array (
+      'max_size' => 1048576,
+      'max_nesting_depth' => 10,
+      'max_calls' => 50,
+      'max_components' => 200,
+    ),
+  ),
+  'excel' => 
+  array (
+    'exports' => 
+    array (
+      'chunk_size' => 1000,
+      'pre_calculate_formulas' => false,
+      'strict_null_comparison' => false,
+      'csv' => 
+      array (
+        'delimiter' => ',',
+        'enclosure' => '"',
+        'line_ending' => '
+',
+        'use_bom' => false,
+        'include_separator_line' => false,
+        'excel_compatibility' => false,
+        'output_encoding' => '',
+        'test_auto_detect' => true,
+      ),
+      'properties' => 
+      array (
+        'creator' => '',
+        'lastModifiedBy' => '',
+        'title' => '',
+        'description' => '',
+        'subject' => '',
+        'keywords' => '',
+        'category' => '',
+        'manager' => '',
+        'company' => '',
+      ),
+    ),
+    'imports' => 
+    array (
+      'read_only' => true,
+      'ignore_empty' => false,
+      'heading_row' => 
+      array (
+        'formatter' => 'slug',
+      ),
+      'csv' => 
+      array (
+        'delimiter' => NULL,
+        'enclosure' => '"',
+        'escape_character' => '\\',
+        'contiguous' => false,
+        'input_encoding' => 'guess',
+      ),
+      'properties' => 
+      array (
+        'creator' => '',
+        'lastModifiedBy' => '',
+        'title' => '',
+        'description' => '',
+        'subject' => '',
+        'keywords' => '',
+        'category' => '',
+        'manager' => '',
+        'company' => '',
+      ),
+      'cells' => 
+      array (
+        'middleware' => 
+        array (
+        ),
+      ),
+    ),
+    'extension_detector' => 
+    array (
+      'xlsx' => 'Xlsx',
+      'xlsm' => 'Xlsx',
+      'xltx' => 'Xlsx',
+      'xltm' => 'Xlsx',
+      'xls' => 'Xls',
+      'xlt' => 'Xls',
+      'ods' => 'Ods',
+      'ots' => 'Ods',
+      'slk' => 'Slk',
+      'xml' => 'Xml',
+      'gnumeric' => 'Gnumeric',
+      'htm' => 'Html',
+      'html' => 'Html',
+      'csv' => 'Csv',
+      'tsv' => 'Csv',
+      'pdf' => 'Dompdf',
+    ),
+    'value_binder' => 
+    array (
+      'default' => 'Maatwebsite\\Excel\\DefaultValueBinder',
+    ),
+    'cache' => 
+    array (
+      'driver' => 'memory',
+      'batch' => 
+      array (
+        'memory_limit' => 60000,
+      ),
+      'illuminate' => 
+      array (
+        'store' => NULL,
+      ),
+      'default_ttl' => 10800,
+    ),
+    'transactions' => 
+    array (
+      'handler' => 'db',
+      'db' => 
+      array (
+        'connection' => NULL,
+      ),
+    ),
+    'temporary_files' => 
+    array (
+      'local_path' => '/home/zulfikriyahya/blueprint/perpustakaan/storage/framework/cache/laravel-excel',
+      'local_permissions' => 
+      array (
+      ),
+      'remote_disk' => NULL,
+      'remote_prefix' => NULL,
+      'force_resync_remote' => NULL,
+    ),
+  ),
+  'blueprint' => 
+  array (
+    'namespace' => 'App',
+    'models_namespace' => 'Models',
+    'controllers_namespace' => 'Http\\Controllers',
+    'components_namespace' => 'Livewire',
+    'policy_namespace' => 'Policies',
+    'app_path' => 'app',
+    'generate_phpdocs' => false,
+    'use_constraints' => false,
+    'on_delete' => 'cascade',
+    'on_update' => 'cascade',
+    'fake_nullables' => true,
+    'use_guarded' => false,
+    'types' => 
+    array (
+      'primary' => 'id',
+      'timestamps' => 'timestamp',
+    ),
+    'singular_routes' => false,
+    'property_promotion' => false,
+    'generate_resource_collection_classes' => true,
+    'generators' => 
+    array (
+      'controller' => 'Blueprint\\Generators\\ControllerGenerator',
+      'factory' => 'Blueprint\\Generators\\FactoryGenerator',
+      'migration' => 'Blueprint\\Generators\\MigrationGenerator',
+      'model' => 'Blueprint\\Generators\\ModelGenerator',
+      'route' => 'Blueprint\\Generators\\RouteGenerator',
+      'seeder' => 'Blueprint\\Generators\\SeederGenerator',
+      'test' => 'Blueprint\\Generators\\PhpUnitTestGenerator',
+      'event' => 'Blueprint\\Generators\\Statements\\EventGenerator',
+      'form_request' => 'Blueprint\\Generators\\Statements\\FormRequestGenerator',
+      'job' => 'Blueprint\\Generators\\Statements\\JobGenerator',
+      'mail' => 'Blueprint\\Generators\\Statements\\MailGenerator',
+      'notification' => 'Blueprint\\Generators\\Statements\\NotificationGenerator',
+      'resource' => 'Blueprint\\Generators\\Statements\\ResourceGenerator',
+      'view' => 'Blueprint\\Generators\\Statements\\ViewGenerator',
+      'inertia_page' => 'Blueprint\\Generators\\Statements\\InertiaPageGenerator',
+      'policy' => 'Blueprint\\Generators\\PolicyGenerator',
+    ),
+  ),
+  'tinker' => 
+  array (
+    'commands' => 
+    array (
+    ),
+    'alias' => 
+    array (
+    ),
+    'dont_alias' => 
+    array (
+      0 => 'App\\Nova',
+    ),
+    'trust_project' => 'always',
+  ),
+);
+
+```
+---
+
+## bootstrap/cache/events.php
+```php
+<?php return array (
+  'Illuminate\\Foundation\\Support\\Providers\\EventServiceProvider' => 
+  array (
+  ),
+);
+```
+---
+
+## bootstrap/cache/filament/panels/dashboard.php
+```php
+<?php return array (
+  'livewireComponents' => 
+  array (
+    'App\\Filament\\Pages\\Dashboard' => 'App\\Filament\\Pages\\Dashboard',
+    'App\\Filament\\Resources\\AuthorResource\\Pages\\CreateAuthor' => 'App\\Filament\\Resources\\AuthorResource\\Pages\\CreateAuthor',
+    'App\\Filament\\Resources\\AuthorResource\\Pages\\EditAuthor' => 'App\\Filament\\Resources\\AuthorResource\\Pages\\EditAuthor',
+    'App\\Filament\\Resources\\AuthorResource\\Pages\\ListAuthors' => 'App\\Filament\\Resources\\AuthorResource\\Pages\\ListAuthors',
+    'App\\Filament\\Resources\\BukuResource\\Pages\\CreateBuku' => 'App\\Filament\\Resources\\BukuResource\\Pages\\CreateBuku',
+    'App\\Filament\\Resources\\BukuResource\\Pages\\EditBuku' => 'App\\Filament\\Resources\\BukuResource\\Pages\\EditBuku',
+    'App\\Filament\\Resources\\BukuResource\\Pages\\ListBukus' => 'App\\Filament\\Resources\\BukuResource\\Pages\\ListBukus',
+    'App\\Filament\\Resources\\BukuResource\\RelationManagers\\EksemplarsRelationManager' => 'App\\Filament\\Resources\\BukuResource\\RelationManagers\\EksemplarsRelationManager',
+    'App\\Filament\\Resources\\BukuResource\\Widgets\\BukuStatsWidget' => 'App\\Filament\\Resources\\BukuResource\\Widgets\\BukuStatsWidget',
+    'App\\Filament\\Resources\\DendaResource\\Pages\\ListDendas' => 'App\\Filament\\Resources\\DendaResource\\Pages\\ListDendas',
+    'App\\Filament\\Resources\\DendaResource\\Widgets\\DendaStatsWidget' => 'App\\Filament\\Resources\\DendaResource\\Widgets\\DendaStatsWidget',
+    'App\\Filament\\Resources\\FirmwareResource\\Pages\\CreateFirmwareRelease' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\CreateFirmwareRelease',
+    'App\\Filament\\Resources\\FirmwareResource\\Pages\\EditFirmwareRelease' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\EditFirmwareRelease',
+    'App\\Filament\\Resources\\FirmwareResource\\Pages\\ListFirmwareReleases' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\ListFirmwareReleases',
+    'App\\Filament\\Resources\\FirmwareResource\\Widgets\\FirmwareStatsWidget' => 'App\\Filament\\Resources\\FirmwareResource\\Widgets\\FirmwareStatsWidget',
+    'App\\Filament\\Resources\\JurusanResource\\Pages\\CreateJurusan' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\CreateJurusan',
+    'App\\Filament\\Resources\\JurusanResource\\Pages\\EditJurusan' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\EditJurusan',
+    'App\\Filament\\Resources\\JurusanResource\\Pages\\ListJurusans' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\ListJurusans',
+    'App\\Filament\\Resources\\JurusanResource\\Widgets\\JurusanStatsWidget' => 'App\\Filament\\Resources\\JurusanResource\\Widgets\\JurusanStatsWidget',
+    'App\\Filament\\Resources\\KategoriResource\\Pages\\CreateKategori' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\CreateKategori',
+    'App\\Filament\\Resources\\KategoriResource\\Pages\\EditKategori' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\EditKategori',
+    'App\\Filament\\Resources\\KategoriResource\\Pages\\ListKategoris' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\ListKategoris',
+    'App\\Filament\\Resources\\KategoriResource\\Widgets\\KategoriStatsWidget' => 'App\\Filament\\Resources\\KategoriResource\\Widgets\\KategoriStatsWidget',
+    'App\\Filament\\Resources\\KelasResource\\Pages\\CreateKelas' => 'App\\Filament\\Resources\\KelasResource\\Pages\\CreateKelas',
+    'App\\Filament\\Resources\\KelasResource\\Pages\\EditKelas' => 'App\\Filament\\Resources\\KelasResource\\Pages\\EditKelas',
+    'App\\Filament\\Resources\\KelasResource\\Pages\\ListKelas' => 'App\\Filament\\Resources\\KelasResource\\Pages\\ListKelas',
+    'App\\Filament\\Resources\\KelasResource\\Widgets\\KelasStatsWidget' => 'App\\Filament\\Resources\\KelasResource\\Widgets\\KelasStatsWidget',
+    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\CreateKelasTahunPelajaran' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\CreateKelasTahunPelajaran',
+    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\EditKelasTahunPelajaran' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\EditKelasTahunPelajaran',
+    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\ListKelasTahunPelajarans' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\ListKelasTahunPelajarans',
+    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\RelationManagers\\SiswaAktifRelationManager' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\RelationManagers\\SiswaAktifRelationManager',
+    'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Widgets\\KelasTahunPelajaranStatsWidget' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Widgets\\KelasTahunPelajaranStatsWidget',
+    'App\\Filament\\Resources\\KunjunganResource\\Pages\\ListKunjungans' => 'App\\Filament\\Resources\\KunjunganResource\\Pages\\ListKunjungans',
+    'App\\Filament\\Resources\\KunjunganResource\\Widgets\\KunjunganStatsWidget' => 'App\\Filament\\Resources\\KunjunganResource\\Widgets\\KunjunganStatsWidget',
+    'App\\Filament\\Resources\\LevelBadgeLogResource\\Pages\\ListLevelBadgeLogs' => 'App\\Filament\\Resources\\LevelBadgeLogResource\\Pages\\ListLevelBadgeLogs',
+    'App\\Filament\\Resources\\LevelBadgeLogResource\\Widgets\\LevelBadgeLogStatsWidget' => 'App\\Filament\\Resources\\LevelBadgeLogResource\\Widgets\\LevelBadgeLogStatsWidget',
+    'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\CreateLevelBadge' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\CreateLevelBadge',
+    'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\EditLevelBadge' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\EditLevelBadge',
+    'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\ListLevelBadges' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\ListLevelBadges',
+    'App\\Filament\\Resources\\LevelBadgeResource\\Widgets\\LevelBadgeStatsWidget' => 'App\\Filament\\Resources\\LevelBadgeResource\\Widgets\\LevelBadgeStatsWidget',
+    'App\\Filament\\Resources\\PeminjamanResource\\Pages\\CreatePeminjaman' => 'App\\Filament\\Resources\\PeminjamanResource\\Pages\\CreatePeminjaman',
+    'App\\Filament\\Resources\\PeminjamanResource\\Pages\\ListPeminjamans' => 'App\\Filament\\Resources\\PeminjamanResource\\Pages\\ListPeminjamans',
+    'App\\Filament\\Resources\\PeminjamanResource\\Widgets\\PeminjamanOverviewWidget' => 'App\\Filament\\Resources\\PeminjamanResource\\Widgets\\PeminjamanOverviewWidget',
+    'App\\Filament\\Resources\\PengembalianResource\\Pages\\ListPengembalians' => 'App\\Filament\\Resources\\PengembalianResource\\Pages\\ListPengembalians',
+    'App\\Filament\\Resources\\PengembalianResource\\Widgets\\PengembalianStatsWidget' => 'App\\Filament\\Resources\\PengembalianResource\\Widgets\\PengembalianStatsWidget',
+    'App\\Filament\\Resources\\PunishmentLogResource\\Pages\\ListPunishmentLogs' => 'App\\Filament\\Resources\\PunishmentLogResource\\Pages\\ListPunishmentLogs',
+    'App\\Filament\\Resources\\PunishmentLogResource\\Widgets\\PunishmentLogStatsWidget' => 'App\\Filament\\Resources\\PunishmentLogResource\\Widgets\\PunishmentLogStatsWidget',
+    'App\\Filament\\Resources\\PunishmentResource\\Pages\\CreatePunishment' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\CreatePunishment',
+    'App\\Filament\\Resources\\PunishmentResource\\Pages\\EditPunishment' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\EditPunishment',
+    'App\\Filament\\Resources\\PunishmentResource\\Pages\\ListPunishments' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\ListPunishments',
+    'App\\Filament\\Resources\\PunishmentResource\\Widgets\\PunishmentStatsWidget' => 'App\\Filament\\Resources\\PunishmentResource\\Widgets\\PunishmentStatsWidget',
+    'App\\Filament\\Resources\\RakResource\\Pages\\CreateRak' => 'App\\Filament\\Resources\\RakResource\\Pages\\CreateRak',
+    'App\\Filament\\Resources\\RakResource\\Pages\\EditRak' => 'App\\Filament\\Resources\\RakResource\\Pages\\EditRak',
+    'App\\Filament\\Resources\\RakResource\\Pages\\ListRaks' => 'App\\Filament\\Resources\\RakResource\\Pages\\ListRaks',
+    'App\\Filament\\Resources\\RakResource\\RelationManagers\\EksemplarsRelationManager' => 'App\\Filament\\Resources\\RakResource\\RelationManagers\\EksemplarsRelationManager',
+    'App\\Filament\\Resources\\RakResource\\Widgets\\RakStatsWidget' => 'App\\Filament\\Resources\\RakResource\\Widgets\\RakStatsWidget',
+    'App\\Filament\\Resources\\RewardLogResource\\Pages\\ListRewardLogs' => 'App\\Filament\\Resources\\RewardLogResource\\Pages\\ListRewardLogs',
+    'App\\Filament\\Resources\\RewardLogResource\\Widgets\\RewardLogStatsWidget' => 'App\\Filament\\Resources\\RewardLogResource\\Widgets\\RewardLogStatsWidget',
+    'App\\Filament\\Resources\\RewardResource\\Pages\\CreateReward' => 'App\\Filament\\Resources\\RewardResource\\Pages\\CreateReward',
+    'App\\Filament\\Resources\\RewardResource\\Pages\\EditReward' => 'App\\Filament\\Resources\\RewardResource\\Pages\\EditReward',
+    'App\\Filament\\Resources\\RewardResource\\Pages\\ListRewards' => 'App\\Filament\\Resources\\RewardResource\\Pages\\ListRewards',
+    'App\\Filament\\Resources\\RewardResource\\Widgets\\RewardStatsWidget' => 'App\\Filament\\Resources\\RewardResource\\Widgets\\RewardStatsWidget',
+    'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Pages\\ListRiwayatKelasSiswas' => 'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Pages\\ListRiwayatKelasSiswas',
+    'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Widgets\\RiwayatKelasSiswaStatsWidget' => 'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Widgets\\RiwayatKelasSiswaStatsWidget',
+    'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\CreateTahunPelajaran' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\CreateTahunPelajaran',
+    'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\EditTahunPelajaran' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\EditTahunPelajaran',
+    'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\ListTahunPelajarans' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\ListTahunPelajarans',
+    'App\\Filament\\Resources\\TahunPelajaranResource\\Widgets\\TahunPelajaranStatsWidget' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Widgets\\TahunPelajaranStatsWidget',
+    'App\\Filament\\Resources\\TransaksiResource\\Pages\\ListTransaksis' => 'App\\Filament\\Resources\\TransaksiResource\\Pages\\ListTransaksis',
+    'App\\Filament\\Resources\\TransaksiResource\\Pages\\ViewTransaksi' => 'App\\Filament\\Resources\\TransaksiResource\\Pages\\ViewTransaksi',
+    'App\\Filament\\Resources\\TransaksiResource\\RelationManagers\\PeminjamansRelationManager' => 'App\\Filament\\Resources\\TransaksiResource\\RelationManagers\\PeminjamansRelationManager',
+    'App\\Filament\\Resources\\TransaksiResource\\Widgets\\TransaksiStatsWidget' => 'App\\Filament\\Resources\\TransaksiResource\\Widgets\\TransaksiStatsWidget',
+    'App\\Filament\\Resources\\UserResource\\Pages\\CreateUser' => 'App\\Filament\\Resources\\UserResource\\Pages\\CreateUser',
+    'App\\Filament\\Resources\\UserResource\\Pages\\EditUser' => 'App\\Filament\\Resources\\UserResource\\Pages\\EditUser',
+    'App\\Filament\\Resources\\UserResource\\Pages\\ListUsers' => 'App\\Filament\\Resources\\UserResource\\Pages\\ListUsers',
+    'App\\Filament\\Resources\\UserResource\\Widgets\\UserStatsWidget' => 'App\\Filament\\Resources\\UserResource\\Widgets\\UserStatsWidget',
+    'App\\Filament\\Pages\\Auth\\Login' => 'App\\Filament\\Pages\\Auth\\Login',
+    'App\\Filament\\Pages\\Auth\\RequestPasswordReset' => 'App\\Filament\\Pages\\Auth\\RequestPasswordReset',
+    'App\\Filament\\Pages\\Auth\\ResetPassword' => 'App\\Filament\\Pages\\Auth\\ResetPassword',
+    'App\\Filament\\Pages\\ImportExportMaster' => 'App\\Filament\\Pages\\ImportExportMaster',
+    'App\\Filament\\Pages\\LaporanBulanan' => 'App\\Filament\\Pages\\LaporanBulanan',
+    'App\\Filament\\Pages\\PengaturanSistem' => 'App\\Filament\\Pages\\PengaturanSistem',
+    'App\\Filament\\Pages\\ProsesKenaikanKelas' => 'App\\Filament\\Pages\\ProsesKenaikanKelas',
+    'App\\Filament\\Pages\\Sirkulasi' => 'App\\Filament\\Pages\\Sirkulasi',
+    'App\\Filament\\Pages\\TransaksiCepat' => 'App\\Filament\\Pages\\TransaksiCepat',
+    'App\\Filament\\Widgets\\BukuPerKategoriWidget' => 'App\\Filament\\Widgets\\BukuPerKategoriWidget',
+    'App\\Filament\\Widgets\\BukuRusakHilangWidget' => 'App\\Filament\\Widgets\\BukuRusakHilangWidget',
+    'App\\Filament\\Widgets\\DendaTerbaruWidget' => 'App\\Filament\\Widgets\\DendaTerbaruWidget',
+    'App\\Filament\\Widgets\\GamifikasiBulananWidget' => 'App\\Filament\\Widgets\\GamifikasiBulananWidget',
+    'App\\Filament\\Widgets\\PeminjamanJatuhTempoWidget' => 'App\\Filament\\Widgets\\PeminjamanJatuhTempoWidget',
+    'App\\Filament\\Widgets\\PeminjamanStatsWidget' => 'App\\Filament\\Widgets\\PeminjamanStatsWidget',
+    'App\\Filament\\Widgets\\PerJenisKelaminWidget' => 'App\\Filament\\Widgets\\PerJenisKelaminWidget',
+    'App\\Filament\\Widgets\\TrenBulananWidget' => 'App\\Filament\\Widgets\\TrenBulananWidget',
+    'App\\Filament\\Widgets\\WhatsappLogWidget' => 'App\\Filament\\Widgets\\WhatsappLogWidget',
+    'Filament\\Livewire\\DatabaseNotifications' => 'Filament\\Livewire\\DatabaseNotifications',
+    'Filament\\Auth\\Pages\\EditProfile' => 'Filament\\Auth\\Pages\\EditProfile',
+    'Filament\\Livewire\\GlobalSearch' => 'Filament\\Livewire\\GlobalSearch',
+    'Filament\\Livewire\\Notifications' => 'Filament\\Livewire\\Notifications',
+    'Filament\\Livewire\\Sidebar' => 'Filament\\Livewire\\Sidebar',
+    'Filament\\Livewire\\SimpleUserMenu' => 'Filament\\Livewire\\SimpleUserMenu',
+    'Filament\\Livewire\\Topbar' => 'Filament\\Livewire\\Topbar',
+    'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ListRoles' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ListRoles',
+    'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\CreateRole' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\CreateRole',
+    'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ViewRole' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ViewRole',
+    'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\EditRole' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\EditRole',
+  ),
+  'clusters' => 
+  array (
+  ),
+  'clusteredComponents' => 
+  array (
+  ),
+  'clusterDirectories' => 
+  array (
+  ),
+  'clusterNamespaces' => 
+  array (
+  ),
+  'pages' => 
+  array (
+    0 => 'App\\Filament\\Pages\\Dashboard',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/Dashboard.php' => 'App\\Filament\\Pages\\Dashboard',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/ImportExportMaster.php' => 'App\\Filament\\Pages\\ImportExportMaster',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/LaporanBulanan.php' => 'App\\Filament\\Pages\\LaporanBulanan',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/PengaturanSistem.php' => 'App\\Filament\\Pages\\PengaturanSistem',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/ProsesKenaikanKelas.php' => 'App\\Filament\\Pages\\ProsesKenaikanKelas',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/Sirkulasi.php' => 'App\\Filament\\Pages\\Sirkulasi',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages/TransaksiCepat.php' => 'App\\Filament\\Pages\\TransaksiCepat',
+    1 => 'App\\Filament\\Pages\\Dashboard',
+  ),
+  'pageConfigurations' => 
+  array (
+  ),
+  'pageDirectories' => 
+  array (
+    0 => '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Pages',
+  ),
+  'pageNamespaces' => 
+  array (
+    0 => 'App\\Filament\\Pages',
+  ),
+  'resources' => 
+  array (
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/AuthorResource.php' => 'App\\Filament\\Resources\\AuthorResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/BukuResource.php' => 'App\\Filament\\Resources\\BukuResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/DendaResource.php' => 'App\\Filament\\Resources\\DendaResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/FirmwareResource.php' => 'App\\Filament\\Resources\\FirmwareResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/JurusanResource.php' => 'App\\Filament\\Resources\\JurusanResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/KategoriResource.php' => 'App\\Filament\\Resources\\KategoriResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/KelasResource.php' => 'App\\Filament\\Resources\\KelasResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/KelasTahunPelajaranResource.php' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/KunjunganResource.php' => 'App\\Filament\\Resources\\KunjunganResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/LevelBadgeLogResource.php' => 'App\\Filament\\Resources\\LevelBadgeLogResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/LevelBadgeResource.php' => 'App\\Filament\\Resources\\LevelBadgeResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/PeminjamanResource.php' => 'App\\Filament\\Resources\\PeminjamanResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/PengembalianResource.php' => 'App\\Filament\\Resources\\PengembalianResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/PunishmentLogResource.php' => 'App\\Filament\\Resources\\PunishmentLogResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/PunishmentResource.php' => 'App\\Filament\\Resources\\PunishmentResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/RakResource.php' => 'App\\Filament\\Resources\\RakResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/RewardLogResource.php' => 'App\\Filament\\Resources\\RewardLogResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/RewardResource.php' => 'App\\Filament\\Resources\\RewardResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/RiwayatKelasSiswaResource.php' => 'App\\Filament\\Resources\\RiwayatKelasSiswaResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/TahunPelajaranResource.php' => 'App\\Filament\\Resources\\TahunPelajaranResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/TransaksiResource.php' => 'App\\Filament\\Resources\\TransaksiResource',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources/UserResource.php' => 'App\\Filament\\Resources\\UserResource',
+    0 => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\RoleResource',
+  ),
+  'resourceConfigurations' => 
+  array (
+  ),
+  'resourceDirectories' => 
+  array (
+    0 => '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Resources',
+  ),
+  'resourceNamespaces' => 
+  array (
+    0 => 'App\\Filament\\Resources',
+  ),
+  'widgets' => 
+  array (
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/BukuPerKategoriWidget.php' => 'App\\Filament\\Widgets\\BukuPerKategoriWidget',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/BukuRusakHilangWidget.php' => 'App\\Filament\\Widgets\\BukuRusakHilangWidget',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/DendaTerbaruWidget.php' => 'App\\Filament\\Widgets\\DendaTerbaruWidget',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/GamifikasiBulananWidget.php' => 'App\\Filament\\Widgets\\GamifikasiBulananWidget',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/PeminjamanJatuhTempoWidget.php' => 'App\\Filament\\Widgets\\PeminjamanJatuhTempoWidget',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/PeminjamanStatsWidget.php' => 'App\\Filament\\Widgets\\PeminjamanStatsWidget',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/PerJenisKelaminWidget.php' => 'App\\Filament\\Widgets\\PerJenisKelaminWidget',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/TrenBulananWidget.php' => 'App\\Filament\\Widgets\\TrenBulananWidget',
+    '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets/WhatsappLogWidget.php' => 'App\\Filament\\Widgets\\WhatsappLogWidget',
+  ),
+  'widgetDirectories' => 
+  array (
+    0 => '/home/zulfikriyahya/blueprint/perpustakaan/app/Filament/Widgets',
+  ),
+  'widgetNamespaces' => 
+  array (
+    0 => 'App\\Filament\\Widgets',
+  ),
+);
+```
+---
+
 ## bootstrap/cache/packages.php
 ```php
 <?php return array (
@@ -25964,6 +29092,6622 @@ return Application::configure(basePath: dirname(__DIR__))
     ),
   ),
 );
+```
+---
+
+## bootstrap/cache/routes-v7.php
+```php
+<?php
+
+app('router')->setCompiledRoutes(
+    array (
+  'compiled' => 
+  array (
+    0 => false,
+    1 => 
+    array (
+      '/dashboard/login' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.auth.login',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/password-reset/request' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.auth.password-reset.request',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/password-reset/reset' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.auth.password-reset.reset',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/logout' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.auth.logout',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'POST' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.pages.dashboard',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/import-export-master' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.pages.import-export-master',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/laporan-bulanan' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.pages.laporan-bulanan',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/pengaturan-sistem' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.pages.pengaturan-sistem',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/sirkulasi' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.pages.sirkulasi',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/transaksi-cepat' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.pages.transaksi-cepat',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/authors' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.authors.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/authors/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.authors.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/bukus' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.bukus.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/bukus/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.bukus.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/dendas' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.dendas.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/firmware' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.firmware.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/firmware/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.firmware.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/jurusans' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.jurusans.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/jurusans/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.jurusans.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/kategoris' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kategoris.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/kategoris/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kategoris.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/kelas' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kelas.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/kelas/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kelas.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/kelas-tahun-pelajarans' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kelas-tahun-pelajarans.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/kelas-tahun-pelajarans/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kelas-tahun-pelajarans.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/kunjungans' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kunjungans.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/level-badge-logs' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.level-badge-logs.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/level-badges' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.level-badges.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/level-badges/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.level-badges.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/peminjamen' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.peminjamen.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/peminjamen/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.peminjamen.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/pengembalians' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.pengembalians.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/punishment-logs' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.punishment-logs.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/punishments' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.punishments.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/punishments/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.punishments.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/raks' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.raks.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/raks/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.raks.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/reward-logs' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.reward-logs.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/rewards' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.rewards.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/rewards/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.rewards.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/riwayat-kelas-siswas' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.riwayat-kelas-siswas.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/tahun-pelajarans' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.tahun-pelajarans.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/tahun-pelajarans/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.tahun-pelajarans.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/transaksis' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.transaksis.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/users' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.users.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/users/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.users.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/shield/roles' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.shield.roles.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/shield/roles/create' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.shield.roles.create',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/livewire-6d52253c/update' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'default-livewire.update',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'POST' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/livewire-6d52253c/livewire.js' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::5xqP9NeYwmmhauHY',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/livewire-6d52253c/livewire.min.js.map' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::ikwaLcM4p1QYjd3D',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/livewire-6d52253c/livewire.csp.min.js.map' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::YyxbUXrSdNdMUoUZ',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/livewire-6d52253c/upload-file' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'livewire.upload-file',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'POST' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/api/perpustakaan/ping' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::Tv8WY9WdL87rvzSi',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/api/perpustakaan/rfid-list/version' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::R3pSxqknPh8s6gUi',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/api/perpustakaan/rfid-list' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::U542NWGLiaQ3ZkaZ',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/api/perpustakaan/sync-bulk' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::VMIGw6k42g70Ai38',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'POST' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/api/perpustakaan' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::jTPg0u378m1VDd1R',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'POST' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/api/perpustakaan/heartbeat' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::80vmwA2x0nY1gG0Z',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'POST' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/api/perpustakaan/config' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::6eyo9ttPXB7fsTgc',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/api/perpustakaan/firmware/check' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::uSef0BhvLMUrY4ec',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'POST' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/api/perpustakaan/firmware/report' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::cfruy4ImZtxHgg6w',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'POST' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/up' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::jHmD8PgyVIegX2kc',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'home',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/faq' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'faq',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/tentang' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'tentang',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/authors' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'authors.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/buku-digital' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'buku.index',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/dashboard/chart-export/pdf' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'chart-export.pdf',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'POST' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      '/sitemap.xml' => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'sitemap',
+          ),
+          1 => NULL,
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+    ),
+    2 => 
+    array (
+      0 => '{^(?|/filament/(?|exports/([^/]++)/download(*:45)|imports/([^/]++)/failed\\-rows/download(*:90))|/dashboard/(?|p(?|roses\\-kenaikan\\-kelas/([^/]++)(*:147)|unishments/([^/]++)/edit(*:179))|authors/([^/]++)/edit(*:209)|bukus/([^/]++)/edit(*:236)|firmware/([^/]++)/edit(*:266)|jurusans/([^/]++)/edit(*:296)|k(?|ategoris/([^/]++)/edit(*:330)|elas(?|/([^/]++)/edit(*:359)|\\-tahun\\-pelajarans/([^/]++)/edit(*:400)))|level\\-badges/([^/]++)/edit(*:437)|r(?|aks/([^/]++)/edit(*:466)|ewards/([^/]++)/edit(*:494))|t(?|ahun\\-pelajarans/([^/]++)/edit(*:537)|ransaksis/([^/]++)(*:563))|users/([^/]++)/edit(*:591)|shield/roles/([^/]++)(?|(*:623)|/edit(*:636)))|/livewire\\-6d52253c/(?|preview\\-file/([^/]++)(*:691)|js/([^/\\.]++)\\.js(*:716)|css/([^/\\.]++)\\.(?|css(*:746)|global\\.css(*:765)))|/authors/([^/]++)(*:792)|/buku\\-digital/baca/([^/]++)(*:828)|/unduh\\-bulk\\-data/([^/]++)(*:863)|/storage/(.*)(?|(*:887)))/?$}sDu',
+    ),
+    3 => 
+    array (
+      45 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.exports.download',
+          ),
+          1 => 
+          array (
+            0 => 'export',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      90 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.imports.failed-rows.download',
+          ),
+          1 => 
+          array (
+            0 => 'import',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      147 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.pages.proses-kenaikan-kelas.{ktp}',
+          ),
+          1 => 
+          array (
+            0 => 'ktp',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => true,
+          6 => NULL,
+        ),
+      ),
+      179 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.punishments.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      209 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.authors.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      236 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.bukus.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      266 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.firmware.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      296 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.jurusans.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      330 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kategoris.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      359 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kelas.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      400 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.kelas-tahun-pelajarans.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      437 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.level-badges.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      466 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.raks.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      494 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.rewards.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      537 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.tahun-pelajarans.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      563 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.transaksis.view',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => true,
+          6 => NULL,
+        ),
+      ),
+      591 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.users.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      623 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.shield.roles.view',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => true,
+          6 => NULL,
+        ),
+      ),
+      636 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'filament.dashboard.resources.shield.roles.edit',
+          ),
+          1 => 
+          array (
+            0 => 'record',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      691 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'livewire.preview-file',
+          ),
+          1 => 
+          array (
+            0 => 'filename',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => true,
+          6 => NULL,
+        ),
+      ),
+      716 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::7Ozt6p0e6IELDTy5',
+          ),
+          1 => 
+          array (
+            0 => 'component',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      746 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::sn3thLaXH1YFhohE',
+          ),
+          1 => 
+          array (
+            0 => 'component',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      765 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'generated::9NzK5k2cAAtMvEZQ',
+          ),
+          1 => 
+          array (
+            0 => 'component',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => NULL,
+        ),
+      ),
+      792 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'authors.show',
+          ),
+          1 => 
+          array (
+            0 => 'author',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => true,
+          6 => NULL,
+        ),
+      ),
+      828 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'buku.baca',
+          ),
+          1 => 
+          array (
+            0 => 'file',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => true,
+          6 => NULL,
+        ),
+      ),
+      863 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'bulk-data-job.download',
+          ),
+          1 => 
+          array (
+            0 => 'bulkDataJob',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => true,
+          6 => NULL,
+        ),
+      ),
+      887 => 
+      array (
+        0 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'storage.local',
+          ),
+          1 => 
+          array (
+            0 => 'path',
+          ),
+          2 => 
+          array (
+            'GET' => 0,
+            'HEAD' => 1,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => true,
+          6 => NULL,
+        ),
+        1 => 
+        array (
+          0 => 
+          array (
+            '_route' => 'storage.local.upload',
+          ),
+          1 => 
+          array (
+            0 => 'path',
+          ),
+          2 => 
+          array (
+            'PUT' => 0,
+          ),
+          3 => NULL,
+          4 => false,
+          5 => true,
+          6 => NULL,
+        ),
+        2 => 
+        array (
+          0 => NULL,
+          1 => NULL,
+          2 => NULL,
+          3 => NULL,
+          4 => false,
+          5 => false,
+          6 => 0,
+        ),
+      ),
+    ),
+    4 => NULL,
+  ),
+  'attributes' => 
+  array (
+    'filament.exports.download' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'filament/exports/{export}/download',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'filament.actions',
+        ),
+        'uses' => 'Filament\\Actions\\Exports\\Http\\Controllers\\DownloadExport@__invoke',
+        'controller' => 'Filament\\Actions\\Exports\\Http\\Controllers\\DownloadExport',
+        'as' => 'filament.exports.download',
+        'namespace' => NULL,
+        'prefix' => 'filament',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.imports.failed-rows.download' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'filament/imports/{import}/failed-rows/download',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'filament.actions',
+        ),
+        'uses' => 'Filament\\Actions\\Imports\\Http\\Controllers\\DownloadImportFailureCsv@__invoke',
+        'controller' => 'Filament\\Actions\\Imports\\Http\\Controllers\\DownloadImportFailureCsv',
+        'as' => 'filament.imports.failed-rows.download',
+        'namespace' => NULL,
+        'prefix' => 'filament',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.auth.login' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/login',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+        ),
+        'uses' => 'App\\Filament\\Pages\\Auth\\Login@__invoke',
+        'controller' => 'App\\Filament\\Pages\\Auth\\Login',
+        'as' => 'filament.dashboard.auth.login',
+        'namespace' => NULL,
+        'prefix' => '/dashboard',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.auth.password-reset.request' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/password-reset/request',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+        ),
+        'uses' => 'App\\Filament\\Pages\\Auth\\RequestPasswordReset@__invoke',
+        'controller' => 'App\\Filament\\Pages\\Auth\\RequestPasswordReset',
+        'as' => 'filament.dashboard.auth.password-reset.request',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/password-reset',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.auth.password-reset.reset' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/password-reset/reset',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'signed',
+        ),
+        'uses' => 'App\\Filament\\Pages\\Auth\\ResetPassword@__invoke',
+        'controller' => 'App\\Filament\\Pages\\Auth\\ResetPassword',
+        'as' => 'filament.dashboard.auth.password-reset.reset',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/password-reset',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.auth.logout' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'POST',
+      ),
+      'uri' => 'dashboard/logout',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'uses' => 'Filament\\Auth\\Http\\Controllers\\LogoutController@__invoke',
+        'controller' => 'Filament\\Auth\\Http\\Controllers\\LogoutController',
+        'as' => 'filament.dashboard.auth.logout',
+        'namespace' => NULL,
+        'prefix' => '/dashboard',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.pages.dashboard' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'uses' => 'App\\Filament\\Pages\\Dashboard@__invoke',
+        'controller' => 'App\\Filament\\Pages\\Dashboard',
+        'as' => 'filament.dashboard.pages.dashboard',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/',
+        'where' => 
+        array (
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.pages.import-export-master' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/import-export-master',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'uses' => 'App\\Filament\\Pages\\ImportExportMaster@__invoke',
+        'controller' => 'App\\Filament\\Pages\\ImportExportMaster',
+        'as' => 'filament.dashboard.pages.import-export-master',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/',
+        'where' => 
+        array (
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.pages.laporan-bulanan' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/laporan-bulanan',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'uses' => 'App\\Filament\\Pages\\LaporanBulanan@__invoke',
+        'controller' => 'App\\Filament\\Pages\\LaporanBulanan',
+        'as' => 'filament.dashboard.pages.laporan-bulanan',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/',
+        'where' => 
+        array (
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.pages.pengaturan-sistem' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/pengaturan-sistem',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'uses' => 'App\\Filament\\Pages\\PengaturanSistem@__invoke',
+        'controller' => 'App\\Filament\\Pages\\PengaturanSistem',
+        'as' => 'filament.dashboard.pages.pengaturan-sistem',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/',
+        'where' => 
+        array (
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.pages.proses-kenaikan-kelas.{ktp}' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/proses-kenaikan-kelas/{ktp}',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'uses' => 'App\\Filament\\Pages\\ProsesKenaikanKelas@__invoke',
+        'controller' => 'App\\Filament\\Pages\\ProsesKenaikanKelas',
+        'as' => 'filament.dashboard.pages.proses-kenaikan-kelas.{ktp}',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/',
+        'where' => 
+        array (
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.pages.sirkulasi' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/sirkulasi',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'uses' => 'App\\Filament\\Pages\\Sirkulasi@__invoke',
+        'controller' => 'App\\Filament\\Pages\\Sirkulasi',
+        'as' => 'filament.dashboard.pages.sirkulasi',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/',
+        'where' => 
+        array (
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.pages.transaksi-cepat' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/transaksi-cepat',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'uses' => 'App\\Filament\\Pages\\TransaksiCepat@__invoke',
+        'controller' => 'App\\Filament\\Pages\\TransaksiCepat',
+        'as' => 'filament.dashboard.pages.transaksi-cepat',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/',
+        'where' => 
+        array (
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.authors.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/authors',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\AuthorResource\\Pages\\ListAuthors@__invoke',
+        'controller' => 'App\\Filament\\Resources\\AuthorResource\\Pages\\ListAuthors',
+        'as' => 'filament.dashboard.resources.authors.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/authors',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.authors.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/authors/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\AuthorResource\\Pages\\CreateAuthor@__invoke',
+        'controller' => 'App\\Filament\\Resources\\AuthorResource\\Pages\\CreateAuthor',
+        'as' => 'filament.dashboard.resources.authors.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/authors',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.authors.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/authors/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\AuthorResource\\Pages\\EditAuthor@__invoke',
+        'controller' => 'App\\Filament\\Resources\\AuthorResource\\Pages\\EditAuthor',
+        'as' => 'filament.dashboard.resources.authors.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/authors',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.bukus.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/bukus',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\BukuResource\\Pages\\ListBukus@__invoke',
+        'controller' => 'App\\Filament\\Resources\\BukuResource\\Pages\\ListBukus',
+        'as' => 'filament.dashboard.resources.bukus.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/bukus',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.bukus.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/bukus/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\BukuResource\\Pages\\CreateBuku@__invoke',
+        'controller' => 'App\\Filament\\Resources\\BukuResource\\Pages\\CreateBuku',
+        'as' => 'filament.dashboard.resources.bukus.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/bukus',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.bukus.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/bukus/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\BukuResource\\Pages\\EditBuku@__invoke',
+        'controller' => 'App\\Filament\\Resources\\BukuResource\\Pages\\EditBuku',
+        'as' => 'filament.dashboard.resources.bukus.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/bukus',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.dendas.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/dendas',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\DendaResource\\Pages\\ListDendas@__invoke',
+        'controller' => 'App\\Filament\\Resources\\DendaResource\\Pages\\ListDendas',
+        'as' => 'filament.dashboard.resources.dendas.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/dendas',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.firmware.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/firmware',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\ListFirmwareReleases@__invoke',
+        'controller' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\ListFirmwareReleases',
+        'as' => 'filament.dashboard.resources.firmware.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/firmware',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.firmware.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/firmware/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\CreateFirmwareRelease@__invoke',
+        'controller' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\CreateFirmwareRelease',
+        'as' => 'filament.dashboard.resources.firmware.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/firmware',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.firmware.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/firmware/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\EditFirmwareRelease@__invoke',
+        'controller' => 'App\\Filament\\Resources\\FirmwareResource\\Pages\\EditFirmwareRelease',
+        'as' => 'filament.dashboard.resources.firmware.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/firmware',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.jurusans.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/jurusans',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\ListJurusans@__invoke',
+        'controller' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\ListJurusans',
+        'as' => 'filament.dashboard.resources.jurusans.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/jurusans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.jurusans.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/jurusans/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\CreateJurusan@__invoke',
+        'controller' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\CreateJurusan',
+        'as' => 'filament.dashboard.resources.jurusans.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/jurusans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.jurusans.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/jurusans/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\EditJurusan@__invoke',
+        'controller' => 'App\\Filament\\Resources\\JurusanResource\\Pages\\EditJurusan',
+        'as' => 'filament.dashboard.resources.jurusans.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/jurusans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kategoris.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kategoris',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\ListKategoris@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\ListKategoris',
+        'as' => 'filament.dashboard.resources.kategoris.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kategoris',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kategoris.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kategoris/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\CreateKategori@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\CreateKategori',
+        'as' => 'filament.dashboard.resources.kategoris.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kategoris',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kategoris.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kategoris/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\EditKategori@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KategoriResource\\Pages\\EditKategori',
+        'as' => 'filament.dashboard.resources.kategoris.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kategoris',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kelas.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kelas',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KelasResource\\Pages\\ListKelas@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KelasResource\\Pages\\ListKelas',
+        'as' => 'filament.dashboard.resources.kelas.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kelas',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kelas.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kelas/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KelasResource\\Pages\\CreateKelas@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KelasResource\\Pages\\CreateKelas',
+        'as' => 'filament.dashboard.resources.kelas.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kelas',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kelas.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kelas/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KelasResource\\Pages\\EditKelas@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KelasResource\\Pages\\EditKelas',
+        'as' => 'filament.dashboard.resources.kelas.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kelas',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kelas-tahun-pelajarans.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kelas-tahun-pelajarans',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\ListKelasTahunPelajarans@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\ListKelasTahunPelajarans',
+        'as' => 'filament.dashboard.resources.kelas-tahun-pelajarans.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kelas-tahun-pelajarans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kelas-tahun-pelajarans.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kelas-tahun-pelajarans/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\CreateKelasTahunPelajaran@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\CreateKelasTahunPelajaran',
+        'as' => 'filament.dashboard.resources.kelas-tahun-pelajarans.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kelas-tahun-pelajarans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kelas-tahun-pelajarans.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kelas-tahun-pelajarans/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\EditKelasTahunPelajaran@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KelasTahunPelajaranResource\\Pages\\EditKelasTahunPelajaran',
+        'as' => 'filament.dashboard.resources.kelas-tahun-pelajarans.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kelas-tahun-pelajarans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.kunjungans.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/kunjungans',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\KunjunganResource\\Pages\\ListKunjungans@__invoke',
+        'controller' => 'App\\Filament\\Resources\\KunjunganResource\\Pages\\ListKunjungans',
+        'as' => 'filament.dashboard.resources.kunjungans.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/kunjungans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.level-badge-logs.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/level-badge-logs',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\LevelBadgeLogResource\\Pages\\ListLevelBadgeLogs@__invoke',
+        'controller' => 'App\\Filament\\Resources\\LevelBadgeLogResource\\Pages\\ListLevelBadgeLogs',
+        'as' => 'filament.dashboard.resources.level-badge-logs.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/level-badge-logs',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.level-badges.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/level-badges',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\ListLevelBadges@__invoke',
+        'controller' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\ListLevelBadges',
+        'as' => 'filament.dashboard.resources.level-badges.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/level-badges',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.level-badges.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/level-badges/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\CreateLevelBadge@__invoke',
+        'controller' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\CreateLevelBadge',
+        'as' => 'filament.dashboard.resources.level-badges.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/level-badges',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.level-badges.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/level-badges/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\EditLevelBadge@__invoke',
+        'controller' => 'App\\Filament\\Resources\\LevelBadgeResource\\Pages\\EditLevelBadge',
+        'as' => 'filament.dashboard.resources.level-badges.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/level-badges',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.peminjamen.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/peminjamen',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\PeminjamanResource\\Pages\\ListPeminjamans@__invoke',
+        'controller' => 'App\\Filament\\Resources\\PeminjamanResource\\Pages\\ListPeminjamans',
+        'as' => 'filament.dashboard.resources.peminjamen.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/peminjamen',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.peminjamen.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/peminjamen/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\PeminjamanResource\\Pages\\CreatePeminjaman@__invoke',
+        'controller' => 'App\\Filament\\Resources\\PeminjamanResource\\Pages\\CreatePeminjaman',
+        'as' => 'filament.dashboard.resources.peminjamen.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/peminjamen',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.pengembalians.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/pengembalians',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\PengembalianResource\\Pages\\ListPengembalians@__invoke',
+        'controller' => 'App\\Filament\\Resources\\PengembalianResource\\Pages\\ListPengembalians',
+        'as' => 'filament.dashboard.resources.pengembalians.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/pengembalians',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.punishment-logs.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/punishment-logs',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\PunishmentLogResource\\Pages\\ListPunishmentLogs@__invoke',
+        'controller' => 'App\\Filament\\Resources\\PunishmentLogResource\\Pages\\ListPunishmentLogs',
+        'as' => 'filament.dashboard.resources.punishment-logs.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/punishment-logs',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.punishments.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/punishments',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\ListPunishments@__invoke',
+        'controller' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\ListPunishments',
+        'as' => 'filament.dashboard.resources.punishments.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/punishments',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.punishments.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/punishments/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\CreatePunishment@__invoke',
+        'controller' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\CreatePunishment',
+        'as' => 'filament.dashboard.resources.punishments.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/punishments',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.punishments.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/punishments/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\EditPunishment@__invoke',
+        'controller' => 'App\\Filament\\Resources\\PunishmentResource\\Pages\\EditPunishment',
+        'as' => 'filament.dashboard.resources.punishments.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/punishments',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.raks.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/raks',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\RakResource\\Pages\\ListRaks@__invoke',
+        'controller' => 'App\\Filament\\Resources\\RakResource\\Pages\\ListRaks',
+        'as' => 'filament.dashboard.resources.raks.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/raks',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.raks.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/raks/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\RakResource\\Pages\\CreateRak@__invoke',
+        'controller' => 'App\\Filament\\Resources\\RakResource\\Pages\\CreateRak',
+        'as' => 'filament.dashboard.resources.raks.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/raks',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.raks.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/raks/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\RakResource\\Pages\\EditRak@__invoke',
+        'controller' => 'App\\Filament\\Resources\\RakResource\\Pages\\EditRak',
+        'as' => 'filament.dashboard.resources.raks.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/raks',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.reward-logs.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/reward-logs',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\RewardLogResource\\Pages\\ListRewardLogs@__invoke',
+        'controller' => 'App\\Filament\\Resources\\RewardLogResource\\Pages\\ListRewardLogs',
+        'as' => 'filament.dashboard.resources.reward-logs.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/reward-logs',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.rewards.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/rewards',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\RewardResource\\Pages\\ListRewards@__invoke',
+        'controller' => 'App\\Filament\\Resources\\RewardResource\\Pages\\ListRewards',
+        'as' => 'filament.dashboard.resources.rewards.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/rewards',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.rewards.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/rewards/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\RewardResource\\Pages\\CreateReward@__invoke',
+        'controller' => 'App\\Filament\\Resources\\RewardResource\\Pages\\CreateReward',
+        'as' => 'filament.dashboard.resources.rewards.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/rewards',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.rewards.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/rewards/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\RewardResource\\Pages\\EditReward@__invoke',
+        'controller' => 'App\\Filament\\Resources\\RewardResource\\Pages\\EditReward',
+        'as' => 'filament.dashboard.resources.rewards.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/rewards',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.riwayat-kelas-siswas.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/riwayat-kelas-siswas',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Pages\\ListRiwayatKelasSiswas@__invoke',
+        'controller' => 'App\\Filament\\Resources\\RiwayatKelasSiswaResource\\Pages\\ListRiwayatKelasSiswas',
+        'as' => 'filament.dashboard.resources.riwayat-kelas-siswas.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/riwayat-kelas-siswas',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.tahun-pelajarans.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/tahun-pelajarans',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\ListTahunPelajarans@__invoke',
+        'controller' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\ListTahunPelajarans',
+        'as' => 'filament.dashboard.resources.tahun-pelajarans.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/tahun-pelajarans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.tahun-pelajarans.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/tahun-pelajarans/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\CreateTahunPelajaran@__invoke',
+        'controller' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\CreateTahunPelajaran',
+        'as' => 'filament.dashboard.resources.tahun-pelajarans.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/tahun-pelajarans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.tahun-pelajarans.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/tahun-pelajarans/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\EditTahunPelajaran@__invoke',
+        'controller' => 'App\\Filament\\Resources\\TahunPelajaranResource\\Pages\\EditTahunPelajaran',
+        'as' => 'filament.dashboard.resources.tahun-pelajarans.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/tahun-pelajarans',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.transaksis.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/transaksis',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\TransaksiResource\\Pages\\ListTransaksis@__invoke',
+        'controller' => 'App\\Filament\\Resources\\TransaksiResource\\Pages\\ListTransaksis',
+        'as' => 'filament.dashboard.resources.transaksis.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/transaksis',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.transaksis.view' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/transaksis/{record}',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\TransaksiResource\\Pages\\ViewTransaksi@__invoke',
+        'controller' => 'App\\Filament\\Resources\\TransaksiResource\\Pages\\ViewTransaksi',
+        'as' => 'filament.dashboard.resources.transaksis.view',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/transaksis',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.users.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/users',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\UserResource\\Pages\\ListUsers@__invoke',
+        'controller' => 'App\\Filament\\Resources\\UserResource\\Pages\\ListUsers',
+        'as' => 'filament.dashboard.resources.users.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/users',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.users.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/users/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\UserResource\\Pages\\CreateUser@__invoke',
+        'controller' => 'App\\Filament\\Resources\\UserResource\\Pages\\CreateUser',
+        'as' => 'filament.dashboard.resources.users.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/users',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.users.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/users/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'App\\Filament\\Resources\\UserResource\\Pages\\EditUser@__invoke',
+        'controller' => 'App\\Filament\\Resources\\UserResource\\Pages\\EditUser',
+        'as' => 'filament.dashboard.resources.users.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/users',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.shield.roles.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/shield/roles',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ListRoles@__invoke',
+        'controller' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ListRoles',
+        'as' => 'filament.dashboard.resources.shield.roles.index',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/shield/roles',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.shield.roles.create' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/shield/roles/create',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\CreateRole@__invoke',
+        'controller' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\CreateRole',
+        'as' => 'filament.dashboard.resources.shield.roles.create',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/shield/roles',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.shield.roles.view' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/shield/roles/{record}',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ViewRole@__invoke',
+        'controller' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\ViewRole',
+        'as' => 'filament.dashboard.resources.shield.roles.view',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/shield/roles',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'filament.dashboard.resources.shield.roles.edit' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'dashboard/shield/roles/{record}/edit',
+      'action' => 
+      array (
+        'domain' => NULL,
+        'middleware' => 
+        array (
+          0 => 'panel:dashboard',
+          1 => 'Illuminate\\Cookie\\Middleware\\EncryptCookies',
+          2 => 'Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse',
+          3 => 'Illuminate\\Session\\Middleware\\StartSession',
+          4 => 'Filament\\Http\\Middleware\\AuthenticateSession',
+          5 => 'Illuminate\\View\\Middleware\\ShareErrorsFromSession',
+          6 => 'Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery',
+          7 => 'Illuminate\\Routing\\Middleware\\SubstituteBindings',
+          8 => 'Filament\\Http\\Middleware\\DisableBladeIconComponents',
+          9 => 'Filament\\Http\\Middleware\\DispatchServingFilamentEvent',
+          10 => 'Filament\\Http\\Middleware\\Authenticate',
+        ),
+        'excluded_middleware' => 
+        array (
+        ),
+        'uses' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\EditRole@__invoke',
+        'controller' => 'BezhanSalleh\\FilamentShield\\Resources\\Roles\\Pages\\EditRole',
+        'as' => 'filament.dashboard.resources.shield.roles.edit',
+        'namespace' => NULL,
+        'prefix' => 'dashboard/shield/roles',
+        'where' => 
+        array (
+        ),
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'default-livewire.update' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'POST',
+      ),
+      'uri' => 'livewire-6d52253c/update',
+      'action' => 
+      array (
+        'uses' => 'Livewire\\Mechanisms\\HandleRequests\\HandleRequests@handleUpdate',
+        'controller' => 'Livewire\\Mechanisms\\HandleRequests\\HandleRequests@handleUpdate',
+        'middleware' => 
+        array (
+          0 => 'web',
+          1 => 'Livewire\\Mechanisms\\HandleRequests\\RequireLivewireHeaders',
+        ),
+        'as' => 'default-livewire.update',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::5xqP9NeYwmmhauHY' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'livewire-6d52253c/livewire.js',
+      'action' => 
+      array (
+        'uses' => 'Livewire\\Mechanisms\\FrontendAssets\\FrontendAssets@returnJavaScriptAsFile',
+        'controller' => 'Livewire\\Mechanisms\\FrontendAssets\\FrontendAssets@returnJavaScriptAsFile',
+        'as' => 'generated::5xqP9NeYwmmhauHY',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::ikwaLcM4p1QYjd3D' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'livewire-6d52253c/livewire.min.js.map',
+      'action' => 
+      array (
+        'uses' => 'Livewire\\Mechanisms\\FrontendAssets\\FrontendAssets@maps',
+        'controller' => 'Livewire\\Mechanisms\\FrontendAssets\\FrontendAssets@maps',
+        'as' => 'generated::ikwaLcM4p1QYjd3D',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::YyxbUXrSdNdMUoUZ' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'livewire-6d52253c/livewire.csp.min.js.map',
+      'action' => 
+      array (
+        'uses' => 'Livewire\\Mechanisms\\FrontendAssets\\FrontendAssets@cspMaps',
+        'controller' => 'Livewire\\Mechanisms\\FrontendAssets\\FrontendAssets@cspMaps',
+        'as' => 'generated::YyxbUXrSdNdMUoUZ',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'livewire.upload-file' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'POST',
+      ),
+      'uri' => 'livewire-6d52253c/upload-file',
+      'action' => 
+      array (
+        'uses' => 'Livewire\\Features\\SupportFileUploads\\FileUploadController@handle',
+        'controller' => 'Livewire\\Features\\SupportFileUploads\\FileUploadController@handle',
+        'as' => 'livewire.upload-file',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'livewire.preview-file' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'livewire-6d52253c/preview-file/{filename}',
+      'action' => 
+      array (
+        'uses' => 'Livewire\\Features\\SupportFileUploads\\FilePreviewController@handle',
+        'controller' => 'Livewire\\Features\\SupportFileUploads\\FilePreviewController@handle',
+        'as' => 'livewire.preview-file',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::7Ozt6p0e6IELDTy5' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'livewire-6d52253c/js/{component}.js',
+      'action' => 
+      array (
+        'uses' => 'O:55:"Laravel\\SerializableClosure\\UnsignedSerializableClosure":1:{s:12:"serializable";O:46:"Laravel\\SerializableClosure\\Serializers\\Native":5:{s:3:"use";a:0:{}s:8:"function";s:905:"function ($component) {
+            $component = str_replace(\'----\', \':\', $component);
+            $component = str_replace(\'---\', \'::\', $component);
+            $component = str_replace(\'--\', \'.\', $component);
+
+            $instance = app(\'livewire\')->new($component);
+
+            if (! method_exists($instance, \'scriptModuleSrc\')) {
+                throw new \\Exception(\'Component \'.$component.\' does not have a script source.\');
+            }
+
+            $path = $instance->scriptModuleSrc();
+
+            if (! file_exists($path)) {
+                throw new \\Exception(\'Script file not found: \'.$path);
+            }
+
+            $source = file_get_contents($path);
+
+            $filemtime = filemtime($path);
+
+            return \\Livewire\\Drawer\\Utils::pretendResponseIsFileFromString(
+                $source,
+                $filemtime,
+                $component.\'.js\',
+            );
+        }";s:5:"scope";s:51:"Livewire\\Features\\SupportJsModules\\SupportJsModules";s:4:"this";N;s:4:"self";s:32:"000000000000104b0000000000000000";}}',
+        'as' => 'generated::7Ozt6p0e6IELDTy5',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::sn3thLaXH1YFhohE' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'livewire-6d52253c/css/{component}.css',
+      'action' => 
+      array (
+        'uses' => 'O:55:"Laravel\\SerializableClosure\\UnsignedSerializableClosure":1:{s:12:"serializable";O:46:"Laravel\\SerializableClosure\\Serializers\\Native":5:{s:3:"use";a:0:{}s:8:"function";s:1074:"function ($component) {
+            $component = str_replace(\'----\', \':\', $component);
+            $component = str_replace(\'---\', \'::\', $component);
+            $component = str_replace(\'--\', \'.\', $component);
+
+            $instance = app(\'livewire\')->new($component);
+
+            if (! method_exists($instance, \'styleModuleSrc\')) {
+                throw new \\Exception(\'Component \'.$component.\' does not have a style source.\');
+            }
+
+            $path = $instance->styleModuleSrc();
+
+            if (! file_exists($path)) {
+                throw new \\Exception(\'Style file not found: \'.$path);
+            }
+
+            $css = file_get_contents($path);
+
+            // Wrap in component selector for scoping
+            $wrappedCss = "[wire\\\\:name=\\"{$component}\\"] {\\n{$css}\\n}";
+
+            $filemtime = filemtime($path);
+
+            return \\Livewire\\Drawer\\Utils::pretendResponseIsFileFromString(
+                $wrappedCss,
+                $filemtime,
+                $component.\'.css\',
+                \'text/css; charset=utf-8\',
+            );
+        }";s:5:"scope";s:53:"Livewire\\Features\\SupportCssModules\\SupportCssModules";s:4:"this";N;s:4:"self";s:32:"000000000000104d0000000000000000";}}',
+        'as' => 'generated::sn3thLaXH1YFhohE',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::9NzK5k2cAAtMvEZQ' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'livewire-6d52253c/css/{component}.global.css',
+      'action' => 
+      array (
+        'uses' => 'O:55:"Laravel\\SerializableClosure\\UnsignedSerializableClosure":1:{s:12:"serializable";O:46:"Laravel\\SerializableClosure\\Serializers\\Native":5:{s:3:"use";a:0:{}s:8:"function";s:972:"function ($component) {
+            $component = str_replace(\'----\', \':\', $component);
+            $component = str_replace(\'---\', \'::\', $component);
+            $component = str_replace(\'--\', \'.\', $component);
+
+            $instance = app(\'livewire\')->new($component);
+
+            if (! method_exists($instance, \'globalStyleModuleSrc\')) {
+                throw new \\Exception(\'Component \'.$component.\' does not have a global style source.\');
+            }
+
+            $path = $instance->globalStyleModuleSrc();
+
+            if (! file_exists($path)) {
+                throw new \\Exception(\'Global style file not found: \'.$path);
+            }
+
+            $css = file_get_contents($path);
+
+            $filemtime = filemtime($path);
+
+            return \\Livewire\\Drawer\\Utils::pretendResponseIsFileFromString(
+                $css,
+                $filemtime,
+                $component.\'.global.css\',
+                \'text/css; charset=utf-8\',
+            );
+        }";s:5:"scope";s:53:"Livewire\\Features\\SupportCssModules\\SupportCssModules";s:4:"this";N;s:4:"self";s:32:"000000000000104f0000000000000000";}}',
+        'as' => 'generated::9NzK5k2cAAtMvEZQ',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::Tv8WY9WdL87rvzSi' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'api/perpustakaan/ping',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'api',
+          1 => 'device.api.key',
+        ),
+        'uses' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@ping',
+        'controller' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@ping',
+        'namespace' => NULL,
+        'prefix' => 'api/perpustakaan',
+        'where' => 
+        array (
+        ),
+        'as' => 'generated::Tv8WY9WdL87rvzSi',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::R3pSxqknPh8s6gUi' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'api/perpustakaan/rfid-list/version',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'api',
+          1 => 'device.api.key',
+        ),
+        'uses' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@rfidListVersion',
+        'controller' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@rfidListVersion',
+        'namespace' => NULL,
+        'prefix' => 'api/perpustakaan',
+        'where' => 
+        array (
+        ),
+        'as' => 'generated::R3pSxqknPh8s6gUi',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::U542NWGLiaQ3ZkaZ' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'api/perpustakaan/rfid-list',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'api',
+          1 => 'device.api.key',
+        ),
+        'uses' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@rfidList',
+        'controller' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@rfidList',
+        'namespace' => NULL,
+        'prefix' => 'api/perpustakaan',
+        'where' => 
+        array (
+        ),
+        'as' => 'generated::U542NWGLiaQ3ZkaZ',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::VMIGw6k42g70Ai38' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'POST',
+      ),
+      'uri' => 'api/perpustakaan/sync-bulk',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'api',
+          1 => 'device.api.key',
+        ),
+        'uses' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@syncBulk',
+        'controller' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@syncBulk',
+        'namespace' => NULL,
+        'prefix' => 'api/perpustakaan',
+        'where' => 
+        array (
+        ),
+        'as' => 'generated::VMIGw6k42g70Ai38',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::jTPg0u378m1VDd1R' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'POST',
+      ),
+      'uri' => 'api/perpustakaan',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'api',
+          1 => 'device.api.key',
+        ),
+        'uses' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@kirimLangsung',
+        'controller' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@kirimLangsung',
+        'namespace' => NULL,
+        'prefix' => 'api/perpustakaan',
+        'where' => 
+        array (
+        ),
+        'as' => 'generated::jTPg0u378m1VDd1R',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::80vmwA2x0nY1gG0Z' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'POST',
+      ),
+      'uri' => 'api/perpustakaan/heartbeat',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'api',
+          1 => 'device.api.key',
+        ),
+        'uses' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@heartbeat',
+        'controller' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@heartbeat',
+        'namespace' => NULL,
+        'prefix' => 'api/perpustakaan',
+        'where' => 
+        array (
+        ),
+        'as' => 'generated::80vmwA2x0nY1gG0Z',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::6eyo9ttPXB7fsTgc' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'api/perpustakaan/config',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'api',
+          1 => 'device.api.key',
+        ),
+        'uses' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@config',
+        'controller' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@config',
+        'namespace' => NULL,
+        'prefix' => 'api/perpustakaan',
+        'where' => 
+        array (
+        ),
+        'as' => 'generated::6eyo9ttPXB7fsTgc',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::uSef0BhvLMUrY4ec' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'POST',
+      ),
+      'uri' => 'api/perpustakaan/firmware/check',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'api',
+          1 => 'device.api.key',
+        ),
+        'uses' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@firmwareCheck',
+        'controller' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@firmwareCheck',
+        'namespace' => NULL,
+        'prefix' => 'api/perpustakaan',
+        'where' => 
+        array (
+        ),
+        'as' => 'generated::uSef0BhvLMUrY4ec',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::cfruy4ImZtxHgg6w' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'POST',
+      ),
+      'uri' => 'api/perpustakaan/firmware/report',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'api',
+          1 => 'device.api.key',
+        ),
+        'uses' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@firmwareReport',
+        'controller' => 'App\\Http\\Controllers\\Api\\PerpustakaanDeviceController@firmwareReport',
+        'namespace' => NULL,
+        'prefix' => 'api/perpustakaan',
+        'where' => 
+        array (
+        ),
+        'as' => 'generated::cfruy4ImZtxHgg6w',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'generated::jHmD8PgyVIegX2kc' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'up',
+      'action' => 
+      array (
+        'uses' => 'O:55:"Laravel\\SerializableClosure\\UnsignedSerializableClosure":1:{s:12:"serializable";O:46:"Laravel\\SerializableClosure\\Serializers\\Native":5:{s:3:"use";a:0:{}s:8:"function";s:1138:"function (\\Illuminate\\Http\\Request $request) {
+                    $exception = null;
+
+                    try {
+                        \\Illuminate\\Support\\Facades\\Event::dispatch(new \\Illuminate\\Foundation\\Events\\DiagnosingHealth);
+                    } catch (\\Throwable $e) {
+                        if (app()->hasDebugModeEnabled()) {
+                            throw $e;
+                        }
+
+                        report($e);
+
+                        $exception = $e->getMessage();
+                    }
+
+                    $status = $exception ? 500 : 200;
+
+                    if ($request->expectsJson()) {
+                        return response()->json([
+                            \'status\' => $exception ? \'down\' : \'up\',
+                        ], $status);
+                    }
+
+                    return response(\\Illuminate\\Support\\Facades\\View::file(\'/home/zulfikriyahya/blueprint/perpustakaan/vendor/laravel/framework/src/Illuminate/Foundation/Configuration\'.\'/../resources/health-up.blade.php\', [
+                        \'exception\' => $exception,
+                    ]), status: $status);
+                }";s:5:"scope";s:54:"Illuminate\\Foundation\\Configuration\\ApplicationBuilder";s:4:"this";N;s:4:"self";s:32:"00000000000012460000000000000000";}}',
+        'as' => 'generated::jHmD8PgyVIegX2kc',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'home' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => '/',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+        ),
+        'uses' => 'O:55:"Laravel\\SerializableClosure\\UnsignedSerializableClosure":1:{s:12:"serializable";O:46:"Laravel\\SerializableClosure\\Serializers\\Native":5:{s:3:"use";a:0:{}s:8:"function";s:291:"function () {
+    // Sesuai keputusan: user sudah login -> langsung transaksi-cepat,
+    // guest -> landing page publik.
+    if (\\auth()->check()) {
+        return \\redirect(\'dashboard/transaksi-cepat\');
+    }
+
+    return \\app(\\App\\Http\\Controllers\\LandingPageController::class)->index();
+}";s:5:"scope";s:37:"Illuminate\\Routing\\RouteFileRegistrar";s:4:"this";N;s:4:"self";s:32:"000000000000123b0000000000000000";}}',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'home',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'faq' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'faq',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+        ),
+        'uses' => 'App\\Http\\Controllers\\LandingPageController@faq',
+        'controller' => 'App\\Http\\Controllers\\LandingPageController@faq',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'faq',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'tentang' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'tentang',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+        ),
+        'uses' => 'App\\Http\\Controllers\\LandingPageController@tentang',
+        'controller' => 'App\\Http\\Controllers\\LandingPageController@tentang',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'tentang',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'authors.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'authors',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+        ),
+        'uses' => 'App\\Http\\Controllers\\AuthorPublikController@index',
+        'controller' => 'App\\Http\\Controllers\\AuthorPublikController@index',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'authors.index',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'authors.show' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'authors/{author}',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+        ),
+        'uses' => 'App\\Http\\Controllers\\AuthorPublikController@show',
+        'controller' => 'App\\Http\\Controllers\\AuthorPublikController@show',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'authors.show',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'buku.index' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'buku-digital',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+        ),
+        'uses' => 'App\\Http\\Controllers\\BukuPublikController@index',
+        'controller' => 'App\\Http\\Controllers\\BukuPublikController@index',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'buku.index',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'buku.baca' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'buku-digital/baca/{file}',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+        ),
+        'uses' => 'App\\Http\\Controllers\\BukuPublikController@baca',
+        'controller' => 'App\\Http\\Controllers\\BukuPublikController@baca',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'buku.baca',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'chart-export.pdf' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'POST',
+      ),
+      'uri' => 'dashboard/chart-export/pdf',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+          1 => 'web',
+          2 => 'auth',
+        ),
+        'uses' => 'App\\Http\\Controllers\\ChartExportController@pdf',
+        'controller' => 'App\\Http\\Controllers\\ChartExportController@pdf',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'chart-export.pdf',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'bulk-data-job.download' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'unduh-bulk-data/{bulkDataJob}',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+          1 => 'auth',
+        ),
+        'uses' => 'App\\Http\\Controllers\\BulkDataJobDownloadController@__invoke',
+        'controller' => 'App\\Http\\Controllers\\BulkDataJobDownloadController',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'bulk-data-job.download',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'sitemap' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'sitemap.xml',
+      'action' => 
+      array (
+        'middleware' => 
+        array (
+          0 => 'web',
+        ),
+        'uses' => 'App\\Http\\Controllers\\SitemapController@index',
+        'controller' => 'App\\Http\\Controllers\\SitemapController@index',
+        'namespace' => NULL,
+        'prefix' => '',
+        'where' => 
+        array (
+        ),
+        'as' => 'sitemap',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'storage.local' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'GET',
+        1 => 'HEAD',
+      ),
+      'uri' => 'storage/{path}',
+      'action' => 
+      array (
+        'uses' => 'O:55:"Laravel\\SerializableClosure\\UnsignedSerializableClosure":1:{s:12:"serializable";O:46:"Laravel\\SerializableClosure\\Serializers\\Native":5:{s:3:"use";a:3:{s:4:"disk";s:5:"local";s:6:"config";a:5:{s:6:"driver";s:5:"local";s:4:"root";s:62:"/home/zulfikriyahya/blueprint/perpustakaan/storage/app/private";s:5:"serve";b:1;s:5:"throw";b:0;s:6:"report";b:0;}s:12:"isProduction";b:0;}s:8:"function";s:323:"function (\\Illuminate\\Http\\Request $request, string $path) use ($disk, $config, $isProduction) {
+                    return (new \\Illuminate\\Filesystem\\ServeFile(
+                        $disk,
+                        $config,
+                        $isProduction
+                    ))($request, $path);
+                }";s:5:"scope";s:47:"Illuminate\\Filesystem\\FilesystemServiceProvider";s:4:"this";N;s:4:"self";s:32:"000000000000122d0000000000000000";}}',
+        'as' => 'storage.local',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+        'path' => '.*',
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+    'storage.local.upload' => 
+    array (
+      'methods' => 
+      array (
+        0 => 'PUT',
+      ),
+      'uri' => 'storage/{path}',
+      'action' => 
+      array (
+        'uses' => 'O:55:"Laravel\\SerializableClosure\\UnsignedSerializableClosure":1:{s:12:"serializable";O:46:"Laravel\\SerializableClosure\\Serializers\\Native":5:{s:3:"use";a:3:{s:4:"disk";s:5:"local";s:6:"config";a:5:{s:6:"driver";s:5:"local";s:4:"root";s:62:"/home/zulfikriyahya/blueprint/perpustakaan/storage/app/private";s:5:"serve";b:1;s:5:"throw";b:0;s:6:"report";b:0;}s:12:"isProduction";b:0;}s:8:"function";s:325:"function (\\Illuminate\\Http\\Request $request, string $path) use ($disk, $config, $isProduction) {
+                    return (new \\Illuminate\\Filesystem\\ReceiveFile(
+                        $disk,
+                        $config,
+                        $isProduction
+                    ))($request, $path);
+                }";s:5:"scope";s:47:"Illuminate\\Filesystem\\FilesystemServiceProvider";s:4:"this";N;s:4:"self";s:32:"000000000000122b0000000000000000";}}',
+        'as' => 'storage.local.upload',
+      ),
+      'fallback' => false,
+      'defaults' => 
+      array (
+      ),
+      'wheres' => 
+      array (
+        'path' => '.*',
+      ),
+      'bindingFields' => 
+      array (
+      ),
+      'lockSeconds' => NULL,
+      'waitSeconds' => NULL,
+      'withTrashed' => false,
+    ),
+  ),
+)
+);
+
 ```
 ---
 
@@ -27846,421 +37590,6 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 
             <livewire:riwayat-sirkulasi-harian />
 
-        </div>
-    </div>
-</x-filament-panels::page>
-
-```
----
-
-## resources/views/filament/pages/transaksi-cepat.blade.php
-```blade
-<x-filament-panels::page>
-    <style>
-        .transaksi-cepat-card {
-            background: #ffffff;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
-        }
-
-        html.dark .transaksi-cepat-card {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.16);
-            box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.04),
-                0 20px 50px -12px rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(6px);
-        }
-
-        .transaksi-cepat-avatar-wrap {
-            position: relative;
-            width: 88px;
-            height: 88px;
-            margin-bottom: 0.75rem;
-        }
-
-        .transaksi-cepat-ring {
-            position: absolute;
-            inset: 0;
-            transform: rotate(-90deg);
-            pointer-events: none;
-        }
-
-        .transaksi-cepat-ring circle {
-    fill: none;
-    stroke-width: 3;
-    transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
-}
-    </style>
-
-    {{-- Komponen Alpine idle-timer transaksi mandiri/otonom - didaftarkan
-         sebagai named component (bukan inline x-init string) supaya tidak
-         rentan bug parsing/quoting, dan supaya progress-nya bisa dipakai
-         reaktif untuk UI countdown ring di sekitar avatar. --}}
-    <script>
-        document.addEventListener('alpine:init', () => {
-    Alpine.data('transaksiCepatIdleTimer', () => ({
-        idleTimeoutMs: 10000,
-        tickMs: 100,
-        msLeft: 10000,
-        timerId: null,
-        listenersAttached: false,
-
-        init() {
-            this.resetTimer();
-
-            if (! this.listenersAttached) {
-                const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
-                this._onActivity = () => this.resetTimer();
-                activityEvents.forEach(evt => document.addEventListener(evt, this._onActivity));
-
-                document.addEventListener('livewire:navigating', () => {
-                    this.stopTimer();
-                    activityEvents.forEach(evt => document.removeEventListener(evt, this._onActivity));
-                }, { once: true });
-
-                this.listenersAttached = true;
-            }
-        },
-
-        resetTimer() {
-            this.msLeft = this.idleTimeoutMs;
-
-            if (this.timerId) {
-                clearInterval(this.timerId);
-            }
-
-            this.timerId = setInterval(() => {
-                this.msLeft -= this.tickMs;
-
-                if (this.msLeft <= 0) {
-                    this.stopTimer();
-                    this.msLeft = this.idleTimeoutMs;
-                    this.$wire.selesai();
-                }
-            }, this.tickMs);
-        },
-
-        stopTimer() {
-            if (this.timerId) {
-                clearInterval(this.timerId);
-                this.timerId = null;
-            }
-        },
-
-        get progress() {
-            return Math.max(0, Math.min(1, this.msLeft / this.idleTimeoutMs));
-        },
-
-        get secondsLeft() {
-            return Math.ceil(Math.max(0, this.msLeft) / 1000);
-        },
-
-        // circumference lingkaran r=42 -> 2 * PI * 42
-        get ringDashoffset() {
-            const circumference = 263.89;
-
-            return circumference * (1 - this.progress);
-        },
-
-        // Hijau -> kuning -> merah seiring waktu habis. Threshold dipilih
-        // supaya "kuning" (peringatan) sudah mulai terlihat saat sisa
-        // waktu tinggal 40% (4 detik dari total 10 detik), dan "merah"
-        // (mendesak) di 6 detik terakhir (20% dari total).
-        get ringColor() {
-            if (this.progress > 0.4) {
-                return '#22c55e'; // hijau (success)
-            }
-
-            if (this.progress > 0.2) {
-                return '#eab308'; // kuning (warning)
-            }
-
-            return '#ef4444'; // merah (danger)
-        },
-    }));
-});
-    </script>
-
-    <div style="display: flex; justify-content: center; padding: 2rem 1rem;">
-        <div
-            class="transaksi-cepat-card"
-            style="width: 100%; max-width: 460px; border-radius: 20px; padding: 2rem;"
-            x-data="transaksiCepatIdleTimer()"
-        >
-            @if (! $user)
-                {{-- Identifikasi user: satu input, auto-deteksi kartu/NISN vs nama --}}
-                <div
-                    x-data
-                    x-init="$nextTick(() => $refs.kartu.focus())"
-                    style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 1rem 0;"
-                >
-                    <div
-                        style="display: flex; align-items: center; justify-content: center; width: 88px; height: 88px; border-radius: 50%; margin-bottom: 1.25rem; background: linear-gradient(135deg, var(--primary-400), var(--primary-600));"
-                    >
-                        <x-filament::icon icon="heroicon-o-credit-card" style="width: 40px; height: 40px; color: #fff;" />
-                    </div>
-
-                    <h2 class="text-gray-950 dark:text-white" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem;">Tempelkan kartu atau ketik nama</h2>
-                    <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.875rem; margin-bottom: 1.5rem;">
-                        Scan kartu RFID, ketik NISN, atau ketik nama siswa/pegawai.
-                    </p>
-
-                    <div style="width: 100%; position: relative; text-align: left;">
-                        <input
-                            x-ref="kartu"
-                            type="text"
-                            wire:model.live.debounce.400ms="kartuInput"
-                            wire:keydown.enter="scanKartu($event.target.value)"
-                            autofocus
-                            class="fi-input"
-                            style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem;"
-                            placeholder="Scan kartu / NISN / nama..."
-                        />
-
-                        @if (mb_strlen(trim((string) $kartuInput)) >= 2 && $this->hasilCariUser->isNotEmpty())
-                            <div
-                                x-data="{ show: false }"
-                                x-init="requestAnimationFrame(() => show = true)"
-                                x-transition:enter="transition ease-out duration-200"
-                                x-transition:enter-start="opacity-0"
-                                x-transition:enter-end="opacity-100"
-                                style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.375rem; max-height: 280px; overflow-y: auto;"
-                            >
-                                @foreach ($this->hasilCariUser as $hasil)
-                                    <button
-                                        type="button"
-                                        wire:click="pilihUser('{{ $hasil->id }}')"
-                                        wire:key="hasil-user-{{ $hasil->id }}"
-                                        class="bg-gray-50 dark:bg-white/5 hover:bg-primary-50 dark:hover:bg-primary-500/10"
-                                        style="display: flex; align-items: center; gap: 0.625rem; padding: 0.6rem 0.75rem; border-radius: 12px; border: none; cursor: pointer; text-align: left; width: 100%;"
-                                    >
-                                        <div style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; font-weight: 600; font-size: 13px; color: #fff; background: var(--primary-500); flex-shrink: 0;">
-                                            {{ collect(explode(' ', $hasil->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
-                                        </div>
-                                        <div style="min-width: 0;">
-                                            <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $hasil->nama }}</p>
-                                            <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 0;">{{ $hasil->nisn ? "NISN {$hasil->nisn}" : ($hasil->nip ? "NIP {$hasil->nip}" : '-') }}</p>
-                                        </div>
-                                    </button>
-                                @endforeach
-                            </div>
-                        @endif
-                    </div>
-                </div>
-            @else
-                <div
-                    x-data="{ show: false }"
-                    x-init="requestAnimationFrame(() => show = true)"
-                    x-transition:enter="transition ease-out duration-300"
-                    x-transition:enter-start="opacity-0"
-                    x-transition:enter-end="opacity-100"
-                >
-                    {{-- Profil user --}}
-                    <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
-                        <div class="transaksi-cepat-avatar-wrap">
-                            @if ($user->avatar)
-                                <img
-                                    src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar) }}"
-                                    alt="{{ $user->nama }}"
-                                    width="80"
-                                    height="80"
-                                    style="display: block; width: 80px; height: 80px; margin: 4px; border-radius: 50%; object-fit: cover; border: 3px solid {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};"
-                                />
-                            @else
-                                <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; margin: 4px; border-radius: 50%; font-weight: 600; font-size: 22px; color: #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};">
-                                    {{ collect(explode(' ', $user->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
-                                </div>
-                            @endif
-
-                            {{-- Countdown ring: mengelilingi avatar, penuh saat user baru
-                                 dimuat, mengecil linear ke nol dalam 5 detik idle. Warna
-                                 memakai token Filament yang sama dgn border avatar supaya
-                                 konsisten dgn status suspend/aktif. --}}
-                            <svg class="transaksi-cepat-ring" viewBox="0 0 88 88">
-                                <circle
-                                    cx="44"
-                                    cy="44"
-                                    r="42"
-                                    :stroke="ringColor"
-                                    stroke-dasharray="263.89"
-                                    :stroke-dashoffset="ringDashoffset"
-                                    stroke-linecap="round"
-                                ></circle>
-                            </svg>
-
-                            <span style="position: absolute; bottom: 2px; right: 2px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--success-500)' }};">
-                                <x-filament::icon
-                                    :icon="$user->status_suspend ? 'heroicon-s-lock-closed' : 'heroicon-s-check'"
-                                    style="width: 14px; height: 14px; color: #fff;"
-                                />
-                            </span>
-                        </div>
-
-                        <p class="text-gray-400 dark:text-gray-500" style="font-size: 0.6875rem; margin: 0 0 0.25rem; font-variant-numeric: tabular-nums;" x-text="'Reset otomatis dalam ' + secondsLeft + ' detik'"></p>
-
-                        <h2 class="text-gray-950 dark:text-white" style="font-size: 1.125rem; font-weight: 600; line-height: 1.3; margin: 0;">{{ $user->nama }}</h2>
-                        @if ($user->nisn || $user->nip)
-                            <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">
-                                {{ $user->nisn ? "NISN {$user->nisn}" : "NIP {$user->nip}" }}
-                            </p>
-                        @endif
-
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; margin-bottom: 1.5rem;">
-                            <x-filament::badge :color="$user->status_suspend ? 'danger' : 'success'">
-                                {{ $user->status_suspend ? 'Suspend' : 'Aktif' }}
-                            </x-filament::badge>
-                            <x-filament::badge :color="$bisaMeminjam ? 'success' : 'gray'">
-                                {{ $bisaMeminjam ? 'Bisa meminjam' : 'Tidak bisa meminjam baru' }}
-                            </x-filament::badge>
-                        </div>
-
-                        @if ($user->status_suspend)
-                            <div class="bg-warning-50 dark:bg-warning-500/10 text-warning-600 dark:text-warning-400" style="display: flex; align-items: flex-start; gap: 0.5rem; border-radius: 12px; padding: 0.75rem; font-size: 0.875rem; margin-bottom: 1.5rem; text-align: left; width: 100%;">
-                                <x-filament::icon icon="heroicon-o-exclamation-triangle" style="width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;" />
-                                <span>User masih bisa mengembalikan buku, tapi tidak bisa meminjam baru sampai Denda lunas.</span>
-                            </div>
-                        @endif
-                    </div>
-
-                    {{-- Input buku: satu input, auto-deteksi barcode/ISBN vs judul --}}
-                    <div class="dark:border-white/10" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 0.5rem;">
-                        <div x-data x-init="$refs.kode.focus()" style="width: 100%; position: relative; text-align: left;">
-                            <label class="text-gray-950 dark:text-white" style="display: block; text-align: center; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem;">
-                                Scan Barcode / ISBN / Ketik Judul Buku
-                            </label>
-                            <input
-                                x-ref="kode"
-                                type="text"
-                                wire:model.live.debounce.400ms="kodeInput"
-                                wire:keydown.enter="scanKode($event.target.value)"
-                                autofocus
-                                class="fi-input"
-                                style="width: 100%; border-radius: 9999px; text-align: center; padding: 0.75rem 1.5rem; font-size: 1rem;"
-                                placeholder="Scan barcode/ISBN atau ketik judul buku..."
-                            />
-                            <p class="text-gray-400 dark:text-gray-500" style="text-align: center; font-size: 0.75rem; margin-top: 0.5rem;">
-                                Sistem otomatis mendeteksi pinjam / kembali per eksemplar.
-                            </p>
-
-                            @if (mb_strlen(trim((string) $kodeInput)) >= 2 && $this->hasilCariBuku->isNotEmpty())
-                                <div
-                                    x-data="{ show: false }"
-                                    x-init="requestAnimationFrame(() => show = true)"
-                                    x-transition:enter="transition ease-out duration-200"
-                                    x-transition:enter-start="opacity-0"
-                                    x-transition:enter-end="opacity-100"
-                                    style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.375rem; max-height: 240px; overflow-y: auto;"
-                                >
-                                    @foreach ($this->hasilCariBuku as $hasil)
-                                        <button
-                                            type="button"
-                                            wire:click="pilihBuku('{{ $hasil->id }}')"
-                                            wire:key="hasil-buku-{{ $hasil->id }}"
-                                            class="bg-gray-50 dark:bg-white/5 hover:bg-primary-50 dark:hover:bg-primary-500/10"
-                                            style="display: flex; align-items: center; gap: 0.625rem; padding: 0.6rem 0.75rem; border-radius: 12px; border: none; cursor: pointer; text-align: left; width: 100%;"
-                                        >
-                                            <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--primary-100); flex-shrink: 0;">
-                                                <x-filament::icon icon="heroicon-o-book-open" style="width: 16px; height: 16px; color: var(--primary-600);" />
-                                            </div>
-                                            <div style="min-width: 0;">
-                                                <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $hasil->judul }}</p>
-                                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 0;">{{ $hasil->penulis ?: '-' }} &middot; stok tersedia: {{ $hasil->stokTersedia() }}</p>
-                                            </div>
-                                        </button>
-                                    @endforeach
-                                </div>
-                            @endif
-                        </div>
-
-                        <div style="display: flex; justify-content: center; margin-top: 1.25rem;">
-                            <x-filament::button
-                                wire:click="selesai"
-                                color="gray"
-                                icon="heroicon-o-arrow-path"
-                                size="sm"
-                            >
-                                Ganti user
-                            </x-filament::button>
-                        </div>
-                    </div>
-
-                    {{-- Statistik sesi --}}
-                    @php
-                        $totalDipinjam = collect($riwayatScan)->where('aksi', 'dipinjamkan')->where('sukses', true)->count();
-                        $totalDikembalikan = collect($riwayatScan)->where('aksi', 'dikembalikan')->where('sukses', true)->count();
-                        $totalGagal = collect($riwayatScan)->where('sukses', false)->count();
-                    @endphp
-                    @if (count($riwayatScan) > 0)
-                        <div class="dark:border-white/10" style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 1.5rem;">
-                            <div style="text-align: center;">
-                                <p class="text-primary-600 dark:text-primary-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDipinjam }}</p>
-                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dipinjamkan</p>
-                            </div>
-                            <div class="bg-gray-200 dark:bg-gray-700" style="height: 32px; width: 1px;"></div>
-                            <div style="text-align: center;">
-                                <p class="text-success-600 dark:text-success-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalDikembalikan }}</p>
-                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Dikembalikan</p>
-                            </div>
-                            <div class="bg-gray-200 dark:bg-gray-700" style="height: 32px; width: 1px;"></div>
-                            <div style="text-align: center;">
-                                <p class="text-danger-600 dark:text-danger-400" style="font-size: 1.5rem; font-weight: 600; margin: 0;">{{ $totalGagal }}</p>
-                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0;">Gagal</p>
-                            </div>
-                        </div>
-                    @endif
-
-                    {{-- Riwayat scan --}}
-                    <div class="dark:border-white/10" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 1.5rem;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                            <p class="text-gray-950 dark:text-white" style="font-size: 0.875rem; font-weight: 600; margin: 0;">Riwayat Scan</p>
-                            @if (count($riwayatScan) > 0)
-                                <x-filament::badge color="gray">{{ count($riwayatScan) }} item</x-filament::badge>
-                            @endif
-                        </div>
-
-                        <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 260px; overflow-y: auto;">
-                            @forelse ($riwayatScan as $item)
-                                <div
-                                    x-data="{ show: false }"
-                                    x-init="requestAnimationFrame(() => show = true)"
-                                    x-transition:enter="transition ease-out duration-300"
-                                    x-transition:enter-start="opacity-0"
-                                    x-transition:enter-end="opacity-100"
-                                    class="bg-gray-50 dark:bg-white/5"
-                                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 12px;"
-                                >
-                                    <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: {{ $item['sukses'] ? 'var(--success-100)' : 'var(--danger-100)' }}; color: {{ $item['sukses'] ? 'var(--success-700)' : 'var(--danger-700)' }};">
-                                        @if (! $item['sukses'])
-                                            <x-filament::icon icon="heroicon-o-x-mark" style="width: 16px; height: 16px;" />
-                                        @elseif ($item['aksi'] === 'dipinjamkan')
-                                            <x-filament::icon icon="heroicon-o-arrow-up-circle" style="width: 16px; height: 16px;" />
-                                        @else
-                                            <x-filament::icon icon="heroicon-o-arrow-down-circle" style="width: 16px; height: 16px;" />
-                                        @endif
-                                    </div>
-                                    <div style="flex: 1; min-width: 0;">
-                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                            <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['judul'] }}</p>
-                                            @if ($item['sukses'])
-                                                <x-filament::badge :color="$item['aksi'] === 'dipinjamkan' ? 'primary' : 'success'" size="sm">
-                                                    {{ ucfirst($item['aksi']) }}
-                                                </x-filament::badge>
-                                            @endif
-                                        </div>
-                                        <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['barcode'] }} &middot; {{ $item['pesan'] }}</p>
-                                    </div>
-                                </div>
-                            @empty
-                                <div class="text-gray-400 dark:text-gray-500" style="text-align: center; padding: 2rem 0;">
-                                    <x-filament::icon icon="heroicon-o-book-open" style="width: 32px; height: 32px; margin: 0 auto 0.5rem;" />
-                                    <p style="font-size: 0.875rem; margin: 0;">Belum ada buku yang di-scan.</p>
-                                </div>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-            @endif
         </div>
     </div>
 </x-filament-panels::page>

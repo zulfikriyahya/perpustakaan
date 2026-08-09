@@ -20,3 +20,18 @@
 - SEO Google
 - halaman daftar buku pdf / e-book / audio-book
 
+
+
+Bahan bahan :
+
+    Amplifier XH543
+
+  Link pembelian : https://shp.ee/hrddic8
+
+    Tune Control Ne555
+
+  Link pembelian : https://shp.ee/7pndsgn
+
+    Bluetooth MP3
+
+  Link pembelian : https://shp.ee/2sj4yx9

@@ -24,7 +24,24 @@
                     @forelse ($this->riwayatLengkapHariIni as $item)
                         <tr class="dark:border-white/10" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
                             <td class="text-gray-500 dark:text-gray-400" style="padding: 0.5rem 0.75rem; white-space: nowrap;">{{ $item['waktu']?->format('H:i:s') }}</td>
-                            <td class="text-gray-950 dark:text-white" style="padding: 0.5rem 0.75rem;">{{ $item['nama_user'] }}</td>
+                            <td class="text-gray-950 dark:text-white" style="padding: 0.5rem 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    @if ($item['avatar_url'])
+                                        <img src="{{ $item['avatar_url'] }}" alt="{{ $item['nama_user'] }}" width="24" height="24" style="display: block; width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />
+                                    @else
+                                        <div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; font-weight: 600; font-size: 10px; color: #fff; background: var(--primary-500); flex-shrink: 0;">
+                                            {{ collect(explode(' ', $item['nama_user']))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
+                                        </div>
+                                    @endif
+
+                                    <div style="min-width: 0;">
+                                        <p style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['nama_user'] }}</p>
+                                        @if ($item['point_user'] !== null)
+                                            <x-filament::badge color="warning" size="sm">{{ $item['point_user'] }} Point</x-filament::badge>
+                                        @endif
+                                    </div>
+                                </div>
+                            </td>
                             <td class="text-gray-950 dark:text-white" style="padding: 0.5rem 0.75rem;">{{ $item['judul_buku'] }}</td>
                             <td style="padding: 0.5rem 0.75rem;">
                                 <x-filament::badge :color="$item['aksi'] === 'dipinjamkan' ? 'primary' : 'success'" size="sm">{{ ucfirst($item['aksi']) }}</x-filament::badge>

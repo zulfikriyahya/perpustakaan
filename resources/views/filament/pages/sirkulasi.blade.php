@@ -12,6 +12,16 @@
             display: none !important;
         }
 
+        /* BARU (gap iterasi ini) - heading halaman ("Sirkulasi") sudah
+           dikosongkan lewat getHeading() di Sirkulasi.php, tapi container
+           header tetap dirender (kosong) oleh layout panel dan
+           menyisakan spacing kosong di atas konten - fallback CSS ini
+           menyembunyikan container tsb sepenuhnya, murni kosmetik
+           konsisten dgn pola sembunyi-sidebar di atas. */
+        .fi-header {
+            display: none !important;
+        }
+
         .sirkulasi-section {
             background: #ffffff;
             border: 1px solid rgba(0, 0, 0, 0.08);
@@ -215,9 +225,23 @@
     </style>
 
     {{-- Alpine idle-timer + jam analog (diwarisi identik dari Transaksi
-         Cepat, Aturan poin 3 - DRY di level JS/Blade). --}}
+     Cepat, Aturan poin 3 - DRY di level JS/Blade).
+
+     FIX (gap iterasi ini): registrasi Alpine.data() SEBELUMNYA hanya
+     dipasang di dalam listener 'alpine:init', yang cuma ditembakkan
+     SEKALI oleh Alpine (saat full page load pertama). Karena halaman
+     ini dibuka lewat wire:navigate (SPA) dari halaman lain, script ini
+     baru dieksekusi SETELAH Alpine sudah start di halaman sebelumnya -
+     'alpine:init' tidak pernah datang lagi, sehingga Alpine.data()
+     tidak pernah terdaftar -> "x-data is not defined". Fix: cek dulu
+     apakah Alpine sudah berjalan (window.Alpine tersedia); kalau sudah,
+     daftarkan langsung. Kalau belum (full page load pertama, Alpine
+     belum start), tetap tunggu 'alpine:init' seperti semula. Alpine.data()
+     aman dipanggil berkali-kali (setiap kali script ini ikut dieksekusi
+     ulang oleh Livewire saat wire:navigate) - ia hanya menimpa definisi
+     lama dengan yang baru, tidak menimbulkan efek samping. --}}
     <script>
-        document.addEventListener('alpine:init', () => {
+        function registerAlpineComponentsSirkulasi() {
             Alpine.data('transaksiCepatIdleTimer', () => ({
                 idleTimeoutMs: 10000,
                 tickMs: 100,
@@ -347,7 +371,18 @@
                     }, { once: true });
                 },
             }));
-        });
+        }
+
+        if (window.Alpine) {
+            // Alpine sudah start (halaman ini dimuat via wire:navigate dari
+            // halaman lain) - daftarkan langsung, 'alpine:init' tidak akan
+            // ditembakkan lagi.
+            registerAlpineComponentsSirkulasi();
+        } else {
+            // Full page load pertama - Alpine belum start, tunggu event
+            // seperti semula.
+            document.addEventListener('alpine:init', registerAlpineComponentsSirkulasi);
+        }
     </script>
 
     <div class="sirkulasi-page-wrapper" x-data="sirkulasiAutoFocus">

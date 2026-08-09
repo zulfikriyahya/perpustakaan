@@ -65,6 +65,25 @@ class Sirkulasi extends TransaksiCepat
     {
         return false;
     }
+    /**
+     * BARU (gap iterasi ini) - halaman Sirkulasi dipakai sebagai layar
+     * operasional full-screen (sidebar & topbar sirkulasi minimal, lihat
+     * CSS di sirkulasi.blade.php) - heading besar "Sirkulasi" bawaan
+     * Filament (di atas logo/topbar) dianggap noise, dihilangkan supaya
+     * layar lebih ringkas utk operator. TIDAK memengaruhi navigationLabel
+     * (tetap "Sirkulasi" untuk referensi internal, meski
+     * shouldRegisterNavigation() sudah false sehingga label itu pun
+     * tidak pernah tampil di sidebar).
+     *
+     * TODO: verifikasi signature terhadap versi package yang terpasang -
+     * getHeading(): string|Htmlable|null adalah API dasar
+     * Filament\Pages\Page sejak v3, dipertahankan di v4 - cek ulang jika
+     * versi filament/filament di composer.lock berbeda dari asumsi ini.
+     */
+    public function getHeading(): string
+    {
+        return '';
+    }
 
     /**
      * Override RINGAN dari TransaksiCepat::prosesEksemplar() - HANYA

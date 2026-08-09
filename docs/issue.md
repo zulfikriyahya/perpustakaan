@@ -102,364 +102,53 @@ Ketentuan:
 
 - Perbaiki:
 ```
-GET
-https://perpustakaan.mtsn1pandeglang.sch.id/images/brand-lightmode.png
-[HTTP/1.1 200 OK 0ms]
-
-GET
-https://perpustakaan.mtsn1pandeglang.sch.id/images/brand-darkmode.png
-[HTTP/1.1 200 OK 0ms]
-
-GET
-https://perpustakaan.mtsn1pandeglang.sch.id/storage/user-avatar/01KZF1EZ93BGBBPGGAAW4MWQX6.png
-[HTTP/1.1 200 OK 0ms]
-
-Alpine Expression Error: sirkulasiAutoFocus is not defined
-
-Expression: "sirkulasiAutoFocus"
-
-
-<div class="sirkulasi-page-wrapper" x-data="sirkulasiAutoFocus">
-module.esm.js:476:11
-Alpine Expression Error: jamSirkulasi is not defined
-
-Expression: "jamSirkulasi"
-
-
-<div class="sirkulasi-section jam-analog-wrapper" x-data="jamSirkulasi">
-module.esm.js:476:11
-Alpine Expression Error: derajatJam is not defined
-
-Expression: "100 + 48 * Math.sin(derajatJam * Math.PI / 180)"
-
-
-<line class="tangan-jam" x1="100" y1="100" :x2="100 + 48 * Math.sin(derajatJam * Math.PI / 180)" :y2="100 - 48 * Math.cos(derajatJam * Math.PI / 180)">
-module.esm.js:476:11
-Alpine Expression Error: derajatJam is not defined
-
-Expression: "100 - 48 * Math.cos(derajatJam * Math.PI / 180)"
-
-
-<line class="tangan-jam" x1="100" y1="100" :x2="100 + 48 * Math.sin(derajatJam * Math.PI / 180)" :y2="100 - 48 * Math.cos(derajatJam * Math.PI / 180)">
-module.esm.js:476:11
-Alpine Expression Error: derajatMenit is not defined
-
-Expression: "100 + 68 * Math.sin(derajatMenit * Math.PI / 180)"
-
-
-<line class="tangan-menit" x1="100" y1="100" :x2="100 + 68 * Math.sin(derajatMenit * Math.PI / 180)" :y2="100 - 68 * Math.cos(derajatMenit * Math.PI / 180)">
-module.esm.js:476:11
-Alpine Expression Error: derajatMenit is not defined
-
-Expression: "100 - 68 * Math.cos(derajatMenit * Math.PI / 180)"
-
-
-<line class="tangan-menit" x1="100" y1="100" :x2="100 + 68 * Math.sin(derajatMenit * Math.PI / 180)" :y2="100 - 68 * Math.cos(derajatMenit * Math.PI / 180)">
-module.esm.js:476:11
-Alpine Expression Error: derajatDetik is not defined
-
-Expression: "100 + 78 * Math.sin(derajatDetik * Math.PI / 180)"
-
-
-<line class="tangan-detik" x1="100" y1="100" :x2="100 + 78 * Math.sin(derajatDetik * Math.PI / 180)" :y2="100 - 78 * Math.cos(derajatDetik * Math.PI / 180)">
-module.esm.js:476:11
-Alpine Expression Error: derajatDetik is not defined
-
-Expression: "100 - 78 * Math.cos(derajatDetik * Math.PI / 180)"
-
-
-<line class="tangan-detik" x1="100" y1="100" :x2="100 + 78 * Math.sin(derajatDetik * Math.PI / 180)" :y2="100 - 78 * Math.cos(derajatDetik * Math.PI / 180)">
-module.esm.js:476:11
-Alpine Expression Error: jamDigital is not defined
-
-Expression: "jamDigital"
-
-
-<p class="text-gray-950 dark:text-white" style="font-size: 1rem; font-we…-numeric: tabular-nums;" x-text="jamDigital">
-module.esm.js:476:11
-Alpine Expression Error: tanggalHariIni is not defined
-
-Expression: "tanggalHariIni"
-
-
-<p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; marg…em; text-align: center;" x-text="tanggalHariIni">
-module.esm.js:476:11
-Alpine Expression Error: transaksiCepatIdleTimer is not defined
-
-Expression: "transaksiCepatIdleTimer()"
-
-
-<div class="transaksi-cepat-card" style="border-radius: 20px; padding: 1.75rem;" x-data="transaksiCepatIdleTimer()">
-module.esm.js:476:11
-Nilai  tidak diharapkan saat menguraikan atribut x2. livewire.min.js:82:12712
-Nilai  tidak diharapkan saat menguraikan atribut y2. livewire.min.js:82:12712
-Nilai  tidak diharapkan saat menguraikan atribut x2. livewire.min.js:82:12712
-Nilai  tidak diharapkan saat menguraikan atribut y2. livewire.min.js:82:12712
-Nilai  tidak diharapkan saat menguraikan atribut x2. livewire.min.js:82:12712
-Nilai  tidak diharapkan saat menguraikan atribut y2. livewire.min.js:82:12712
-Uncaught ReferenceError: sirkulasiAutoFocus is not defined
-    anonymous https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4 line 5 > AsyncFunction:3
-    Md https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    xd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    wt https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    <anonymous> https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    n https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    qe https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    bf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    whenFinished https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    $a https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    uu https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:6
-    Ra https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    ef https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-livewire.min.js:3:16
-Uncaught ReferenceError: jamSirkulasi is not defined
-    anonymous https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4 line 5 > AsyncFunction:3
-    Md https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    xd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    wt https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    <anonymous> https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    n https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    qe https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    bf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    whenFinished https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    $a https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    uu https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:6
-    Ra https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    ef https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-livewire.min.js:3:16
-Uncaught ReferenceError: derajatJam is not defined
-    anonymous https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4 line 5 > AsyncFunction:3
-    Md https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    xd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    Yl https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Np https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Ct https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    Yl https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    n https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    qe https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    bf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    whenFinished https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    $a https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    uu https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:6
-    Ra https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    ef https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-2 livewire.min.js:3:52
-Uncaught ReferenceError: derajatMenit is not defined
-    anonymous https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4 line 5 > AsyncFunction:3
-    Md https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    xd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    Yl https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Np https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Ct https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    Yl https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    n https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    qe https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    bf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    whenFinished https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    $a https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    uu https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:6
-    Ra https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    ef https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-2 livewire.min.js:3:52
-Uncaught ReferenceError: derajatDetik is not defined
-    anonymous https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4 line 5 > AsyncFunction:3
-    Md https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    xd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    Yl https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Np https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Ct https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    Yl https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    n https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    qe https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    bf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    whenFinished https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    $a https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    uu https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:6
-    Ra https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    ef https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-2 livewire.min.js:3:52
-Uncaught ReferenceError: jamDigital is not defined
-    anonymous https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4 line 5 > AsyncFunction:3
-    Md https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    xd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    <anonymous> https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Np https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Ct https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    <anonymous> https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    n https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    qe https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    bf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    whenFinished https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    $a https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    uu https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:6
-    Ra https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    ef https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-livewire.min.js:3:16
-Uncaught ReferenceError: tanggalHariIni is not defined
-    anonymous https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4 line 5 > AsyncFunction:3
-    Md https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    xd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    <anonymous> https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Np https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Ct https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    <anonymous> https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    n https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    qe https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    bf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    whenFinished https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    $a https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    uu https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:6
-    Ra https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    ef https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-livewire.min.js:3:16
-Uncaught ReferenceError: transaksiCepatIdleTimer is not defined
-    anonymous https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4 line 5 > AsyncFunction:3
-    Md https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    xd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:1
-    wt https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    <anonymous> https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    r https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    n https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    Fd https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    qe https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:5
-    bf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    Ya https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    vf https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    t https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    whenFinished https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    $a https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    uu https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:6
-    Ra https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    La https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-    _f https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:82
-    ef https://perpustakaan.mtsn1pandeglang.sch.id/livewire-6d52253c/livewire.min.js?id=f4724cc4:8
-livewire.min.js:3:16
-GET
-https://perpustakaan.mtsn1pandeglang.sch.id/images/favicon.ico
-[HTTP/1.1 200  0ms]
+Uncaught (in promise)
+Object { status: null, body: null, json: null, errors: null }
+2
+Uncaught (in promise)
+Object { status: null, body: null, json: null, errors: null }
+​
+body: null
+​
+errors: null
+​
+json: null
+​
+status: null
+​
+<prototype>: Object { … }
+​​
+__defineGetter__: function __defineGetter__()
+​​
+__defineSetter__: function __defineSetter__()
+​​
+__lookupGetter__: function __lookupGetter__()
+​​
+__lookupSetter__: function __lookupSetter__()
+​​
+__proto__:
+​​
+constructor: function Object()
+​​
+hasOwnProperty: function hasOwnProperty()
+​​
+isPrototypeOf: function isPrototypeOf()
+​​
+propertyIsEnumerable: function propertyIsEnumerable()
+​​
+toLocaleString: function toLocaleString()
+​​
+toString: function toString()
+​​
+valueOf: function valueOf()
+​​
+<get __proto__()>: function __proto__()
+​​
+<set __proto__()>: function __proto__()
+2
+Uncaught (in promise)
+Object { status: null, body: null, json: null, errors: null }
+2
 
 ​
 ```

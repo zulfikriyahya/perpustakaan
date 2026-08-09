@@ -41,8 +41,8 @@ class DashboardPanelProvider extends PanelProvider
             ->path('dashboard')
             ->login(Login::class)
             ->brandLogo(new HtmlString(
-                '<img src="'.asset('images/brand-lightmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />'.
-                    '<img src="'.asset('images/brand-darkmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
+                '<img src="' . asset('images/brand-lightmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />' .
+                    '<img src="' . asset('images/brand-darkmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
             ))
             ->brandLogoHeight('2.5rem')
             ->spa(hasPrefetching: true)
@@ -51,38 +51,35 @@ class DashboardPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn (): string => view('filament.partials.global-logo-style')->render()
-                    .view('filament.partials.global-footer-style')->render(),
+                fn(): string => view('filament.partials.global-logo-style')->render()
+                    . view('filament.partials.global-footer-style')->render(),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn (): string => request()->routeIs('filament.dashboard.auth.*')
+                fn(): string => request()->routeIs('filament.dashboard.auth.*')
                     ? ''
                     : view('filament.partials.app-footer')->render(),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn (): string => view('filament.partials.chart-export-script')->render(),
+                fn(): string => view('filament.partials.chart-export-script')->render(),
             )
             /**
-             * BARU - tombol akses halaman Sirkulasi di topbar (kanan
-             * atas, bersebelahan icon database notification, sesuai gap
-             * iterasi ini). Disembunyikan otomatis untuk halaman auth
-             * (belum login, topbar tidak relevan) memakai pola
-             * routeIs() yang sama seperti footer di atas.
-             *
-             * TODO: verifikasi signature terhadap versi package yang
-             * terpasang - enum case PanelsRenderHook::TOPBAR_END
-             * diasumsikan tersedia dan posisinya berdekatan dengan
-             * notifikasi database di filament/filament ^5.7 (composer.lock
-             * proyek ini); WAJIB dicek visual (poin 12) - kalau posisi
-             * ternyata tidak bersebelahan icon notification, ganti ke
-             * render hook lain yang tersedia (mis. USER_MENU_BEFORE) atau
-             * sesuaikan CSS margin di partial terkait.
+             * BARU (gap: "Uncaught (in promise) Object {status:null,...}")
+             * - guard global request-gagal Livewire, dipasang di SEMUA
+             * halaman panel termasuk halaman auth (session/CSRF yang
+             * sudah expired juga bisa kejadian di halaman auth, meski
+             * jarang) - TIDAK dikecualikan seperti footer/tombol
+             * sirkulasi karena guard ini murni safety net, tidak ada
+             * elemen visual yang perlu disembunyikan.
              */
             ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn(): string => view('filament.partials.global-request-error-guard')->render(),
+            )
+            ->renderHook(
                 PanelsRenderHook::TOPBAR_END,
-                fn (): string => request()->routeIs('filament.dashboard.auth.*')
+                fn(): string => request()->routeIs('filament.dashboard.auth.*')
                     ? ''
                     : view('filament.partials.sirkulasi-topbar-button')->render(),
             )

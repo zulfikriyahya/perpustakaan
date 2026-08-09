@@ -4121,6 +4121,25 @@ class Sirkulasi extends TransaksiCepat
     {
         return false;
     }
+    /**
+     * BARU (gap iterasi ini) - halaman Sirkulasi dipakai sebagai layar
+     * operasional full-screen (sidebar & topbar sirkulasi minimal, lihat
+     * CSS di sirkulasi.blade.php) - heading besar "Sirkulasi" bawaan
+     * Filament (di atas logo/topbar) dianggap noise, dihilangkan supaya
+     * layar lebih ringkas utk operator. TIDAK memengaruhi navigationLabel
+     * (tetap "Sirkulasi" untuk referensi internal, meski
+     * shouldRegisterNavigation() sudah false sehingga label itu pun
+     * tidak pernah tampil di sidebar).
+     *
+     * TODO: verifikasi signature terhadap versi package yang terpasang -
+     * getHeading(): string|Htmlable|null adalah API dasar
+     * Filament\Pages\Page sejak v3, dipertahankan di v4 - cek ulang jika
+     * versi filament/filament di composer.lock berbeda dari asumsi ini.
+     */
+    public function getHeading(): string
+    {
+        return '';
+    }
 
     /**
      * Override RINGAN dari TransaksiCepat::prosesEksemplar() - HANYA
@@ -12221,7 +12240,7 @@ class BukuPublikController extends Controller
     public function index()
     {
         $ebooks = Buku::query()
-            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
                 JenisFileBuku::Pdf->value,
                 JenisFileBuku::Epub->value,
             ]))
@@ -12229,7 +12248,7 @@ class BukuPublikController extends Controller
             ->paginate(12, ['*'], 'ebook_page');
 
         $audiobooks = Buku::query()
-            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
                 JenisFileBuku::AudioMp3->value,
                 JenisFileBuku::AudioWav->value,
             ]))
@@ -12243,15 +12262,25 @@ class BukuPublikController extends Controller
      * TODO: GAP-SPEC - reader saat ini publik tanpa batasan (dikonfirmasi
      * akses publik tanpa login). Jika ke depan perlu dibatasi (mis. hanya
      * preview N halaman), perlu keputusan eksplisit lanjutan.
+     *
+     * BARU (gap iterasi ini, SEO): header X-Robots-Tag: noindex dipasang
+     * di response supaya halaman reader per-file TIDAK di-index search
+     * engine (dianggap thin/duplicate content dari halaman katalog
+     * buku.index yang sudah jadi halaman kanonik) - dilakukan lewat
+     * header HTTP (bukan <meta name="robots"> di Blade) karena view
+     * buku.baca-pdf.blade.php belum ditinjau isinya di sesi ini (Aturan
+     * poin 18) - pendekatan header aman tanpa perlu menyentuh file itu.
      */
     public function baca(BukuFile $file)
     {
         abort_unless($file->jenis === JenisFileBuku::Pdf, 404);
 
-        return view('buku.baca-pdf', [
-            'file' => $file,
-            'buku' => $file->buku,
-        ]);
+        return response()
+            ->view('buku.baca-pdf', [
+                'file' => $file,
+                'buku' => $file->buku,
+            ])
+            ->header('X-Robots-Tag', 'noindex, nofollow');
     }
 }
 
@@ -12507,15 +12536,14 @@ class SitemapController extends Controller
         $authorUrls = Author::query()
             ->select('id', 'updated_at')
             ->get()
-            ->map(fn (Author $author) => [
+            ->map(fn(Author $author) => [
                 'loc' => route('authors.show', $author),
                 'priority' => '0.6',
                 'lastmod' => $author->updated_at?->toAtomString(),
             ]);
 
         $urls = $urls->concat($authorUrls);
-
-        $xml = view('sitemap', ['urls' => $urls])->render();
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . view('sitemap', ['urls' => $urls])->render();
 
         return Response::make($xml, 200, ['Content-Type' => 'application/xml']);
     }
@@ -13213,6 +13241,8 @@ class RiwayatSirkulasiHarian extends Component
                 'waktu' => $p->created_at,
                 'aksi' => 'dipinjamkan',
                 'nama_user' => $p->user?->nama ?? '-',
+                'avatar_url' => $p->user?->getFilamentAvatarUrl(),
+                'point_user' => $p->user?->akumulasi_point,
                 'judul_buku' => $p->eksemplar?->buku?->judul ?? '-',
                 'diproses_oleh' => $p->diprosesOleh?->nama ?? '-',
             ]);
@@ -13225,6 +13255,8 @@ class RiwayatSirkulasiHarian extends Component
                 'waktu' => $pg->created_at,
                 'aksi' => 'dikembalikan',
                 'nama_user' => $pg->peminjaman?->user?->nama ?? '-',
+                'avatar_url' => $pg->peminjaman?->user?->getFilamentAvatarUrl(),
+                'point_user' => $pg->peminjaman?->user?->akumulasi_point,
                 'judul_buku' => $pg->peminjaman?->eksemplar?->buku?->judul ?? '-',
                 'diproses_oleh' => $pg->diprosesOleh?->nama ?? '-',
             ]);
@@ -19853,6 +19885,18 @@ Route::post('/dashboard/chart-export/pdf', [ChartExportController::class, 'pdf']
 Route::get('/unduh-bulk-data/{bulkDataJob}', BulkDataJobDownloadController::class)
     ->middleware(['auth'])
     ->name('bulk-data-job.download');
+Route::get('/robots.txt', function () {
+    $lines = [
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /dashboard',
+        'Disallow: /unduh-bulk-data',
+        '',
+        'Sitemap: ' . route('sitemap'),
+    ];
+
+    return response(implode("\n", $lines), 200, ['Content-Type' => 'text/plain']);
+})->name('robots');
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
 
@@ -36154,7 +36198,23 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 
 ## resources/views/author-detail.blade.php
 ```blade
-<x-layout :title="$author->nama">
+<x-layout
+    :title="$author->nama"
+    :description="\Illuminate\Support\Str::limit(strip_tags($author->bio ?? 'Profil dan daftar buku karya '.$author->nama.' di Perpustakaan Digital MTs Negeri 1 Pandeglang.'), 160)"
+    :og-image="$author->foto ? asset('storage/'.$author->foto) : null"
+>
+    @push('jsonld')
+    <script type="application/ld+json">
+    {!! json_encode(array_filter([
+        '@context' => 'https://schema.org',
+        '@type' => 'Person',
+        'name' => $author->nama,
+        'description' => $author->bio,
+        'url' => route('authors.show', $author),
+        'image' => $author->foto ? asset('storage/'.$author->foto) : null,
+    ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}
+    </script>
+    @endpush
     <section class="max-w-3xl mx-auto px-4 py-16">
         <div class="bg-white border rounded-lg p-6 flex items-center gap-6">
             <div class="w-24 h-24 rounded-full bg-slate-100 overflow-hidden border shrink-0">
@@ -36199,7 +36259,10 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 
 ## resources/views/authors.blade.php
 ```blade
-<x-layout :title="'Authors'">
+<x-layout
+    :title="'Daftar Penulis'"
+    :description="'Daftar penulis buku yang tersedia di koleksi Perpustakaan Digital MTs Negeri 1 Pandeglang.'"
+>
     <section class="max-w-6xl mx-auto px-4 py-16">
         <h1 class="text-3xl font-bold text-teal-900 mb-8">Penulis</h1>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -36305,7 +36368,10 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 
 ## resources/views/buku/index.blade.php
 ```blade
-<x-layout :title="'Buku Digital'">
+<x-layout
+    :title="'Buku Digital'"
+    :description="'Koleksi e-book dan audiobook digital Perpustakaan MTs Negeri 1 Pandeglang, dapat diakses publik tanpa login.'"
+>
     <section class="max-w-6xl mx-auto px-4 py-16">
         <h1 class="text-3xl font-bold text-teal-900 mb-8">E-Book</h1>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -36372,11 +36438,52 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <title>{{ $title ?? 'Perpustakaan Digital' }} - MTs Negeri 1 Pandeglang</title>
     <meta name="description" content="{{ $description ?? 'Perpustakaan digital MTs Negeri 1 Pandeglang - katalog buku, e-book, dan audiobook.' }}">
+
+    {{-- BARU (gap iterasi ini: finalisasi SEO) - robots meta per-halaman,
+         default selalu "index, follow" kecuali halaman secara eksplisit
+         mengirim prop $robots (mis. halaman reader PDF via header HTTP,
+         bukan lewat prop ini - lihat BukuPublikController::baca()). --}}
+    <meta name="robots" content="{{ $robots ?? 'index, follow' }}">
+
+    {{-- BARU - canonical URL, default ke URL saat ini (tanpa query string
+         pagination dsb DIHILANGKAN secara sengaja - canonical selalu
+         menunjuk versi "bersih" dari halaman, kecuali di-override manual
+         lewat prop $canonical, mis. utk halaman terpaginasi jika suatu
+         saat ingin canonical ke halaman 1). --}}
+    <link rel="canonical" href="{{ $canonical ?? url()->current() }}">
+
+    {{-- BARU - Open Graph (Facebook/WhatsApp/dll share preview) --}}
+    <meta property="og:site_name" content="Perpustakaan Digital MTs Negeri 1 Pandeglang">
+    <meta property="og:type" content="{{ $ogType ?? 'website' }}">
+    <meta property="og:locale" content="id_ID">
+    <meta property="og:title" content="{{ $title ?? 'Perpustakaan Digital' }} - MTs Negeri 1 Pandeglang">
+    <meta property="og:description" content="{{ $description ?? 'Perpustakaan digital MTs Negeri 1 Pandeglang - katalog buku, e-book, dan audiobook.' }}">
+    <meta property="og:url" content="{{ $canonical ?? url()->current() }}">
+    {{-- TODO: GAP-SPEC - belum ada aset og:image resmi berukuran ideal
+         (disarankan 1200x630px). Fallback sementara pakai favicon
+         (ukurannya jauh dari ideal utk preview link, tapi lebih baik
+         daripada tidak ada gambar sama sekali). Ganti asset('images/favicon.ico')
+         di bawah begitu aset og-image resmi tersedia dari sekolah. --}}
+    <meta property="og:image" content="{{ $ogImage ?? asset('images/favicon.ico') }}">
+
+    {{-- BARU - Twitter Card --}}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $title ?? 'Perpustakaan Digital' }} - MTs Negeri 1 Pandeglang">
+    <meta name="twitter:description" content="{{ $description ?? 'Perpustakaan digital MTs Negeri 1 Pandeglang - katalog buku, e-book, dan audiobook.' }}">
+    <meta name="twitter:image" content="{{ $ogImage ?? asset('images/favicon.ico') }}">
+
     <link rel="manifest" href="{{ asset('manifest.json') }}">
     <link rel="icon" href="{{ asset('images/favicon.ico') }}">
     @vite('resources/css/app.css')
+
+    {{-- BARU - slot khusus JSON-LD structured data, diisi opsional oleh
+         masing-masing view lewat @@push('jsonld') ... @@endpush, dirender
+         di <head> supaya search engine bisa membaca structured data
+         tanpa perlu parsing seluruh body. --}}
+    @stack('jsonld')
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
     @include('partials.public-nav')
@@ -36400,20 +36507,50 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 
 ## resources/views/faq.blade.php
 ```blade
-<x-layout :title="'FAQ'">
+@php
+    $daftarFaq = [
+        [
+            'tanya' => 'Bagaimana cara meminjam buku?',
+            'jawab' => 'Kunjungi perpustakaan dan lakukan tap kartu RFID di meja pustakawan.',
+        ],
+        [
+            'tanya' => 'Apakah e-book dan audiobook bisa diakses siapa saja?',
+            'jawab' => 'Ya, koleksi digital dapat diakses publik tanpa perlu login.',
+        ],
+        // TODO: GAP-SPEC - konten FAQ masih placeholder, tunggu materi resmi dari sekolah
+    ];
+@endphp
+<x-layout
+    :title="'FAQ'"
+    :description="'Pertanyaan yang sering diajukan seputar layanan Perpustakaan Digital MTs Negeri 1 Pandeglang.'"
+>
+    @push('jsonld')
+    <script type="application/ld+json">
+    {!! json_encode([
+        '@context' => 'https://schema.org',
+        '@type' => 'FAQPage',
+        'mainEntity' => collect($daftarFaq)->map(fn ($faq) => [
+            '@type' => 'Question',
+            'name' => $faq['tanya'],
+            'acceptedAnswer' => [
+                '@type' => 'Answer',
+                'text' => $faq['jawab'],
+            ],
+        ])->values()->all(),
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}
+    </script>
+    @endpush
+
     <section class="max-w-3xl mx-auto px-4 py-16">
         <h1 class="text-3xl font-bold text-teal-900 mb-8">Pertanyaan yang Sering Diajukan</h1>
 
         <div class="space-y-6">
-            <div class="bg-white border rounded-lg p-5">
-                <h3 class="font-semibold text-slate-800">Bagaimana cara meminjam buku?</h3>
-                <p class="text-slate-600 mt-1">Kunjungi perpustakaan dan lakukan tap kartu RFID di meja pustakawan.</p>
-            </div>
-            <div class="bg-white border rounded-lg p-5">
-                <h3 class="font-semibold text-slate-800">Apakah e-book dan audiobook bisa diakses siapa saja?</h3>
-                <p class="text-slate-600 mt-1">Ya, koleksi digital dapat diakses publik tanpa perlu login.</p>
-            </div>
-            {{-- TODO: GAP-SPEC - konten FAQ masih placeholder, tunggu materi resmi dari sekolah --}}
+            @foreach ($daftarFaq as $faq)
+                <div class="bg-white border rounded-lg p-5">
+                    <h3 class="font-semibold text-slate-800">{{ $faq['tanya'] }}</h3>
+                    <p class="text-slate-600 mt-1">{{ $faq['jawab'] }}</p>
+                </div>
+            @endforeach
         </div>
     </section>
 </x-layout>
@@ -36981,6 +37118,16 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
             display: none !important;
         }
 
+        /* BARU (gap iterasi ini) - heading halaman ("Sirkulasi") sudah
+           dikosongkan lewat getHeading() di Sirkulasi.php, tapi container
+           header tetap dirender (kosong) oleh layout panel dan
+           menyisakan spacing kosong di atas konten - fallback CSS ini
+           menyembunyikan container tsb sepenuhnya, murni kosmetik
+           konsisten dgn pola sembunyi-sidebar di atas. */
+        .fi-header {
+            display: none !important;
+        }
+
         .sirkulasi-section {
             background: #ffffff;
             border: 1px solid rgba(0, 0, 0, 0.08);
@@ -37184,9 +37331,23 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
     </style>
 
     {{-- Alpine idle-timer + jam analog (diwarisi identik dari Transaksi
-         Cepat, Aturan poin 3 - DRY di level JS/Blade). --}}
+     Cepat, Aturan poin 3 - DRY di level JS/Blade).
+
+     FIX (gap iterasi ini): registrasi Alpine.data() SEBELUMNYA hanya
+     dipasang di dalam listener 'alpine:init', yang cuma ditembakkan
+     SEKALI oleh Alpine (saat full page load pertama). Karena halaman
+     ini dibuka lewat wire:navigate (SPA) dari halaman lain, script ini
+     baru dieksekusi SETELAH Alpine sudah start di halaman sebelumnya -
+     'alpine:init' tidak pernah datang lagi, sehingga Alpine.data()
+     tidak pernah terdaftar -> "x-data is not defined". Fix: cek dulu
+     apakah Alpine sudah berjalan (window.Alpine tersedia); kalau sudah,
+     daftarkan langsung. Kalau belum (full page load pertama, Alpine
+     belum start), tetap tunggu 'alpine:init' seperti semula. Alpine.data()
+     aman dipanggil berkali-kali (setiap kali script ini ikut dieksekusi
+     ulang oleh Livewire saat wire:navigate) - ia hanya menimpa definisi
+     lama dengan yang baru, tidak menimbulkan efek samping. --}}
     <script>
-        document.addEventListener('alpine:init', () => {
+        function registerAlpineComponentsSirkulasi() {
             Alpine.data('transaksiCepatIdleTimer', () => ({
                 idleTimeoutMs: 10000,
                 tickMs: 100,
@@ -37316,7 +37477,18 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
                     }, { once: true });
                 },
             }));
-        });
+        }
+
+        if (window.Alpine) {
+            // Alpine sudah start (halaman ini dimuat via wire:navigate dari
+            // halaman lain) - daftarkan langsung, 'alpine:init' tidak akan
+            // ditembakkan lagi.
+            registerAlpineComponentsSirkulasi();
+        } else {
+            // Full page load pertama - Alpine belum start, tunggu event
+            // seperti semula.
+            document.addEventListener('alpine:init', registerAlpineComponentsSirkulasi);
+        }
     </script>
 
     <div class="sirkulasi-page-wrapper" x-data="sirkulasiAutoFocus">
@@ -37917,7 +38089,25 @@ window.ChartExport = window.ChartExport || (function () {
 
 ## resources/views/index.blade.php
 ```blade
-<x-layout :title="'Beranda'">
+<x-layout
+    :title="'Beranda'"
+    :description="'Perpustakaan digital MTs Negeri 1 Pandeglang - jelajahi koleksi buku fisik, e-book, dan audiobook untuk siswa dan pegawai.'"
+>
+    @push('jsonld')
+    <script type="application/ld+json">
+    {!! json_encode([
+        '@context' => 'https://schema.org',
+        '@type' => 'WebSite',
+        'name' => 'Perpustakaan Digital MTs Negeri 1 Pandeglang',
+        'url' => route('home'),
+        'potentialAction' => [
+            '@type' => 'SearchAction',
+            'target' => route('buku.index').'?q={search_term_string}',
+            'query-input' => 'required name=search_term_string',
+        ],
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}
+    </script>
+    @endpush
     <section class="bg-white border-b">
         <div class="max-w-6xl mx-auto px-4 py-20 text-center">
             <h1 class="text-4xl font-bold text-teal-900">Perpustakaan Digital Sekolah</h1>
@@ -38019,7 +38209,24 @@ window.ChartExport = window.ChartExport || (function () {
                     @forelse ($this->riwayatLengkapHariIni as $item)
                         <tr class="dark:border-white/10" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
                             <td class="text-gray-500 dark:text-gray-400" style="padding: 0.5rem 0.75rem; white-space: nowrap;">{{ $item['waktu']?->format('H:i:s') }}</td>
-                            <td class="text-gray-950 dark:text-white" style="padding: 0.5rem 0.75rem;">{{ $item['nama_user'] }}</td>
+                            <td class="text-gray-950 dark:text-white" style="padding: 0.5rem 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    @if ($item['avatar_url'])
+                                        <img src="{{ $item['avatar_url'] }}" alt="{{ $item['nama_user'] }}" width="24" height="24" style="display: block; width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />
+                                    @else
+                                        <div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; font-weight: 600; font-size: 10px; color: #fff; background: var(--primary-500); flex-shrink: 0;">
+                                            {{ collect(explode(' ', $item['nama_user']))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
+                                        </div>
+                                    @endif
+
+                                    <div style="min-width: 0;">
+                                        <p style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['nama_user'] }}</p>
+                                        @if ($item['point_user'] !== null)
+                                            <x-filament::badge color="warning" size="sm">{{ $item['point_user'] }} Point</x-filament::badge>
+                                        @endif
+                                    </div>
+                                </div>
+                            </td>
                             <td class="text-gray-950 dark:text-white" style="padding: 0.5rem 0.75rem;">{{ $item['judul_buku'] }}</td>
                             <td style="padding: 0.5rem 0.75rem;">
                                 <x-filament::badge :color="$item['aksi'] === 'dipinjamkan' ? 'primary' : 'success'" size="sm">{{ ucfirst($item['aksi']) }}</x-filament::badge>
@@ -38598,7 +38805,6 @@ window.ChartExport = window.ChartExport || (function () {
 
 ## resources/views/sitemap.blade.php
 ```blade
-<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     @foreach ($urls as $url)
         <url>
@@ -38616,7 +38822,10 @@ window.ChartExport = window.ChartExport || (function () {
 
 ## resources/views/tentang.blade.php
 ```blade
-<x-layout :title="'Tentang Perpustakaan'">
+<x-layout
+    :title="'Tentang Perpustakaan'"
+    :description="'Profil dan layanan Perpustakaan Digital MTs Negeri 1 Pandeglang untuk siswa dan pegawai.'"
+>
     <section class="max-w-3xl mx-auto px-4 py-16">
         <h1 class="text-3xl font-bold text-teal-900 mb-6">Tentang Perpustakaan</h1>
         <div class="bg-white border rounded-lg p-6 text-slate-600 leading-relaxed">

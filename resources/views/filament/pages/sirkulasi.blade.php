@@ -224,166 +224,175 @@
         }
     </style>
 
-    {{-- Alpine idle-timer + jam analog (diwarisi identik dari Transaksi
-     Cepat, Aturan poin 3 - DRY di level JS/Blade).
+<script>
+    function registerAlpineComponentsSirkulasi() {
+        Alpine.data('transaksiCepatIdleTimer', () => ({
+            idleTimeoutMs: 10000,
+            tickMs: 100,
+            msLeft: 10000,
+            timerId: null,
+            listenersAttached: false,
 
-     FIX (gap iterasi ini): registrasi Alpine.data() SEBELUMNYA hanya
-     dipasang di dalam listener 'alpine:init', yang cuma ditembakkan
-     SEKALI oleh Alpine (saat full page load pertama). Karena halaman
-     ini dibuka lewat wire:navigate (SPA) dari halaman lain, script ini
-     baru dieksekusi SETELAH Alpine sudah start di halaman sebelumnya -
-     'alpine:init' tidak pernah datang lagi, sehingga Alpine.data()
-     tidak pernah terdaftar -> "x-data is not defined". Fix: cek dulu
-     apakah Alpine sudah berjalan (window.Alpine tersedia); kalau sudah,
-     daftarkan langsung. Kalau belum (full page load pertama, Alpine
-     belum start), tetap tunggu 'alpine:init' seperti semula. Alpine.data()
-     aman dipanggil berkali-kali (setiap kali script ini ikut dieksekusi
-     ulang oleh Livewire saat wire:navigate) - ia hanya menimpa definisi
-     lama dengan yang baru, tidak menimbulkan efek samping. --}}
-    <script>
-        function registerAlpineComponentsSirkulasi() {
-            Alpine.data('transaksiCepatIdleTimer', () => ({
-                idleTimeoutMs: 10000,
-                tickMs: 100,
-                msLeft: 10000,
-                timerId: null,
-                listenersAttached: false,
+            init() {
+                this.resetTimer();
 
-                init() {
-                    this.resetTimer();
+                if (! this.listenersAttached) {
+                    const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
+                    this._onActivity = () => this.resetTimer();
+                    activityEvents.forEach(evt => document.addEventListener(evt, this._onActivity));
 
-                    if (! this.listenersAttached) {
-                        const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
-                        this._onActivity = () => this.resetTimer();
-                        activityEvents.forEach(evt => document.addEventListener(evt, this._onActivity));
+                    document.addEventListener('livewire:navigating', () => {
+                        this.stopTimer();
+                        activityEvents.forEach(evt => document.removeEventListener(evt, this._onActivity));
+                    }, { once: true });
 
-                        document.addEventListener('livewire:navigating', () => {
-                            this.stopTimer();
-                            activityEvents.forEach(evt => document.removeEventListener(evt, this._onActivity));
-                        }, { once: true });
+                    this.listenersAttached = true;
+                }
+            },
 
-                        this.listenersAttached = true;
+            resetTimer() {
+                this.msLeft = this.idleTimeoutMs;
+                if (this.timerId) clearInterval(this.timerId);
+                this.timerId = setInterval(() => {
+                    this.msLeft -= this.tickMs;
+                    if (this.msLeft <= 0) {
+                        this.stopTimer();
+                        this.msLeft = this.idleTimeoutMs;
+                        this.$wire.selesai();
                     }
-                },
+                }, this.tickMs);
+            },
 
-                resetTimer() {
-                    this.msLeft = this.idleTimeoutMs;
+            stopTimer() {
+                if (this.timerId) {
+                    clearInterval(this.timerId);
+                    this.timerId = null;
+                }
+            },
+
+            get progress() {
+                return Math.max(0, Math.min(1, this.msLeft / this.idleTimeoutMs));
+            },
+
+            get secondsLeft() {
+                return Math.ceil(Math.max(0, this.msLeft) / 1000);
+            },
+
+            get ringDashoffset() {
+                const circumference = 263.89;
+                return circumference * (1 - this.progress);
+            },
+
+            get ringColor() {
+                if (this.progress > 0.4) return '#22c55e';
+                if (this.progress > 0.2) return '#eab308';
+                return '#ef4444';
+            },
+        }));
+
+        Alpine.data('jamSirkulasi', () => ({
+            now: new Date(),
+            timerId: null,
+
+            init() {
+                this.timerId = setInterval(() => { this.now = new Date(); }, 1000);
+                document.addEventListener('livewire:navigating', () => {
                     if (this.timerId) clearInterval(this.timerId);
-                    this.timerId = setInterval(() => {
-                        this.msLeft -= this.tickMs;
-                        if (this.msLeft <= 0) {
-                            this.stopTimer();
-                            this.msLeft = this.idleTimeoutMs;
-                            this.$wire.selesai();
-                        }
-                    }, this.tickMs);
-                },
+                }, { once: true });
+            },
 
-                stopTimer() {
-                    if (this.timerId) {
-                        clearInterval(this.timerId);
-                        this.timerId = null;
+            get jamDigital() {
+                return this.now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            },
+
+            get tanggalHariIni() {
+                return this.now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            },
+
+            get derajatJam() {
+                return (this.now.getHours() % 12) * 30 + (this.now.getMinutes() * 0.5);
+            },
+
+            get derajatMenit() {
+                return this.now.getMinutes() * 6 + (this.now.getSeconds() * 0.1);
+            },
+
+            get derajatDetik() {
+                return this.now.getSeconds() * 6;
+            },
+        }));
+
+        Alpine.data('sirkulasiAutoFocus', () => ({
+            init() {
+                const refocus = () => {
+                    const el = document.querySelector('[data-sirkulasi-scan-input]');
+                    if (el && document.activeElement !== el) {
+                        el.focus();
                     }
-                },
+                };
 
-                get progress() {
-                    return Math.max(0, Math.min(1, this.msLeft / this.idleTimeoutMs));
-                },
+                this._refocus = refocus;
+                document.addEventListener('livewire:morphed', refocus);
+                document.addEventListener('click', () => setTimeout(refocus, 60));
+                setTimeout(refocus, 150);
 
-                get secondsLeft() {
-                    return Math.ceil(Math.max(0, this.msLeft) / 1000);
-                },
+                document.addEventListener('livewire:navigating', () => {
+                    document.removeEventListener('livewire:morphed', this._refocus);
+                }, { once: true });
 
-                get ringDashoffset() {
-                    const circumference = 263.89;
-                    return circumference * (1 - this.progress);
-                },
+                // BARU (gap: "Uncaught (in promise) Object {status:null,...}"
+                // di layar Sirkulasi standby) - reload PENUH halaman (bukan
+                // wire:navigate) setelah kiosk benar-benar idle dalam waktu
+                // lama, supaya session/CSRF selalu segar SEBELUM sempat
+                // expired di tengah request otomatis (idle-timer
+                // transaksiCepatIdleTimer / poll notifikasi Filament yang
+                // tetap jalan di background walau kiosk tidak disentuh).
+                //
+                // TODO: ASUMSI - threshold 15 menit (jauh di bawah
+                // SESSION_LIFETIME 120 menit di config/session.php) dipilih
+                // sebagai margin aman default; sesuaikan jika pola pemakaian
+                // kiosk di lapangan berbeda (mis. jeda antar siswa lebih
+                // lama dari ini secara normal, bukan berarti "idle").
+                this.initReloadIdleKiosk();
+            },
 
-                get ringColor() {
-                    if (this.progress > 0.4) return '#22c55e';
-                    if (this.progress > 0.2) return '#eab308';
-                    return '#ef4444';
-                },
-            }));
+            initReloadIdleKiosk() {
+                const idleReloadMs = 15 * 60 * 1000;
+                const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
+                let timerId = null;
 
-            Alpine.data('jamSirkulasi', () => ({
-                now: new Date(),
-                timerId: null,
+                const jadwalkanReload = () => {
+                    if (timerId) clearTimeout(timerId);
+                    timerId = setTimeout(() => window.location.reload(), idleReloadMs);
+                };
 
-                init() {
-                    this.timerId = setInterval(() => { this.now = new Date(); }, 1000);
-                    document.addEventListener('livewire:navigating', () => {
-                        if (this.timerId) clearInterval(this.timerId);
-                    }, { once: true });
-                },
+                const onActivity = () => jadwalkanReload();
 
-                get jamDigital() {
-                    return this.now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                },
+                activityEvents.forEach(evt => document.addEventListener(evt, onActivity));
+                // livewire:morphed dihitung sebagai "aktivitas" juga - kalau
+                // transaksi memang sedang berjalan (scan berhasil dsb.),
+                // kiosk TIDAK dianggap idle walau tidak ada keydown/klik
+                // dalam window waktu tertentu (mis. antrean beberapa siswa
+                // scan berurutan tanpa jeda mengetik).
+                document.addEventListener('livewire:morphed', onActivity);
 
-                get tanggalHariIni() {
-                    return this.now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-                },
+                document.addEventListener('livewire:navigating', () => {
+                    if (timerId) clearTimeout(timerId);
+                    activityEvents.forEach(evt => document.removeEventListener(evt, onActivity));
+                    document.removeEventListener('livewire:morphed', onActivity);
+                }, { once: true });
 
-                get derajatJam() {
-                    return (this.now.getHours() % 12) * 30 + (this.now.getMinutes() * 0.5);
-                },
+                jadwalkanReload();
+            },
+        }));
+    }
 
-                get derajatMenit() {
-                    return this.now.getMinutes() * 6 + (this.now.getSeconds() * 0.1);
-                },
-
-                get derajatDetik() {
-                    return this.now.getSeconds() * 6;
-                },
-            }));
-
-            /**
-             * BARU (gap: autofokus permanen tanpa distraksi) - setiap kali
-             * Livewire selesai me-morph DOM (mis. setelah pilihUser(),
-             * pilihBuku(), selesai(), atau update apapun dari scanKartu/
-             * scanKode), input scan yang SEDANG tampil (ditandai atribut
-             * data-sirkulasi-scan-input, hanya satu yang visible di satu
-             * waktu karena @@if/@@else pada $user) di-refocus otomatis jika
-             * belum jadi activeElement. Juga dipasang pada event 'click'
-             * global (mis. setelah klik salah satu hasil dropdown, yang
-             * secara alami memindahkan fokus ke button tsb) supaya
-             * operator TIDAK PERNAH perlu klik manual ke input untuk siap
-             * scan lagi. Delay kecil dipakai supaya tidak mendahului
-             * proses klik/morph yang sedang berjalan.
-             */
-            Alpine.data('sirkulasiAutoFocus', () => ({
-                init() {
-                    const refocus = () => {
-                        const el = document.querySelector('[data-sirkulasi-scan-input]');
-                        if (el && document.activeElement !== el) {
-                            el.focus();
-                        }
-                    };
-
-                    this._refocus = refocus;
-                    document.addEventListener('livewire:morphed', refocus);
-                    document.addEventListener('click', () => setTimeout(refocus, 60));
-                    setTimeout(refocus, 150);
-
-                    document.addEventListener('livewire:navigating', () => {
-                        document.removeEventListener('livewire:morphed', this._refocus);
-                    }, { once: true });
-                },
-            }));
-        }
-
-        if (window.Alpine) {
-            // Alpine sudah start (halaman ini dimuat via wire:navigate dari
-            // halaman lain) - daftarkan langsung, 'alpine:init' tidak akan
-            // ditembakkan lagi.
-            registerAlpineComponentsSirkulasi();
-        } else {
-            // Full page load pertama - Alpine belum start, tunggu event
-            // seperti semula.
-            document.addEventListener('alpine:init', registerAlpineComponentsSirkulasi);
-        }
-    </script>
+    if (window.Alpine) {
+        registerAlpineComponentsSirkulasi();
+    } else {
+        document.addEventListener('alpine:init', registerAlpineComponentsSirkulasi);
+    }
+</script>
 
     <div class="sirkulasi-page-wrapper" x-data="sirkulasiAutoFocus">
         <div class="sirkulasi-page-content" style="display: flex; flex-direction: column; gap: 1.25rem; padding: 1.25rem 1rem;">

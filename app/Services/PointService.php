@@ -63,16 +63,25 @@ class PointService
 
     /**
      * Update level_badge_id user jika akumulasi_point masuk rentang badge
-     * lain. Setiap perubahan JUGA dicatat ke LevelBadgeLog (Aturan poin 3,
-     * DRY - mengikuti pola RewardLog/PunishmentLog) sebagai riwayat
-     * historis, terpisah dari users.level_badge_id yang tetap jadi
-     * snapshot terkini.
+     * lain. users.level_badge_id SELALU diperbarui ke badge terkini
+     * (snapshot terkini tetap akurat walau riwayat/sertifikat di-skip -
+     * lihat di bawah).
      *
-     * BARU (gap iterasi ini): sertifikat PDF digenerate sinkron via
-     * SertifikatService begitu LevelBadgeLog dibuat, SEBELUM notifikasi
-     * WA dikirim, supaya link_sertifikat yang dikirim ke user sudah pasti
-     * valid saat WA diterima (generate PDF dilakukan di dalam request
-     * ini, bukan job async terpisah).
+     * BARU (Opsi C, dikonfirmasi eksplisit): LevelBadgeLog baru - dan
+     * konsekuensinya sertifikat + notifikasi WA - HANYA dibuat jika user
+     * BELUM PERNAH mendapat badge tsb sebelumnya (dicek ke seluruh riwayat
+     * LevelBadgeLog milik user, termasuk yang soft-deleted lewat
+     * withTrashed()). Jika user naik/turun lagi ke badge yang PERNAH dia
+     * dapat, sertifikat yang SUDAH ADA (dari LevelBadgeLog sebelumnya)
+     * tetap dipakai - tidak ada PDF baru, tidak ada baris log baru, tidak
+     * ada WA baru. Ini mencegah spam sertifikat/WA saat akumulasi_point
+     * naik-turun di sekitar batas dua level (mis. akibat reversal denda/
+     * kerusakan yang menggeser akumulasi_point bolak-balik).
+     *
+     * TODO: ASUMSI - notifikasi WA ikut di-skip bersama sertifikat (bukan
+     * tetap dikirim dengan link sertifikat lama). Jika perilaku ini perlu
+     * diubah agar WA tetap terkirim, ubah posisi pemanggilan kirimEvent()
+     * di luar kondisi "sudah pernah dapat" di bawah.
      */
     protected function cekBadge(User $user): void
     {
@@ -85,35 +94,46 @@ class PointService
             ->orderByDesc('urutan')
             ->first();
 
-        if ($badge && $badge->id !== $user->level_badge_id) {
-            $user->update(['level_badge_id' => $badge->id]);
-
-            $levelBadgeLog = LevelBadgeLog::create([
-                'user_id' => $user->id,
-                'level_badge_id' => $badge->id,
-                'tanggal_didapat' => now(),
-            ]);
-
-            // dihitung sertifikat, gagal di-log tapi tidak menggagalkan alur
-            $this->sertifikatService->generateUntukBadge($levelBadgeLog);
-
-            // eventCode 'badge_naik' - TODO: ASUMSI, samakan dengan Setting
-            // wa_template_badge_naik yang harus diisi Admin di panel WA Gateway,
-            // TERMASUK placeholder {{link_sertifikat}} (BARU) di template.
-            // TODO: GAP-SPEC - eventCode ini terpicu di SETIAP perubahan badge,
-            // termasuk kalau badge turun (bukan hanya naik) - belum
-            // dikonfirmasi apakah perlu dipisah jadi badge_naik/badge_turun.
-            $this->whatsappService->kirimEvent(
-                eventCode: 'badge_naik',
-                nomorTujuan: $user->no_telepon,
-                variables: [
-                    'nama' => $user->nama,
-                    'badge' => $badge->nama_badge,
-                    'link_sertifikat' => route('sertifikat.badge', $levelBadgeLog),
-                ],
-                referenceId: "badge-{$user->id}-{$badge->id}",
-            );
+        if (! $badge || $badge->id === $user->level_badge_id) {
+            return;
         }
+
+        $user->update(['level_badge_id' => $badge->id]);
+
+        // dicek riwayat, termasuk yang soft-deleted, apakah badge ini
+        // pernah didapat user sebelumnya (Opsi C)
+        $pernahDidapat = LevelBadgeLog::withTrashed()
+            ->where('user_id', $user->id)
+            ->where('level_badge_id', $badge->id)
+            ->exists();
+
+        if ($pernahDidapat) {
+            // sertifikat lama dipakai lagi, tidak ada log/sertifikat/WA baru
+            return;
+        }
+
+        $levelBadgeLog = LevelBadgeLog::create([
+            'user_id' => $user->id,
+            'level_badge_id' => $badge->id,
+            'tanggal_didapat' => now(),
+        ]);
+
+        // dihitung sertifikat, gagal di-log tapi tidak menggagalkan alur
+        $this->sertifikatService->generateUntukBadge($levelBadgeLog);
+
+        // eventCode 'badge_naik' - TODO: ASUMSI, samakan dengan Setting
+        // wa_template_badge_naik yang harus diisi Admin di panel WA Gateway,
+        // TERMASUK placeholder {{link_sertifikat}} di template.
+        $this->whatsappService->kirimEvent(
+            eventCode: 'badge_naik',
+            nomorTujuan: $user->no_telepon,
+            variables: [
+                'nama' => $user->nama,
+                'badge' => $badge->nama_badge,
+                'link_sertifikat' => route('sertifikat.badge', $levelBadgeLog),
+            ],
+            referenceId: "badge-{$user->id}-{$badge->id}",
+        );
     }
 
     /**
@@ -124,16 +144,17 @@ class PointService
      * threshold dalam satu event - hanya akan tercatat jika suatu saat menjadi
      * satu-satunya/tertinggi yang eligible.
      *
-     * BARU (gap iterasi ini): sertifikat PDF digenerate sinkron via
-     * SertifikatService begitu RewardLog dibuat, sebelum notifikasi WA
-     * dikirim - lihat catatan sama di cekBadge().
+     * Reward TIDAK menerapkan Opsi C - whereDoesntHave('rewardLogs') di
+     * bawah sudah secara alami mencegah reward yang sama didapat dua kali
+     * (RewardLog tidak pernah "turun" seperti Badge, jadi tidak ada
+     * skenario naik-turun berulang untuk didesain ulang).
      */
     protected function cekReward(User $user): void
     {
         $reward = Reward::query()
             ->where('aktif', true)
             ->where('threshold_point', '<=', $user->akumulasi_point)
-            ->whereDoesntHave('rewardLogs', fn ($q) => $q->where('user_id', $user->id))
+            ->whereDoesntHave('rewardLogs', fn($q) => $q->where('user_id', $user->id))
             ->orderByDesc('threshold_point')
             ->first();
 
@@ -152,7 +173,7 @@ class PointService
 
         // eventCode 'reward_didapat' - TODO: ASUMSI, samakan dengan Setting
         // wa_template_reward_didapat, TERMASUK placeholder {{link_sertifikat}}
-        // (BARU) di template.
+        // di template.
         $this->whatsappService->kirimEvent(
             eventCode: 'reward_didapat',
             nomorTujuan: $user->no_telepon,
@@ -217,7 +238,9 @@ class PointService
      * Reverse SATU Point log (mis. saat koreksi kondisi Pengembalian
      * membatalkan alasan event tersebut). Insert entry Point BARU dengan
      * nilai negasi (bukan hapus log lama - riwayat harus auditable),
-     * turunkan akumulasi_point, lalu cek ulang Badge (bisa turun level).
+     * turunkan akumulasi_point, lalu cek ulang Badge (bisa turun level -
+     * dan sekarang, berkat Opsi C, jika badge tujuan pernah didapat
+     * sebelumnya, TIDAK memicu log/sertifikat/WA baru).
      *
      * TODO: GAP-SPEC - Reward/Punishment yang SUDAH terlanjur didapat dari
      * akumulasi sebelum reversal ini TIDAK ditarik kembali (termasuk

@@ -2598,18 +2598,18 @@ class UserImporter extends Importer
                 ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('VII A')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan (wajib jika kelas_nama diisi)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('Non_Jurusan')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('2026/2027')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example(''),
@@ -2634,7 +2634,7 @@ class UserImporter extends Importer
                 ->helperText('Isi URL gambar (https://...) atau pathfile yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
                 ->rules(['nullable', 'string', 'max:2048'])
                 ->example('https://contoh-sekolah.id/foto/siswa1.jpg')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 
@@ -4068,19 +4068,14 @@ class ProsesKenaikanKelas extends Page
 
 namespace App\Filament\Pages;
 
-use App\Enums\EventTypePoint;
-use App\Enums\KondisiBuku;
 use App\Enums\SourceKunjungan;
-use App\Enums\StatusEksemplar;
-use App\Enums\StatusPeminjaman;
 use App\Models\Eksemplar;
 use App\Models\Kunjungan;
 use App\Models\User;
-use App\Services\PointService;
-use App\Services\WhatsappService;
-use Illuminate\Database\QueryException;
 use App\Services\KunjunganService;
+use App\Services\PointService;
 use Filament\Notifications\Notification;
+use Illuminate\Database\QueryException;
 
 /**
  * Halaman "Sirkulasi": DUPLIKAT fungsi & fitur Transaksi Cepat, tapi TANPA
@@ -7628,18 +7623,20 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\LevelBadgeLogExporter;
 use App\Filament\Resources\LevelBadgeLogResource\Pages;
 use App\Models\LevelBadgeLog;
+use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Read-only - LevelBadgeLog HANYA dihasilkan otomatis oleh
  * PointService::cekBadge() saat badge user berubah (Aturan poin 3, DRY).
  * Tidak ada Import - insert manual akan melewati validasi rentang
- * min_point/max_point di PointService. Pola identik dengan
- * RewardLogResource/PunishmentLogResource.
+ * min_point/max_point di PointService DAN tidak akan pernah menghasilkan
+ * sertifikat. Pola identik dengan RewardLogResource/PunishmentLogResource.
  */
 class LevelBadgeLogResource extends Resource
 {
@@ -7668,12 +7665,23 @@ class LevelBadgeLogResource extends Resource
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
                 TextColumn::make('levelBadge.nama_badge')->label('Badge')->searchable()->sortable(),
                 TextColumn::make('tanggal_didapat')->dateTime('d F Y H:i')->sortable(),
+                TextColumn::make('nomor_sertifikat')
+                    ->label('No. Sertifikat')
+                    ->placeholder('Belum tersedia')
+                    ->searchable(),
             ])
             ->filters([
                 SelectFilter::make('level_badge_id')->label('Badge')->relationship('levelBadge', 'nama_badge'),
             ])
             ->defaultSort('tanggal_didapat', 'desc')
-            ->recordActions([])
+            ->recordActions([
+                Action::make('downloadSertifikat')
+                    ->label('Download Sertifikat')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->visible(fn (LevelBadgeLog $record) => filled($record->sertifikat_path))
+                    ->url(fn (LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    ->openUrlInNewTab(),
+            ])
             ->toolbarActions([]);
     }
 
@@ -9279,11 +9287,13 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\RewardLogExporter;
 use App\Filament\Resources\RewardLogResource\Pages;
 use App\Models\RewardLog;
+use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * // TODO: ASUMSI - dibuat sebagai Resource terpisah (bukan RelationManager
@@ -9293,7 +9303,9 @@ use Filament\Tables\Table;
  *
  * Read-only - RewardLog HANYA dihasilkan otomatis oleh PointService saat
  * threshold tercapai (Aturan poin 3, DRY). Tidak ada Import - insert
- * manual lewat spreadsheet akan melewati validasi threshold PointService.
+ * manual lewat spreadsheet akan melewati validasi threshold PointService
+ * DAN tidak akan pernah menghasilkan sertifikat (hanya dibuat via
+ * SertifikatService yang dipanggil PointService).
  */
 class RewardLogResource extends Resource
 {
@@ -9322,12 +9334,23 @@ class RewardLogResource extends Resource
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
                 TextColumn::make('reward.nama')->label('Reward')->searchable()->sortable(),
                 TextColumn::make('tanggal_didapat')->dateTime('d F Y H:i')->sortable(),
+                TextColumn::make('nomor_sertifikat')
+                    ->label('No. Sertifikat')
+                    ->placeholder('Belum tersedia')
+                    ->searchable(),
             ])
             ->filters([
                 SelectFilter::make('reward_id')->label('Reward')->relationship('reward', 'nama'),
             ])
             ->defaultSort('tanggal_didapat', 'desc')
-            ->recordActions([])
+            ->recordActions([
+                Action::make('downloadSertifikat')
+                    ->label('Download Sertifikat')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->visible(fn (RewardLog $record) => filled($record->sertifikat_path))
+                    ->url(fn (RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    ->openUrlInNewTab(),
+            ])
             ->toolbarActions([]);
     }
 
@@ -10375,7 +10398,7 @@ class EditUser extends EditRecord
     {
         return [
             DeleteAction::make()
-                ->hidden(fn($record) => $record && $record->hasRole('super_admin')),
+                ->hidden(fn ($record) => $record && $record->hasRole('super_admin')),
         ];
     }
 
@@ -10561,7 +10584,7 @@ class UserResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        $isProtected = fn(callable $get) => static::isTargetSuperAdmin($get);
+        $isProtected = fn (callable $get) => static::isTargetSuperAdmin($get);
 
         return $schema->components([
             Section::make('Informasi Akun')
@@ -10577,7 +10600,7 @@ class UserResource extends Resource
                             'max' => 'Nama maksimal 255 karakter.',
                         ]),
                     Select::make('role')
-                        ->options(collect(RoleUser::cases())->mapWithKeys(fn($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
+                        ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
                         ->required()
                         ->live()
                         ->hidden($isProtected)
@@ -10593,14 +10616,14 @@ class UserResource extends Resource
                         }),
                     Select::make('jenis_kelamin')
                         ->label('Jenis Kelamin')
-                        ->options(collect(JenisKelamin::cases())->mapWithKeys(fn($j) => [$j->value => $j->label()]))
+                        ->options(collect(JenisKelamin::cases())->mapWithKeys(fn ($j) => [$j->value => $j->label()]))
                         ->native(false)
                         ->hidden($isProtected),
                     TextInput::make('password')
                         ->password()
                         ->revealable()
-                        ->required(fn(string $operation) => $operation === 'create')
-                        ->dehydrated(fn(?string $state) => filled($state))
+                        ->required(fn (string $operation) => $operation === 'create')
+                        ->dehydrated(fn (?string $state) => filled($state))
                         ->maxLength(255)
                         ->helperText('Kosongkan jika tidak ingin mengubah password.')
                         ->validationMessages([
@@ -10620,20 +10643,20 @@ class UserResource extends Resource
                 ->schema([
                     TextInput::make('nisn')
                         ->label('NISN')
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
-                        ->visible(fn(callable $get) => $get('role') === RoleUser::Siswa->value)
-                        ->dehydrated(fn(callable $get) => $get('role') === RoleUser::Siswa->value)
+                        ->visible(fn (callable $get) => $get('role') === RoleUser::Siswa->value)
+                        ->dehydrated(fn (callable $get) => $get('role') === RoleUser::Siswa->value)
                         ->validationMessages([
                             'unique' => 'NISN ini sudah dipakai userlain yang masih aktif.',
                             'max' => 'NISN maksimal 255 karakter.',
                         ]),
                     TextInput::make('nip')
                         ->label('NIP')
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
-                        ->visible(fn(callable $get) => $get('role') !== RoleUser::Siswa->value)
-                        ->dehydrated(fn(callable $get) => $get('role') !== RoleUser::Siswa->value)
+                        ->visible(fn (callable $get) => $get('role') !== RoleUser::Siswa->value)
+                        ->dehydrated(fn (callable $get) => $get('role') !== RoleUser::Siswa->value)
                         ->validationMessages([
                             'unique' => 'NIP ini sudah dipakai user lain yang masih aktif.',
                             'max' => 'NIP maksimal 255 karakter.',
@@ -10654,7 +10677,7 @@ class UserResource extends Resource
                         ->label('No. Telepon')
                         ->required()
                         ->live(onBlur: true)
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
                         ->tel()
                         ->rules([new FormatNomorTelepon])
@@ -10670,7 +10693,7 @@ class UserResource extends Resource
                             // (lihat TODO di bawah), bukan diam-diam diabaikan.
                             $set('no_telepon', NomorTeleponFormatter::normalisasi($state) ?? $state);
                         })
-                        ->dehydrateStateUsing(fn(?string $state) => NomorTeleponFormatter::normalisasi($state) ?? $state)
+                        ->dehydrateStateUsing(fn (?string $state) => NomorTeleponFormatter::normalisasi($state) ?? $state)
                         ->helperText('Boleh diketik format apa pun (mis. +62, spasi, strip) - otomatis dinormalisasi jadi 628xxxxxxxxx saat pindah field/simpan.')
                         ->validationMessages([
                             'required' => 'No. telepon wajib diisi (dipakai untuk notifikasi WhatsApp).',
@@ -10679,7 +10702,7 @@ class UserResource extends Resource
                         ]),
                     TextInput::make('no_kartu_rfid')
                         ->label('No. Kartu RFID')
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
                         ->rules([new FormatKartuRfid])
                         ->helperText('Harus persis 10 digit angka - sesuai kontrak firmware Attendance Machine.')
@@ -10695,7 +10718,7 @@ class UserResource extends Resource
                 ->schema([
                     Placeholder::make('kelas_tahun_pelajaran_id')
                         ->label('Kelas (Tahun Pelajaran)')
-                        ->content(fn(?User $record) => $record?->kelasTahunPelajaran
+                        ->content(fn (?User $record) => $record?->kelasTahunPelajaran
                             ? "{$record->kelasTahunPelajaran->kelas->nama} - {$record->kelasTahunPelajaran->tahunPelajaran->nama}"
                             : 'Belum di-assign - gunakan aksi "Assign ke Kelas" di daftar User.')
                         ->visibleOn('edit'),
@@ -10705,7 +10728,7 @@ class UserResource extends Resource
                             KelasTahunPelajaran::query()
                                 ->with(['kelas', 'tahunPelajaran'])
                                 ->get()
-                                ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
+                                ->mapWithKeys(fn (KelasTahunPelajaran $ktp) => [
                                     $ktp->id => "{$ktp->kelas->nama}- {$ktp->tahunPelajaran->nama}",
                                 ])
                         )
@@ -10714,7 +10737,7 @@ class UserResource extends Resource
                         ->dehydrated()
                         ->visibleOn('create'),
                     Select::make('status_akademik')
-                        ->options(collect(StatusAkademik::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
+                        ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
                         ->disabled()
                         ->dehydrated(false)
                         ->helperText('Berubah otomatis lewat proses Kenaikan Kelas / assignment, tidak bisa diedit manual di sini.')
@@ -10729,17 +10752,17 @@ class UserResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(UserImporter::class)
-                    ->authorize(fn() => auth()->user()?->can('create', User::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('create', User::class) ?? false),
                 ExportAction::make()
                     ->exporter(UserExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', User::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', User::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('avatar')->disk('public')->circular(),
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('role')
                     ->badge()
-                    ->color(fn(RoleUser $state) => match ($state) {
+                    ->color(fn (RoleUser $state) => match ($state) {
                         RoleUser::Admin => 'danger',
                         RoleUser::Pustakawan => 'warning',
                         RoleUser::Pegawai => 'info',
@@ -10750,7 +10773,7 @@ class UserResource extends Resource
                 TextColumn::make('kelasTahunPelajaran.kelas.nama')->label('Kelas')->toggleable()->placeholder('-'),
                 TextColumn::make('status_akademik')
                     ->badge()->toggleable()
-                    ->color(fn(StatusAkademik $state) => match ($state) {
+                    ->color(fn (StatusAkademik $state) => match ($state) {
                         StatusAkademik::Aktif => 'success',
                         StatusAkademik::Lulus => 'info',
                         StatusAkademik::Keluar => 'gray',
@@ -10767,18 +10790,18 @@ class UserResource extends Resource
             ->filters([
                 TrashedFilter::make(),
                 SelectFilter::make('role')
-                    ->options(collect(RoleUser::cases())->mapWithKeys(fn($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
+                    ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
                 SelectFilter::make('status_akademik')
-                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', '', $s->value))])),
+                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', '', $s->value))])),
                 TernaryFilter::make('status_suspend')->label('Status Suspend'),
             ])
             ->recordActions([
                 DeleteAction::make()
-                    ->authorize(fn(User $record) => ! $record->hasRole('super_admin')
+                    ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
                         && (auth()->user()?->can('delete', $record) ?? false)),
                 RestoreAction::make(),
                 ForceDeleteAction::make()
-                    ->authorize(fn(User $record) => ! $record->hasRole('super_admin')
+                    ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
                         && (auth()->user()?->can('forceDelete', $record) ?? false))
                     ->action(function (User $record) {
                         $adaPeminjamanAktif = Peminjaman::query()
@@ -10816,7 +10839,7 @@ class UserResource extends Resource
                                 KelasTahunPelajaran::query()
                                     ->with(['kelas', 'tahunPelajaran'])
                                     ->get()
-                                    ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
+                                    ->mapWithKeys(fn (KelasTahunPelajaran $ktp) => [
                                         $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
                                     ])
                             )
@@ -10828,28 +10851,28 @@ class UserResource extends Resource
                     ->action(function (Collection $records, array $data) {
                         $ktp = KelasTahunPelajaran::query()->findOrFail($data['kelas_tahun_pelajaran_id']);
                         $service = app(KenaikanKelasService::class);
-                        $records->each(fn(User $user) => $service->assignKelas($user, $ktp));
+                        $records->each(fn (User $user) => $service->assignKelas($user, $ktp));
 
-                        Notification::make()->success()->title($records->count() . ' user berhasil di-assign ke kelas.')->send();
+                        Notification::make()->success()->title($records->count().' user berhasil di-assign ke kelas.')->send();
                     })
                     ->deselectRecordsAfterCompletion(),
                 DeleteBulkAction::make()
                     ->action(function (Collection $records) {
-                        $dilindungi = $records->filter(fn(User $u) => $u->hasRole('super_admin'));
-                        $bolehHapus = $records->reject(fn(User $u) => $u->hasRole('super_admin'));
+                        $dilindungi = $records->filter(fn (User $u) => $u->hasRole('super_admin'));
+                        $bolehHapus = $records->reject(fn (User $u) => $u->hasRole('super_admin'));
                         $bolehHapus->each->delete();
 
                         if ($dilindungi->isNotEmpty()) {
                             Notification::make()
                                 ->warning()
                                 ->title('Sebagian user tidak dihapus')
-                                ->body($dilindungi->count() . ' user dengan role super_admin dilewati.')
+                                ->body($dilindungi->count().' user dengan role super_admin dilewati.')
                                 ->send();
                         }
                     })
-                    ->authorize(fn() => auth()->user()?->can('deleteAny', User::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('deleteAny', User::class) ?? false),
             ])
-            ->checkIfRecordIsSelectableUsing(fn(User $record) => ! $record->hasRole('super_admin'));
+            ->checkIfRecordIsSelectableUsing(fn (User $record) => ! $record->hasRole('super_admin'));
     }
 
     public static function getPages(): array
@@ -12001,7 +12024,7 @@ class PerpustakaanDeviceController extends Controller
             ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
             ->pluck('no_kartu_rfid');
 
-        $body = "ver:{$ver}\n" . $kartuList->implode("\n") . "\nEOF";
+        $body = "ver:{$ver}\n".$kartuList->implode("\n")."\nEOF";
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -12138,7 +12161,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {
@@ -12260,14 +12283,22 @@ class PerpustakaanDeviceController extends Controller
 namespace App\Http\Controllers;
 
 use App\Models\Author;
+use Illuminate\Http\Request;
 
 class AuthorPublikController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $authors = Author::query()->withCount('bukus')->paginate(12);
+        $search = trim((string) $request->query('q', ''));
 
-        return view('authors', compact('authors'));
+        $authors = Author::query()
+            ->withCount('bukus')
+            ->when($search !== '', fn ($q) => $q->where('nama', 'like', "%{$search}%"))
+            ->orderBy('nama')
+            ->paginate(12)
+            ->withQueryString();
+
+        return view('authors', compact('authors', 'search'));
     }
 
     public function show(Author $author)
@@ -12275,6 +12306,52 @@ class AuthorPublikController extends Controller
         $author->load('bukus');
 
         return view('author-detail', compact('author'));
+    }
+}
+
+```
+---
+
+## app/Http/Controllers/BukuKatalogController.php
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Buku;
+use Illuminate\Http\Request;
+
+/**
+ * Katalog buku FISIK (terpisah dari BukuPublikController yang khusus
+ * e-book/audiobook digital). Menampilkan SEMUA buku (dikonfirmasi),
+ * termasuk yang hanya punya file digital tanpa eksemplar fisik.
+ */
+class BukuKatalogController extends Controller
+{
+    public function index(Request $request)
+    {
+        // TODO: ASUMSI - pencarian dibatasi pada kolom 'judul' dan 'penulis',
+        // sama seperti BukuPublikController, untuk konsistensi UX.
+        $search = trim((string) $request->query('q', ''));
+
+        $bukus = Buku::query()
+            ->when($search !== '', fn ($q) => $q->where(function ($q) use ($search) {
+                $q->where('judul', 'like', "%{$search}%")
+                    ->orWhere('penulis', 'like', "%{$search}%");
+            }))
+            ->withCount(['eksemplars'])
+            ->orderBy('judul')
+            ->paginate(12)
+            ->withQueryString();
+
+        return view('katalog.index', compact('bukus', 'search'));
+    }
+
+    public function show(Buku $buku)
+    {
+        $buku->load(['authors', 'kategoris', 'files']);
+
+        return view('katalog.show', compact('buku'));
     }
 }
 
@@ -12290,28 +12367,47 @@ namespace App\Http\Controllers;
 use App\Enums\JenisFileBuku;
 use App\Models\Buku;
 use App\Models\BukuFile;
+use Illuminate\Http\Request;
 
 class BukuPublikController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        // TODO: ASUMSI - pencarian dibatasi pada kolom 'judul' dan 'penulis'
+        // (kolom string legacy di tabel bukus), tidak menyertakan 'isbn'
+        // maupun relasi authors/kategoris karena tidak dispesifikasikan.
+        // Jika perlu dicakup, tandai lanjutan sebagai gap baru.
+        $search = trim((string) $request->query('q', ''));
+
         $ebooks = Buku::query()
-            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
                 JenisFileBuku::Pdf->value,
                 JenisFileBuku::Epub->value,
             ]))
+            ->when($search !== '', fn ($q) => $q->where(function ($q) use ($search) {
+                $q->where('judul', 'like', "%{$search}%")
+                    ->orWhere('penulis', 'like', "%{$search}%");
+            }))
             ->with('files')
-            ->paginate(12, ['*'], 'ebook_page');
+            ->orderBy('judul')
+            ->paginate(12, ['*'], 'ebook_page')
+            ->withQueryString();
 
         $audiobooks = Buku::query()
-            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
                 JenisFileBuku::AudioMp3->value,
                 JenisFileBuku::AudioWav->value,
             ]))
+            ->when($search !== '', fn ($q) => $q->where(function ($q) use ($search) {
+                $q->where('judul', 'like', "%{$search}%")
+                    ->orWhere('penulis', 'like', "%{$search}%");
+            }))
             ->with('files')
-            ->paginate(12, ['*'], 'audio_page');
+            ->orderBy('judul')
+            ->paginate(12, ['*'], 'audio_page')
+            ->withQueryString();
 
-        return view('buku.index', compact('ebooks', 'audiobooks'));
+        return view('buku.index', compact('ebooks', 'audiobooks', 'search'));
     }
 
     /**
@@ -12319,13 +12415,13 @@ class BukuPublikController extends Controller
      * akses publik tanpa login). Jika ke depan perlu dibatasi (mis. hanya
      * preview N halaman), perlu keputusan eksplisit lanjutan.
      *
-     * BARU (gap iterasi ini, SEO): header X-Robots-Tag: noindex dipasang
-     * di response supaya halaman reader per-file TIDAK di-index search
-     * engine (dianggap thin/duplicate content dari halaman katalog
-     * buku.index yang sudah jadi halaman kanonik) - dilakukan lewat
-     * header HTTP (bukan <meta name="robots"> di Blade) karena view
-     * buku.baca-pdf.blade.php belum ditinjau isinya di sesi ini (Aturan
-     * poin 18) - pendekatan header aman tanpa perlu menyentuh file itu.
+     * Header X-Robots-Tag: noindex dipasang di response supaya halaman
+     * reader per-file TIDAK di-index search engine (dianggap thin/duplicate
+     * content dari halaman katalog buku.index yang sudah jadi halaman
+     * kanonik) - dilakukan lewat header HTTP (bukan <meta name="robots">
+     * di Blade) karena view buku.baca-pdf.blade.php belum ditinjau isinya
+     * di sesi ini (Aturan poin 18) - pendekatan header aman tanpa perlu
+     * menyentuh file itu.
      */
     public function baca(BukuFile $file)
     {
@@ -12568,6 +12664,64 @@ class LandingPageController extends Controller
 ```
 ---
 
+## app/Http/Controllers/SertifikatPublikController.php
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\LevelBadgeLog;
+use App\Models\RewardLog;
+use Illuminate\Support\Facades\Storage;
+
+/**
+ * Akses PUBLIK tanpa login (dikonfirmasi) - link dikirim lewat notifikasi
+ * WhatsApp. UUID id log sebagai identifier (tidak sekuensial/mudah
+ * ditebak). Header X-Robots-Tag: noindex dipasang karena ini berisi data
+ * personal per-user, mengikuti pola BukuPublikController::baca().
+ *
+ * TODO: GAP-SPEC - saat ini TIDAK ada mekanisme signed URL/expiring link
+ * maupun otentikasi tambahan (dikonfirmasi: publik murni via UUID).
+ * Siapa pun yang mendapatkan URL bisa mengakses PDF tanpa batas waktu.
+ */
+class SertifikatPublikController extends Controller
+{
+    public function reward(RewardLog $rewardLog)
+    {
+        abort_if(! $rewardLog->sertifikat_path, 404);
+
+        return $this->responseFile($rewardLog->sertifikat_path);
+    }
+
+    public function badge(LevelBadgeLog $levelBadgeLog)
+    {
+        abort_if(! $levelBadgeLog->sertifikat_path, 404);
+
+        return $this->responseFile($levelBadgeLog->sertifikat_path);
+    }
+
+    protected function responseFile(string $path)
+    {
+        abort_unless(Storage::disk('public')->exists($path), 404);
+
+        // BUGFIX (sebelumnya): Storage::disk()->response() mengembalikan
+        // Symfony\Component\HttpFoundation\StreamedResponse, yang TIDAK
+        // punya method header() (itu method Illuminate\Http\Response,
+        // bukan bawaan Symfony) - dulu memicu Error 500 "Call to undefined
+        // method ... header()" setiap link sertifikat diakses. Diperbaiki
+        // dengan mengakses properti HeaderBag $response->headers secara
+        // langsung, yang tersedia di SEMUA turunan Response Symfony,
+        // termasuk StreamedResponse.
+        $response = Storage::disk('public')->response($path);
+        $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+
+        return $response;
+    }
+}
+
+```
+---
+
 ## app/Http/Controllers/SitemapController.php
 ```php
 <?php
@@ -12575,6 +12729,7 @@ class LandingPageController extends Controller
 namespace App\Http\Controllers;
 
 use App\Models\Author;
+use App\Models\Buku;
 use Illuminate\Support\Facades\Response;
 
 class SitemapController extends Controller
@@ -12583,6 +12738,7 @@ class SitemapController extends Controller
     {
         $urls = collect([
             ['loc' => route('home'), 'priority' => '1.0'],
+            ['loc' => route('katalog.index'), 'priority' => '0.9'],
             ['loc' => route('buku.index'), 'priority' => '0.9'],
             ['loc' => route('authors.index'), 'priority' => '0.8'],
             ['loc' => route('faq'), 'priority' => '0.5'],
@@ -12592,14 +12748,23 @@ class SitemapController extends Controller
         $authorUrls = Author::query()
             ->select('id', 'updated_at')
             ->get()
-            ->map(fn(Author $author) => [
+            ->map(fn (Author $author) => [
                 'loc' => route('authors.show', $author),
                 'priority' => '0.6',
                 'lastmod' => $author->updated_at?->toAtomString(),
             ]);
 
-        $urls = $urls->concat($authorUrls);
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . view('sitemap', ['urls' => $urls])->render();
+        $bukuUrls = Buku::query()
+            ->select('id', 'updated_at')
+            ->get()
+            ->map(fn (Buku $buku) => [
+                'loc' => route('katalog.show', $buku),
+                'priority' => '0.6',
+                'lastmod' => $buku->updated_at?->toAtomString(),
+            ]);
+
+        $urls = $urls->concat($authorUrls)->concat($bukuUrls);
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n".view('sitemap', ['urls' => $urls])->render();
 
         return Response::make($xml, 200, ['Content-Type' => 'application/xml']);
     }
@@ -13234,6 +13399,7 @@ use App\Models\Peminjaman;
 use App\Models\Pengembalian;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -13293,7 +13459,7 @@ class RiwayatSirkulasiHarian extends Component
             ->whereDate('tanggal_pinjam', today())
             ->with(['user', 'eksemplar.buku', 'diprosesOleh'])
             ->get()
-            ->map(fn(Peminjaman $p) => [
+            ->map(fn (Peminjaman $p) => [
                 'waktu' => $p->created_at,
                 'aksi' => 'dipinjamkan',
                 'nama_user' => $p->user?->nama ?? '-',
@@ -13307,7 +13473,7 @@ class RiwayatSirkulasiHarian extends Component
             ->whereDate('tanggal_kembali', today())
             ->with(['peminjaman.user', 'peminjaman.eksemplar.buku', 'diprosesOleh'])
             ->get()
-            ->map(fn(Pengembalian $pg) => [
+            ->map(fn (Pengembalian $pg) => [
                 'waktu' => $pg->created_at,
                 'aksi' => 'dikembalikan',
                 'nama_user' => $pg->peminjaman?->user?->nama ?? '-',
@@ -13329,7 +13495,7 @@ class RiwayatSirkulasiHarian extends Component
      * render form scan untuk kasus normal (mengetik/scan yang gagal/masih
      * mencari tidak memicu query berat ini).
      */
-    #[\Livewire\Attributes\On('transaksi-sirkulasi-berhasil')]
+    #[On('transaksi-sirkulasi-berhasil')]
     public function refreshRiwayat(): void
     {
         unset($this->totalPenggunaHariIni, $this->riwayatTransaksiHariIni, $this->riwayatLengkapHariIni);
@@ -14064,6 +14230,8 @@ class LevelBadgeLog extends Model
         'user_id',
         'level_badge_id',
         'tanggal_didapat',
+        'sertifikat_path',
+        'nomor_sertifikat',
     ];
 
     protected function casts(): array
@@ -14518,6 +14686,8 @@ class RewardLog extends Model
         'user_id',
         'reward_id',
         'tanggal_didapat',
+        'sertifikat_path',
+        'nomor_sertifikat',
     ];
 
     /**
@@ -15200,14 +15370,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Author;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class AuthorPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Author');
@@ -15267,8 +15437,8 @@ class AuthorPolicy
     {
         return $authUser->can('Reorder:Author');
     }
-
 }
+
 ```
 ---
 
@@ -15280,14 +15450,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -15347,8 +15517,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-
 }
+
 ```
 ---
 
@@ -15360,14 +15530,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -15427,8 +15597,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-
 }
+
 ```
 ---
 
@@ -15528,14 +15698,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\FirmwareRelease;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class FirmwareReleasePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:FirmwareRelease');
@@ -15595,8 +15765,8 @@ class FirmwareReleasePolicy
     {
         return $authUser->can('Reorder:FirmwareRelease');
     }
-
 }
+
 ```
 ---
 
@@ -15608,14 +15778,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -15675,8 +15845,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-
 }
+
 ```
 ---
 
@@ -15688,14 +15858,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -15755,8 +15925,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-
 }
+
 ```
 ---
 
@@ -15768,14 +15938,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -15835,8 +16005,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-
 }
+
 ```
 ---
 
@@ -15848,14 +16018,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -15915,8 +16085,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -15928,14 +16098,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -15995,8 +16165,8 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-
 }
+
 ```
 ---
 
@@ -16008,14 +16178,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadgeLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgeLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadgeLog');
@@ -16075,8 +16245,8 @@ class LevelBadgeLogPolicy
     {
         return $authUser->can('Reorder:LevelBadgeLog');
     }
-
 }
+
 ```
 ---
 
@@ -16088,14 +16258,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -16155,8 +16325,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-
 }
+
 ```
 ---
 
@@ -16168,14 +16338,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -16235,8 +16405,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-
 }
+
 ```
 ---
 
@@ -16248,14 +16418,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -16315,8 +16485,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-
 }
+
 ```
 ---
 
@@ -16328,14 +16498,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -16395,8 +16565,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-
 }
+
 ```
 ---
 
@@ -16408,14 +16578,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -16475,8 +16645,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-
 }
+
 ```
 ---
 
@@ -16488,14 +16658,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -16555,8 +16725,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-
 }
+
 ```
 ---
 
@@ -16568,14 +16738,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -16635,8 +16805,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-
 }
+
 ```
 ---
 
@@ -16648,14 +16818,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -16715,8 +16885,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-
 }
+
 ```
 ---
 
@@ -16728,14 +16898,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -16795,8 +16965,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-
 }
+
 ```
 ---
 
@@ -16808,14 +16978,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
-use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -16875,8 +17045,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-
 }
+
 ```
 ---
 
@@ -16888,14 +17058,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -16955,8 +17125,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-
 }
+
 ```
 ---
 
@@ -16968,14 +17138,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -17035,8 +17205,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-
 }
+
 ```
 ---
 
@@ -17046,13 +17216,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Foundation\Auth\User as AuthUser;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -17112,8 +17282,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-
 }
+
 ```
 ---
 
@@ -17232,8 +17402,8 @@ class DashboardPanelProvider extends PanelProvider
             ->path('dashboard')
             ->login(Login::class)
             ->brandLogo(new HtmlString(
-                '<img src="' . asset('images/brand-lightmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />' .
-                    '<img src="' . asset('images/brand-darkmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
+                '<img src="'.asset('images/brand-lightmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />'.
+                    '<img src="'.asset('images/brand-darkmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
             ))
             ->brandLogoHeight('2.5rem')
             ->spa(hasPrefetching: true)
@@ -17242,18 +17412,18 @@ class DashboardPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn(): string => view('filament.partials.global-logo-style')->render()
-                    . view('filament.partials.global-footer-style')->render(),
+                fn (): string => view('filament.partials.global-logo-style')->render()
+                    .view('filament.partials.global-footer-style')->render(),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): string => request()->routeIs('filament.dashboard.auth.*')
+                fn (): string => request()->routeIs('filament.dashboard.auth.*')
                     ? ''
                     : view('filament.partials.app-footer')->render(),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): string => view('filament.partials.chart-export-script')->render(),
+                fn (): string => view('filament.partials.chart-export-script')->render(),
             )
             /**
              * BARU (gap: "Uncaught (in promise) Object {status:null,...}")
@@ -17266,11 +17436,11 @@ class DashboardPanelProvider extends PanelProvider
              */
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): string => view('filament.partials.global-request-error-guard')->render(),
+                fn (): string => view('filament.partials.global-request-error-guard')->render(),
             )
             ->renderHook(
                 PanelsRenderHook::TOPBAR_END,
-                fn(): string => request()->routeIs('filament.dashboard.auth.*')
+                fn (): string => request()->routeIs('filament.dashboard.auth.*')
                     ? ''
                     : view('filament.partials.sirkulasi-topbar-button')->render(),
             )
@@ -17742,10 +17912,10 @@ class KunjunganService
     ) {}
 
     /**
-     * @param string $sumberLabel label singkat sumber tap untuk audit
-     *   manual - dipakai di keterangan Transaksi maupun variabel 'device'
-     *   di WhatsApp (mis. device_id fisik ESP32, atau
-     *   'Sirkulasi (RFID Reader Web)' untuk tap via halaman web).
+     * @param  string  $sumberLabel  label singkat sumber tap untuk audit
+     *                               manual - dipakai di keterangan Transaksi maupun variabel 'device'
+     *                               di WhatsApp (mis. device_id fisik ESP32, atau
+     *                               'Sirkulasi (RFID Reader Web)' untuk tap via halaman web).
      */
     public function catatKunjungan(
         User $user,
@@ -18765,6 +18935,7 @@ class PointService
 {
     public function __construct(
         protected WhatsappService $whatsappService,
+        protected SertifikatService $sertifikatService,
     ) {}
 
     /**
@@ -18809,10 +18980,25 @@ class PointService
 
     /**
      * Update level_badge_id user jika akumulasi_point masuk rentang badge
-     * lain. Setiap perubahan JUGA dicatat ke LevelBadgeLog (Aturan poin 3,
-     * DRY - mengikuti pola RewardLog/PunishmentLog) sebagai riwayat
-     * historis, terpisah dari users.level_badge_id yang tetap jadi
-     * snapshot terkini.
+     * lain. users.level_badge_id SELALU diperbarui ke badge terkini
+     * (snapshot terkini tetap akurat walau riwayat/sertifikat di-skip -
+     * lihat di bawah).
+     *
+     * BARU (Opsi C, dikonfirmasi eksplisit): LevelBadgeLog baru - dan
+     * konsekuensinya sertifikat + notifikasi WA - HANYA dibuat jika user
+     * BELUM PERNAH mendapat badge tsb sebelumnya (dicek ke seluruh riwayat
+     * LevelBadgeLog milik user, termasuk yang soft-deleted lewat
+     * withTrashed()). Jika user naik/turun lagi ke badge yang PERNAH dia
+     * dapat, sertifikat yang SUDAH ADA (dari LevelBadgeLog sebelumnya)
+     * tetap dipakai - tidak ada PDF baru, tidak ada baris log baru, tidak
+     * ada WA baru. Ini mencegah spam sertifikat/WA saat akumulasi_point
+     * naik-turun di sekitar batas dua level (mis. akibat reversal denda/
+     * kerusakan yang menggeser akumulasi_point bolak-balik).
+     *
+     * TODO: ASUMSI - notifikasi WA ikut di-skip bersama sertifikat (bukan
+     * tetap dikirim dengan link sertifikat lama). Jika perilaku ini perlu
+     * diubah agar WA tetap terkirim, ubah posisi pemanggilan kirimEvent()
+     * di luar kondisi "sudah pernah dapat" di bawah.
      */
     protected function cekBadge(User $user): void
     {
@@ -18825,27 +19011,46 @@ class PointService
             ->orderByDesc('urutan')
             ->first();
 
-        if ($badge && $badge->id !== $user->level_badge_id) {
-            $user->update(['level_badge_id' => $badge->id]);
-
-            LevelBadgeLog::create([
-                'user_id' => $user->id,
-                'level_badge_id' => $badge->id,
-                'tanggal_didapat' => now(),
-            ]);
-
-            // eventCode 'badge_naik' - TODO: ASUMSI, samakan dengan Setting
-            // wa_template_badge_naik yang harus diisi Admin di panel WA Gateway.
-            // TODO: GAP-SPEC - eventCode ini terpicu di SETIAP perubahan badge,
-            // termasuk kalau badge turun (bukan hanya naik) - belum
-            // dikonfirmasi apakah perlu dipisah jadi badge_naik/badge_turun.
-            $this->whatsappService->kirimEvent(
-                eventCode: 'badge_naik',
-                nomorTujuan: $user->no_telepon,
-                variables: ['nama' => $user->nama, 'badge' => $badge->nama_badge],
-                referenceId: "badge-{$user->id}-{$badge->id}",
-            );
+        if (! $badge || $badge->id === $user->level_badge_id) {
+            return;
         }
+
+        $user->update(['level_badge_id' => $badge->id]);
+
+        // dicek riwayat, termasuk yang soft-deleted, apakah badge ini
+        // pernah didapat user sebelumnya (Opsi C)
+        $pernahDidapat = LevelBadgeLog::withTrashed()
+            ->where('user_id', $user->id)
+            ->where('level_badge_id', $badge->id)
+            ->exists();
+
+        if ($pernahDidapat) {
+            // sertifikat lama dipakai lagi, tidak ada log/sertifikat/WA baru
+            return;
+        }
+
+        $levelBadgeLog = LevelBadgeLog::create([
+            'user_id' => $user->id,
+            'level_badge_id' => $badge->id,
+            'tanggal_didapat' => now(),
+        ]);
+
+        // dihitung sertifikat, gagal di-log tapi tidak menggagalkan alur
+        $this->sertifikatService->generateUntukBadge($levelBadgeLog);
+
+        // eventCode 'badge_naik' - TODO: ASUMSI, samakan dengan Setting
+        // wa_template_badge_naik yang harus diisi Admin di panel WA Gateway,
+        // TERMASUK placeholder {{link_sertifikat}} di template.
+        $this->whatsappService->kirimEvent(
+            eventCode: 'badge_naik',
+            nomorTujuan: $user->no_telepon,
+            variables: [
+                'nama' => $user->nama,
+                'badge' => $badge->nama_badge,
+                'link_sertifikat' => route('sertifikat.badge', $levelBadgeLog),
+            ],
+            referenceId: "badge-{$user->id}-{$badge->id}",
+        );
     }
 
     /**
@@ -18855,13 +19060,18 @@ class PointService
      * belum pernah didapat TIDAK di-backfill jika user melompati beberapa
      * threshold dalam satu event - hanya akan tercatat jika suatu saat menjadi
      * satu-satunya/tertinggi yang eligible.
+     *
+     * Reward TIDAK menerapkan Opsi C - whereDoesntHave('rewardLogs') di
+     * bawah sudah secara alami mencegah reward yang sama didapat dua kali
+     * (RewardLog tidak pernah "turun" seperti Badge, jadi tidak ada
+     * skenario naik-turun berulang untuk didesain ulang).
      */
     protected function cekReward(User $user): void
     {
         $reward = Reward::query()
             ->where('aktif', true)
             ->where('threshold_point', '<=', $user->akumulasi_point)
-            ->whereDoesntHave('rewardLogs', fn ($q) => $q->where('user_id', $user->id))
+            ->whereDoesntHave('rewardLogs', fn($q) => $q->where('user_id', $user->id))
             ->orderByDesc('threshold_point')
             ->first();
 
@@ -18875,12 +19085,20 @@ class PointService
             'tanggal_didapat' => now(),
         ]);
 
+        // dihitung sertifikat, gagal di-log tapi tidak menggagalkan alur
+        $this->sertifikatService->generateUntukReward($rewardLog);
+
         // eventCode 'reward_didapat' - TODO: ASUMSI, samakan dengan Setting
-        // wa_template_reward_didapat.
+        // wa_template_reward_didapat, TERMASUK placeholder {{link_sertifikat}}
+        // di template.
         $this->whatsappService->kirimEvent(
             eventCode: 'reward_didapat',
             nomorTujuan: $user->no_telepon,
-            variables: ['nama' => $user->nama, 'reward' => $reward->nama],
+            variables: [
+                'nama' => $user->nama,
+                'reward' => $reward->nama,
+                'link_sertifikat' => route('sertifikat.reward', $rewardLog),
+            ],
             referenceId: "reward-{$rewardLog->id}",
         );
     }
@@ -18937,17 +19155,19 @@ class PointService
      * Reverse SATU Point log (mis. saat koreksi kondisi Pengembalian
      * membatalkan alasan event tersebut). Insert entry Point BARU dengan
      * nilai negasi (bukan hapus log lama - riwayat harus auditable),
-     * turunkan akumulasi_point, lalu cek ulang Badge (bisa turun level).
+     * turunkan akumulasi_point, lalu cek ulang Badge (bisa turun level -
+     * dan sekarang, berkat Opsi C, jika badge tujuan pernah didapat
+     * sebelumnya, TIDAK memicu log/sertifikat/WA baru).
      *
      * TODO: GAP-SPEC - Reward/Punishment yang SUDAH terlanjur didapat dari
-     * akumulasi sebelum reversal ini TIDAK ditarik kembali. Alasan: logic
-     * cekReward()/cekPunishment() hanya memproses "threshold tertinggi yang
-     * belum pernah didapat" (lihat komentar KEPUTUSAN FINAL di method
-     * tersebut) - tidak ada mekanisme "un-award" yang terdefinisi di spec,
-     * dan menariknya kembali (mis. reward yang sudah dikirim notifikasi WA
-     * atau bahkan sudah diklaim fisik) berisiko lebih besar daripada
-     * membiarkannya. Ini keputusan produk yang perlu dikonfirmasi terpisah
-     * jika ternyata reward/punishment WAJIB ikut di-reverse.
+     * akumulasi sebelum reversal ini TIDAK ditarik kembali (termasuk
+     * sertifikat yang sudah digenerate dan mungkin sudah dikirim/diunduh
+     * user - TIDAK dihapus). Alasan: logic cekReward()/cekPunishment()
+     * hanya memproses "threshold tertinggi yang belum pernah didapat"
+     * (lihat komentar KEPUTUSAN FINAL di method tersebut) - tidak ada
+     * mekanisme "un-award" yang terdefinisi di spec. Ini keputusan produk
+     * yang perlu dikonfirmasi terpisah jika ternyata reward/punishment/
+     * sertifikat WAJIB ikut di-reverse.
      */
     public function batalkanEvent(
         Point $pointAsli,
@@ -19051,6 +19271,116 @@ class RfidResolverService
         throw new RuntimeException(
             "User tidak ditemukan untuk kartu/NISN '{$inputKartuAtauNisn}'. Pastikan kartu sudah didaftarkan atau gunakan NISN yang valid."
         );
+    }
+}
+
+```
+---
+
+## app/Services/SertifikatService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\LevelBadgeLog;
+use App\Models\RewardLog;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+
+/**
+ * Satu sumber kebenaran generate PDF sertifikat Reward/Badge (Aturan
+ * poin 3) - dipanggil dari PointService saat threshold tercapai. Jangan
+ * duplikasi pemanggilan Pdf::loadView('pdf.sertifikat', ...) di tempat
+ * lain (mis. Filament Action) - reuse method di sini.
+ */
+class SertifikatService
+{
+    public function generateUntukReward(RewardLog $log): ?string
+    {
+        $log->loadMissing(['user', 'reward']);
+
+        return $this->generate(
+            log: $log,
+            tipe: 'reward',
+            judulSertifikat: 'Sertifikat Penghargaan',
+            namaPenerima: $log->user->nama,
+            namaItem: $log->reward->nama,
+            deskripsiItem: $log->reward->deskripsi,
+        );
+    }
+
+    public function generateUntukBadge(LevelBadgeLog $log): ?string
+    {
+        $log->loadMissing(['user', 'levelBadge']);
+
+        return $this->generate(
+            log: $log,
+            tipe: 'badge',
+            judulSertifikat: 'Sertifikat Pencapaian Badge',
+            namaPenerima: $log->user->nama,
+            namaItem: $log->levelBadge->nama_badge,
+            deskripsiItem: null,
+        );
+    }
+
+    /**
+     * @param  RewardLog|LevelBadgeLog  $log
+     *
+     * Kegagalan generate PDF (mis. dompdf error) di-catch dan di-log,
+     * TIDAK melempar exception - dipanggil dari dalam DB::transaction
+     * PointService dan sertifikat bukan bagian dari data transaksional
+     * inti (Point/Badge/Reward tetap tercatat valid walau sertifikat
+     * gagal dibuat). TODO: GAP-SPEC - belum ada mekanisme retry/regenerate
+     * otomatis untuk sertifikat yang gagal generate di percobaan pertama;
+     * saat ini hanya bisa dicek manual dari kolom sertifikat_path = null.
+     */
+    protected function generate(
+        RewardLog|LevelBadgeLog $log,
+        string $tipe,
+        string $judulSertifikat,
+        string $namaPenerima,
+        string $namaItem,
+        ?string $deskripsiItem,
+    ): ?string {
+        try {
+            $nomor = $this->buatNomorSertifikat($tipe, $log->id);
+
+            $pdf = Pdf::loadView('pdf.sertifikat', [
+                'judulSertifikat' => $judulSertifikat,
+                'namaPenerima' => $namaPenerima,
+                'namaItem' => $namaItem,
+                'deskripsiItem' => $deskripsiItem,
+                'tanggal' => $log->tanggal_didapat,
+                'nomorSertifikat' => $nomor,
+            ])->setPaper('a4', 'landscape');
+
+            $path = "sertifikat/{$tipe}/{$log->id}.pdf";
+            Storage::disk('public')->put($path, $pdf->output());
+
+            $log->forceFill([
+                'sertifikat_path' => $path,
+                'nomor_sertifikat' => $nomor,
+            ])->save();
+
+            return $path;
+        } catch (\Throwable $e) {
+            Log::error("SertifikatService: gagal generate sertifikat {$tipe} untuk log id '{$log->id}': {$e->getMessage()}");
+
+            return null;
+        }
+    }
+
+    /**
+     * TODO: ASUMSI - format nomor sertifikat belum dispesifikasikan di
+     * dokumen acuan. Pola sementara: {TIPE}/{TAHUN}/{8 karakter awal UUID
+     * log, uppercase} - unik per log karena UUID sudah unik, dan mudah
+     * dibaca manusia. Ganti jika sekolah punya format penomoran resmi.
+     */
+    protected function buatNomorSertifikat(string $tipe, string $logId): string
+    {
+        return sprintf('%s/%s/%s', strtoupper($tipe), now()->format('Y'), strtoupper(substr($logId, 0, 8)));
     }
 }
 
@@ -19356,10 +19686,10 @@ namespace App\Services;
 use App\Exceptions\WhatsappGatewayException;
 use App\Jobs\KirimNotifikasiWhatsapp;
 use App\Models\Setting;
+use App\Support\NomorTeleponFormatter;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use App\Support\NomorTeleponFormatter;
 
 /**
  * Wrapper untuk WhatsApp Gateway (whatsapp.zedlabs.id API v1, autentikasi HMAC-SHA256).
@@ -19499,11 +19829,11 @@ class WhatsappService
         $nomor = preg_replace('/[^0-9]/', '', $nomor) ?? '';
 
         if (str_starts_with($nomor, '0')) {
-            return '62' . substr($nomor, 1);
+            return '62'.substr($nomor, 1);
         }
 
         if (! str_starts_with($nomor, '62')) {
-            return '62' . $nomor;
+            return '62'.$nomor;
         }
 
         return $nomor;
@@ -19527,7 +19857,7 @@ class WhatsappService
         $response = Http::withHeaders($headers)
             ->timeout($this->timeout)
             ->withBody($bodyString, 'application/json')
-            ->send($method, $this->baseUrl . $path);
+            ->send($method, $this->baseUrl.$path);
 
         return [$response->status(), $response->json() ?? []];
     }
@@ -20066,13 +20396,13 @@ class NomorTeleponFormatter
         // dianggap '0' redundan) - buang '0' setelah '62' lalu proses sebagai
         // digit ber-prefix '62' biasa.
         if (str_starts_with($digitSaja, '620')) {
-            $digitSaja = '62' . substr($digitSaja, 3);
+            $digitSaja = '62'.substr($digitSaja, 3);
         }
 
         $ternormalisasi = match (true) {
             str_starts_with($digitSaja, '62') => $digitSaja,
-            str_starts_with($digitSaja, '0') => '62' . substr($digitSaja, 1),
-            str_starts_with($digitSaja, '8') => '62' . $digitSaja,
+            str_starts_with($digitSaja, '0') => '62'.substr($digitSaja, 1),
+            str_starts_with($digitSaja, '8') => '62'.$digitSaja,
             default => null,
         };
 
@@ -20170,10 +20500,12 @@ Schedule::command('perpustakaan:cron-harian')
 <?php
 
 use App\Http\Controllers\AuthorPublikController;
+use App\Http\Controllers\BukuKatalogController;
 use App\Http\Controllers\BukuPublikController;
 use App\Http\Controllers\BulkDataJobDownloadController;
 use App\Http\Controllers\ChartExportController;
 use App\Http\Controllers\LandingPageController;
+use App\Http\Controllers\SertifikatPublikController;
 use App\Http\Controllers\SitemapController;
 use Illuminate\Support\Facades\Route;
 
@@ -20193,8 +20525,16 @@ Route::get('/tentang', [LandingPageController::class, 'tentang'])->name('tentang
 Route::get('/authors', [AuthorPublikController::class, 'index'])->name('authors.index');
 Route::get('/authors/{author}', [AuthorPublikController::class, 'show'])->name('authors.show');
 
+// Katalog buku fisik, terpisah dari buku digital (route di bawah).
+Route::get('/buku', [BukuKatalogController::class, 'index'])->name('katalog.index');
+Route::get('/buku/{buku}', [BukuKatalogController::class, 'show'])->name('katalog.show');
+
 Route::get('/buku-digital', [BukuPublikController::class, 'index'])->name('buku.index');
 Route::get('/buku-digital/baca/{file}', [BukuPublikController::class, 'baca'])->name('buku.baca');
+
+// BARU - akses publik sertifikat Reward/Badge, dikirim via link WhatsApp.
+Route::get('/sertifikat/reward/{rewardLog}', [SertifikatPublikController::class, 'reward'])->name('sertifikat.reward');
+Route::get('/sertifikat/badge/{levelBadgeLog}', [SertifikatPublikController::class, 'badge'])->name('sertifikat.badge');
 
 Route::post('/dashboard/chart-export/pdf', [ChartExportController::class, 'pdf'])
     ->middleware(['web', 'auth'])
@@ -20210,7 +20550,7 @@ Route::get('/robots.txt', function () {
         'Disallow: /dashboard',
         'Disallow: /unduh-bulk-data',
         '',
-        'Sitemap: ' . route('sitemap'),
+        'Sitemap: '.route('sitemap'),
     ];
 
     return response(implode("\n", $lines), 200, ['Content-Type' => 'text/plain']);
@@ -25654,6 +25994,54 @@ return new class extends Migration
 ```
 ---
 
+## database/migrations/2026_08_18_000001_add_sertifikat_kolom_ke_reward_logs_dan_level_badge_logs_table.php
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Menambahkan kolom sertifikat ke reward_logs dan level_badge_logs.
+ * Non-destruktif - kedua kolom nullable, tidak mengubah/menghapus data
+ * eksisting. Baris lama (sebelum migration ini) akan punya
+ * sertifikat_path = null sampai suatu saat di-backfill manual (di luar
+ * cakupan gap ini - tidak ada mekanisme backfill otomatis).
+ *
+ * Rollback aman: down() hanya drop kolom yang ditambahkan up() ini,
+ * tidak menyentuh data/kolom lain.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('reward_logs', function (Blueprint $table) {
+            $table->string('sertifikat_path')->nullable()->after('tanggal_didapat');
+            $table->string('nomor_sertifikat')->nullable()->after('sertifikat_path');
+        });
+
+        Schema::table('level_badge_logs', function (Blueprint $table) {
+            $table->string('sertifikat_path')->nullable()->after('tanggal_didapat');
+            $table->string('nomor_sertifikat')->nullable()->after('sertifikat_path');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('reward_logs', function (Blueprint $table) {
+            $table->dropColumn(['sertifikat_path', 'nomor_sertifikat']);
+        });
+
+        Schema::table('level_badge_logs', function (Blueprint $table) {
+            $table->dropColumn(['sertifikat_path', 'nomor_sertifikat']);
+        });
+    }
+};
+
+```
+---
+
 ## database/seeders/DatabaseSeeder.php
 ```php
 <?php
@@ -26837,16 +27225,43 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
     :title="'Daftar Penulis'"
     :description="'Daftar penulis buku yang tersedia di koleksi Perpustakaan Digital MTs Negeri 1 Pandeglang.'"
 >
-    <section class="max-w-6xl mx-auto px-4 py-16">
-        <h1 class="text-3xl font-bold text-teal-900 mb-8">Penulis</h1>
+    <section class="bg-white border-b">
+        <div class="max-w-6xl mx-auto px-4 py-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-teal-900">Penulis</h1>
+            <p class="mt-2 text-slate-600 max-w-2xl">Telusuri penulis dan koleksi karyanya.</p>
+
+            <form action="{{ route('authors.index') }}" method="GET" class="mt-6 max-w-lg">
+                <div class="relative">
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ $search }}"
+                        placeholder="Cari nama penulis..."
+                        class="w-full rounded-md border border-slate-300 pl-10 pr-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                    >
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.35 4.35a7.5 7.5 0 0012.3 12.3z" />
+                    </svg>
+                </div>
+                @if ($search !== '')
+                    <a href="{{ route('authors.index') }}" class="inline-block mt-2 text-xs text-slate-500 hover:text-teal-700 hover:underline">
+                        &times; Hapus pencarian "{{ $search }}"
+                    </a>
+                @endif
+            </form>
+        </div>
+    </section>
+
+    <section class="max-w-6xl mx-auto px-4 py-14">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
             @forelse ($authors as $author)
                 <a href="{{ route('authors.show', $author) }}"
-                   class="bg-white border rounded-lg p-5 text-center hover:shadow-md transition">
+                   class="bg-white border rounded-lg p-5 text-center shadow-sm hover:shadow-md transition">
                     <div class="w-24 h-24 rounded-full mx-auto bg-slate-100 overflow-hidden border">
                         @if ($author->foto)
                             <img src="{{ asset('storage/'.$author->foto) }}"
                                  alt="{{ $author->nama }}"
+                                 loading="lazy"
                                  class="w-full h-full object-cover">
                         @else
                             <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
@@ -26854,14 +27269,24 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
                             </div>
                         @endif
                     </div>
-                    <p class="mt-3 font-medium text-slate-800">{{ $author->nama }}</p>
+                    <p class="mt-3 font-medium text-slate-800 truncate" title="{{ $author->nama }}">{{ $author->nama }}</p>
                     <p class="text-sm text-slate-500">{{ $author->bukus_count }} buku</p>
                 </a>
             @empty
-                <p class="col-span-full text-center text-slate-500">Belum ada penulis.</p>
+                <div class="col-span-full text-center py-12">
+                    <p class="text-slate-500">
+                        @if ($search !== '')
+                            Tidak ada penulis yang cocok dengan "{{ $search }}".
+                        @else
+                            Belum ada penulis.
+                        @endif
+                    </p>
+                </div>
             @endforelse
         </div>
-        {{ $authors->links() }}
+        <div class="mt-8">
+            {{ $authors->links() }}
+        </div>
     </section>
 </x-layout>
 
@@ -26946,59 +27371,124 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
     :title="'Buku Digital'"
     :description="'Koleksi e-book dan audiobook digital Perpustakaan MTs Negeri 1 Pandeglang, dapat diakses publik tanpa login.'"
 >
-    <section class="max-w-6xl mx-auto px-4 py-16">
-        <h1 class="text-3xl font-bold text-teal-900 mb-8">E-Book</h1>
+    <section class="bg-white border-b">
+        <div class="max-w-6xl mx-auto px-4 py-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-teal-900">Buku Digital</h1>
+            <p class="mt-2 text-slate-600 max-w-2xl">
+                Cari dan baca koleksi e-book serta audiobook kami secara gratis.
+            </p>
+
+            <form action="{{ route('buku.index') }}" method="GET" class="mt-6 max-w-lg">
+                <div class="relative">
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ $search }}"
+                        placeholder="Cari judul atau penulis..."
+                        class="w-full rounded-md border border-slate-300 pl-10 pr-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                    >
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.35 4.35a7.5 7.5 0 0012.3 12.3z" />
+                    </svg>
+                </div>
+                @if ($search !== '')
+                    <a href="{{ route('buku.index') }}" class="inline-block mt-2 text-xs text-slate-500 hover:text-teal-700 hover:underline">
+                        &times; Hapus pencarian "{{ $search }}"
+                    </a>
+                @endif
+            </form>
+        </div>
+    </section>
+
+    <section class="max-w-6xl mx-auto px-4 py-14">
+        <h2 class="text-2xl font-semibold text-teal-900 mb-6">E-Book</h2>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
             @forelse ($ebooks as $buku)
-                <div class="bg-white border rounded-lg overflow-hidden">
+                <div class="bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
                     <div class="aspect-[3/4] bg-slate-100">
                         @if ($buku->cover)
                             <img src="{{ asset('storage/'.$buku->cover) }}"
                                  alt="{{ $buku->judul }}"
+                                 loading="lazy"
                                  class="w-full h-full object-cover">
+                        @else
+                            <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+                                Tanpa Sampul
+                            </div>
                         @endif
                     </div>
                     <div class="p-3">
-                        <p class="font-medium text-sm text-slate-700 truncate">{{ $buku->judul }}</p>
+                        <p class="font-medium text-sm text-slate-800 truncate" title="{{ $buku->judul }}">{{ $buku->judul }}</p>
+                        @if ($buku->penulis)
+                            <p class="text-xs text-slate-500 truncate">{{ $buku->penulis }}</p>
+                        @endif
                         @foreach ($buku->files->where('jenis', \App\Enums\JenisFileBuku::Pdf) as $file)
                             <a href="{{ route('buku.baca', $file) }}"
-                               class="inline-block mt-2 text-sm text-teal-700 hover:underline">
+                               class="inline-flex items-center gap-1 mt-3 text-sm font-medium text-teal-700 hover:text-teal-900 hover:underline">
                                 Baca PDF
                             </a>
                         @endforeach
                     </div>
                 </div>
             @empty
-                <p class="col-span-full text-center text-slate-500">Belum ada e-book.</p>
+                <div class="col-span-full text-center py-12">
+                    <p class="text-slate-500">
+                        @if ($search !== '')
+                            Tidak ada e-book yang cocok dengan "{{ $search }}".
+                        @else
+                            Belum ada e-book.
+                        @endif
+                    </p>
+                </div>
             @endforelse
         </div>
-        {{ $ebooks->links() }}
+        <div class="mt-8">
+            {{ $ebooks->links() }}
+        </div>
 
-        <h1 class="text-3xl font-bold text-teal-900 mt-16 mb-8">Audiobook</h1>
+        <h2 class="text-2xl font-semibold text-teal-900 mt-16 mb-6">Audiobook</h2>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
             @forelse ($audiobooks as $buku)
-                <div class="bg-white border rounded-lg overflow-hidden">
+                <div class="bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
                     <div class="aspect-[3/4] bg-slate-100">
                         @if ($buku->cover)
                             <img src="{{ asset('storage/'.$buku->cover) }}"
                                  alt="{{ $buku->judul }}"
+                                 loading="lazy"
                                  class="w-full h-full object-cover">
+                        @else
+                            <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+                                Tanpa Sampul
+                            </div>
                         @endif
                     </div>
                     <div class="p-3">
-                        <p class="font-medium text-sm text-slate-700 truncate">{{ $buku->judul }}</p>
+                        <p class="font-medium text-sm text-slate-800 truncate" title="{{ $buku->judul }}">{{ $buku->judul }}</p>
+                        @if ($buku->penulis)
+                            <p class="text-xs text-slate-500 truncate">{{ $buku->penulis }}</p>
+                        @endif
                         @foreach ($buku->files->filter(fn ($f) => $f->jenis->isAudio()) as $file)
-                            <audio controls class="w-full mt-2">
+                            <audio controls preload="none" class="w-full mt-3">
                                 <source src="{{ $file->url() }}">
                             </audio>
                         @endforeach
                     </div>
                 </div>
             @empty
-                <p class="col-span-full text-center text-slate-500">Belum ada audiobook.</p>
+                <div class="col-span-full text-center py-12">
+                    <p class="text-slate-500">
+                        @if ($search !== '')
+                            Tidak ada audiobook yang cocok dengan "{{ $search }}".
+                        @else
+                            Belum ada audiobook.
+                        @endif
+                    </p>
+                </div>
             @endforelse
         </div>
-        {{ $audiobooks->links() }}
+        <div class="mt-8">
+            {{ $audiobooks->links() }}
+        </div>
     </section>
 </x-layout>
 
@@ -28846,15 +29336,17 @@ window.ChartExport = window.ChartExport || (function () {
     <section class="max-w-6xl mx-auto px-4 py-16">
         <div class="flex justify-between items-end mb-8">
             <h2 class="text-2xl font-semibold text-teal-900">Buku Terbaru</h2>
-            <a href="{{ route('buku.index') }}" class="text-sm text-teal-700 hover:underline">Lihat semua</a>
+            <a href="{{ route('katalog.index') }}" class="text-sm text-teal-700 hover:underline">Lihat semua</a>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
             @forelse ($bukuTerbaru as $buku)
-                <div class="bg-white border rounded-lg overflow-hidden shadow-sm">
+                <a href="{{ route('katalog.show', $buku) }}"
+                   class="bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
                     <div class="aspect-[3/4] bg-slate-100">
                         @if ($buku->cover)
                             <img src="{{ asset('storage/'.$buku->cover) }}"
                                  alt="{{ $buku->judul }}"
+                                 loading="lazy"
                                  class="w-full h-full object-cover">
                         @else
                             <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
@@ -28863,7 +29355,7 @@ window.ChartExport = window.ChartExport || (function () {
                         @endif
                     </div>
                     <p class="p-3 font-medium text-sm text-slate-700 truncate">{{ $buku->judul }}</p>
-                </div>
+                </a>
             @empty
                 <p class="col-span-full text-center text-slate-500">Belum ada buku.</p>
             @endforelse
@@ -28895,6 +29387,189 @@ window.ChartExport = window.ChartExport || (function () {
                 @empty
                     <p class="col-span-full text-center text-slate-500">Belum ada penulis.</p>
                 @endforelse
+            </div>
+        </div>
+    </section>
+</x-layout>
+
+```
+---
+
+## resources/views/katalog/index.blade.php
+```blade
+<x-layout
+    :title="'Katalog Buku'"
+    :description="'Katalog koleksi buku fisik Perpustakaan MTs Negeri 1 Pandeglang.'"
+>
+    <section class="bg-white border-b">
+        <div class="max-w-6xl mx-auto px-4 py-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-teal-900">Katalog Buku</h1>
+            <p class="mt-2 text-slate-600 max-w-2xl">
+                Jelajahi koleksi buku fisik perpustakaan kami.
+            </p>
+
+            <form action="{{ route('katalog.index') }}" method="GET" class="mt-6 max-w-lg">
+                <div class="relative">
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ $search }}"
+                        placeholder="Cari judul atau penulis..."
+                        class="w-full rounded-md border border-slate-300 pl-10 pr-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                    >
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.35 4.35a7.5 7.5 0 0012.3 12.3z" />
+                    </svg>
+                </div>
+                @if ($search !== '')
+                    <a href="{{ route('katalog.index') }}" class="inline-block mt-2 text-xs text-slate-500 hover:text-teal-700 hover:underline">
+                        &times; Hapus pencarian "{{ $search }}"
+                    </a>
+                @endif
+            </form>
+        </div>
+    </section>
+
+    <section class="max-w-6xl mx-auto px-4 py-14">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            @forelse ($bukus as $buku)
+                <a href="{{ route('katalog.show', $buku) }}"
+                   class="bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
+                    <div class="aspect-[3/4] bg-slate-100">
+                        @if ($buku->cover)
+                            <img src="{{ asset('storage/'.$buku->cover) }}"
+                                 alt="{{ $buku->judul }}"
+                                 loading="lazy"
+                                 class="w-full h-full object-cover">
+                        @else
+                            <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+                                Tanpa Sampul
+                            </div>
+                        @endif
+                    </div>
+                    <div class="p-3">
+                        <p class="font-medium text-sm text-slate-800 truncate" title="{{ $buku->judul }}">{{ $buku->judul }}</p>
+                        @if ($buku->penulis)
+                            <p class="text-xs text-slate-500 truncate">{{ $buku->penulis }}</p>
+                        @endif
+                        <p class="text-xs text-teal-700 mt-2">
+                            {{ $buku->eksemplars_count }} eksemplar
+                        </p>
+                    </div>
+                </a>
+            @empty
+                <div class="col-span-full text-center py-12">
+                    <p class="text-slate-500">
+                        @if ($search !== '')
+                            Tidak ada buku yang cocok dengan "{{ $search }}".
+                        @else
+                            Belum ada buku.
+                        @endif
+                    </p>
+                </div>
+            @endforelse
+        </div>
+        <div class="mt-8">
+            {{ $bukus->links() }}
+        </div>
+    </section>
+</x-layout>
+
+```
+---
+
+## resources/views/katalog/show.blade.php
+```blade
+<x-layout
+    :title="$buku->judul"
+    :description="\Illuminate\Support\Str::limit(strip_tags($buku->deskripsi ?? 'Detail buku '.$buku->judul.' di Perpustakaan Digital MTs Negeri 1 Pandeglang.'), 160)"
+    :og-image="$buku->cover ? asset('storage/'.$buku->cover) : null"
+>
+    @push('jsonld')
+    <script type="application/ld+json">
+    {!! json_encode(array_filter([
+        '@context' => 'https://schema.org',
+        '@type' => 'Book',
+        'name' => $buku->judul,
+        'author' => $buku->penulis,
+        'isbn' => $buku->isbn,
+        'description' => $buku->deskripsi,
+        'url' => route('katalog.show', $buku),
+        'image' => $buku->cover ? asset('storage/'.$buku->cover) : null,
+    ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}
+    </script>
+    @endpush
+
+    <section class="max-w-4xl mx-auto px-4 py-16">
+        <div class="bg-white border rounded-lg p-6 flex flex-col md:flex-row gap-6">
+            <div class="w-full md:w-56 shrink-0">
+                <div class="aspect-[3/4] bg-slate-100 rounded-md overflow-hidden">
+                    @if ($buku->cover)
+                        <img src="{{ asset('storage/'.$buku->cover) }}"
+                             alt="{{ $buku->judul }}"
+                             class="w-full h-full object-cover">
+                    @else
+                        <div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+                            Tanpa Sampul
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            <div class="flex-1">
+                <h1 class="text-2xl font-bold text-teal-900">{{ $buku->judul }}</h1>
+
+                @if ($buku->penulis)
+                    <p class="mt-1 text-slate-600">Oleh {{ $buku->penulis }}</p>
+                @endif
+
+                @if ($buku->authors->isNotEmpty())
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        @foreach ($buku->authors as $author)
+                            <a href="{{ route('authors.show', $author) }}"
+                               class="text-xs bg-teal-50 text-teal-700 px-2 py-1 rounded-full hover:bg-teal-100">
+                                {{ $author->nama }}
+                            </a>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if ($buku->kategoris->isNotEmpty())
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        @foreach ($buku->kategoris as $kategori)
+                            <span class="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">
+                                {{ $kategori->nama }}
+                            </span>
+                        @endforeach
+                    </div>
+                @endif
+
+                <dl class="mt-4 grid grid-cols-2 gap-2 text-sm text-slate-600">
+                    @if ($buku->penerbit)
+                        <div><dt class="text-slate-400">Penerbit</dt><dd>{{ $buku->penerbit }}</dd></div>
+                    @endif
+                    @if ($buku->tahun_terbit)
+                        <div><dt class="text-slate-400">Tahun Terbit</dt><dd>{{ $buku->tahun_terbit }}</dd></div>
+                    @endif
+                    @if ($buku->isbn)
+                        <div><dt class="text-slate-400">ISBN</dt><dd>{{ $buku->isbn }}</dd></div>
+                    @endif
+                    <div>
+                        <dt class="text-slate-400">Stok Tersedia</dt>
+                        <dd>{{ $buku->stokTersedia() }} dari {{ $buku->jumlahEksemplarAktif() }} eksemplar</dd>
+                    </div>
+                </dl>
+
+                @if ($buku->deskripsi)
+                    <p class="mt-4 text-slate-600 leading-relaxed">{{ $buku->deskripsi }}</p>
+                @endif
+
+                @if ($buku->files->isNotEmpty())
+                    <a href="{{ route('buku.index') }}"
+                       class="inline-block mt-6 text-sm font-medium text-teal-700 hover:underline">
+                        Buku ini juga tersedia dalam versi digital &rarr;
+                    </a>
+                @endif
             </div>
         </div>
     </section>
@@ -28980,6 +29655,7 @@ window.ChartExport = window.ChartExport || (function () {
         <div>
             <h3 class="font-semibold text-white mb-2">Tautan</h3>
             <ul class="space-y-1 text-teal-200">
+                <li><a href="{{ route('katalog.index') }}" class="hover:text-white">Buku</a></li>
                 <li><a href="{{ route('buku.index') }}" class="hover:text-white">Buku Digital</a></li>
                 <li><a href="{{ route('authors.index') }}" class="hover:text-white">Authors</a></li>
                 <li><a href="{{ route('faq') }}" class="hover:text-white">FAQ</a></li>
@@ -29009,6 +29685,7 @@ window.ChartExport = window.ChartExport || (function () {
         </a>
         <nav class="hidden md:flex gap-8 text-sm font-medium">
             <a href="{{ route('home') }}" class="hover:text-teal-200">Beranda</a>
+            <a href="{{ route('katalog.index') }}" class="hover:text-teal-200">Buku</a>
             <a href="{{ route('buku.index') }}" class="hover:text-teal-200">Buku Digital</a>
             <a href="{{ route('authors.index') }}" class="hover:text-teal-200">Authors</a>
             <a href="{{ route('faq') }}" class="hover:text-teal-200">FAQ</a>
@@ -29518,6 +30195,134 @@ window.ChartExport = window.ChartExport || (function () {
                 @endforelse
             </tbody>
         </table>
+    </div>
+</body>
+</html>
+
+```
+---
+
+## resources/views/pdf/sertifikat.blade.php
+```blade
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <title>{{ $judulSertifikat }}</title>
+    <style>
+        @font-face {
+            font-family: 'Lexend';
+            src: url('{{ public_path('fonts/pdf/lexend-regular.woff2') }}') format('woff2');
+            font-weight: 400;
+        }
+
+        @font-face {
+            font-family: 'Lexend';
+            src: url('{{ public_path('fonts/pdf/lexend-bold.woff2') }}') format('woff2');
+            font-weight: 700;
+        }
+
+        * {
+            font-family: 'Lexend', sans-serif;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 15mm 20mm;
+        }
+
+        .bingkai {
+            border: 3px solid #0f766e;
+            padding: 12mm;
+            text-align: center;
+            height: 165mm;
+        }
+
+        .label-atas {
+            font-size: 11px;
+            letter-spacing: 3px;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+
+        .judul {
+            font-size: 26px;
+            font-weight: 700;
+            color: #134e4a;
+            margin-top: 6mm;
+        }
+
+        .teks-diberikan {
+            font-size: 12px;
+            color: #475569;
+            margin-top: 10mm;
+        }
+
+        .nama-penerima {
+            font-size: 22px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-top: 4mm;
+            border-bottom: 1px solid #cbd5e1;
+            display: inline-block;
+            padding-bottom: 2mm;
+        }
+
+        .teks-atas {
+            font-size: 13px;
+            color: #475569;
+            margin-top: 8mm;
+        }
+
+        .nama-item {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0f766e;
+            margin-top: 2mm;
+        }
+
+        .deskripsi-item {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 3mm;
+            max-width: 130mm;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .footer {
+            margin-top: 16mm;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .nomor {
+            font-size: 9px;
+            color: #94a3b8;
+            margin-top: 2mm;
+        }
+    </style>
+</head>
+<body>
+    <div class="bingkai">
+        <div class="label-atas">Perpustakaan MTs Negeri 1 Pandeglang</div>
+        <div class="judul">{{ $judulSertifikat }}</div>
+
+        <div class="teks-diberikan">Diberikan kepada</div>
+        <div class="nama-penerima">{{ $namaPenerima }}</div>
+
+        <div class="teks-atas">atas pencapaian</div>
+        <div class="nama-item">{{ $namaItem }}</div>
+
+        @if ($deskripsiItem)
+            <div class="deskripsi-item">{{ $deskripsiItem }}</div>
+        @endif
+
+        <div class="footer">
+            Diterbitkan pada {{ \Illuminate\Support\Carbon::parse($tanggal)->translatedFormat('d F Y') }}
+        </div>
+        <div class="nomor">No. Sertifikat: {{ $nomorSertifikat }}</div>
     </div>
 </body>
 </html>

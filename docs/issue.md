@@ -100,8 +100,10 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- tambahkan fitur generate sertifikat untuk hadiah yang memiliki [reward, badge] berdasarkan treshold,
-- update fitur notifikasi whatsapp dan mengirimkan link sertifikat [reward, badge]
+- Satu catatan kecil yang masih terbuka dari sebelumnya, silakan diabaikan dulu kalau belum prioritas: content-disposition: inline; filename=01a011c7-....pdf memakai UUID mentah sebagai nama file, bukan nama yang manusiawi (mis. sertifikat-reward-awal.pdf).
+
+- perbaiki template sertifikat agar lebih indah dan professional menggunakan ukuran kertas A4 lengan landscape orientation
+
 ---
 
 Lanjutkan/selesaikan implementasi proyek ini sesuai seluruh aturan di atas. Untuk setiap gap, jika penyelesaiannya memerlukan keputusan desain yang berdampak ke skema database, keamanan/otorisasi (Policy/Shield), atau kompatibilitas device RFID/firmware yang sudah terpasang di lapangan, **tanyakan secara eksplisit sebelum menulis kode** - jangan menebak lalu menyerahkan perubahan yang berisiko merusak data, akses user, atau koneksi device yang sudah berjalan di production.

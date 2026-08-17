@@ -258,11 +258,13 @@
 │   │   │   ├── Api
 │   │   │   │   └── PerpustakaanDeviceController.php
 │   │   │   ├── AuthorPublikController.php
+│   │   │   ├── BukuKatalogController.php
 │   │   │   ├── BukuPublikController.php
 │   │   │   ├── BulkDataJobDownloadController.php
 │   │   │   ├── ChartExportController.php
 │   │   │   ├── Controller.php
 │   │   │   ├── LandingPageController.php
+│   │   │   ├── SertifikatPublikController.php
 │   │   │   └── SitemapController.php
 │   │   └── Middleware
 │   │       └── AuthenticateDeviceApiKey.php
@@ -354,6 +356,7 @@
 │   │   ├── PeminjamanService.php
 │   │   ├── PointService.php
 │   │   ├── RfidResolverService.php
+│   │   ├── SertifikatService.php
 │   │   ├── SnapshotHarianService.php
 │   │   ├── UserImportResolverService.php
 │   │   └── WhatsappService.php
@@ -462,7 +465,8 @@
 │   │   ├── 2026_08_04_000002_create_bulk_data_jobs_table.php
 │   │   ├── 2026_08_05_000001_create_authors_table.php
 │   │   ├── 2026_08_05_000002_create_author_buku_table.php
-│   │   └── 2026_08_05_000003_create_buku_files_table.php
+│   │   ├── 2026_08_05_000003_create_buku_files_table.php
+│   │   └── 2026_08_18_000001_add_sertifikat_kolom_ke_reward_logs_dan_level_badge_logs_table.php
 │   ├── seeders
 │   │   ├── DatabaseSeeder.php
 │   │   ├── SettingSeeder.php
@@ -498,6 +502,9 @@
 │       │       ├── global-logo-style.blade.php
 │       │       ├── global-request-error-guard.blade.php
 │       │       └── sirkulasi-topbar-button.blade.php
+│       ├── katalog
+│       │   ├── index.blade.php
+│       │   └── show.blade.php
 │       ├── livewire
 │       │   └── riwayat-sirkulasi-harian.blade.php
 │       ├── partials
@@ -506,7 +513,8 @@
 │       ├── pdf
 │       │   ├── chart-export.blade.php
 │       │   ├── label-barcode.blade.php
-│       │   └── laporan-bulanan.blade.php
+│       │   ├── laporan-bulanan.blade.php
+│       │   └── sertifikat.blade.php
 │       ├── author-detail.blade.php
 │       ├── authors.blade.php
 │       ├── faq.blade.php
@@ -540,4 +548,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-121 directories, 420 files
+122 directories, 427 files

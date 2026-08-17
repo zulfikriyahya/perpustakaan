@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthorPublikController;
+use App\Http\Controllers\BukuKatalogController;
 use App\Http\Controllers\BukuPublikController;
 use App\Http\Controllers\BulkDataJobDownloadController;
 use App\Http\Controllers\ChartExportController;
@@ -23,6 +24,10 @@ Route::get('/tentang', [LandingPageController::class, 'tentang'])->name('tentang
 
 Route::get('/authors', [AuthorPublikController::class, 'index'])->name('authors.index');
 Route::get('/authors/{author}', [AuthorPublikController::class, 'show'])->name('authors.show');
+
+// BARU - katalog buku fisik, terpisah dari buku digital (route di bawah).
+Route::get('/buku', [BukuKatalogController::class, 'index'])->name('katalog.index');
+Route::get('/buku/{buku}', [BukuKatalogController::class, 'show'])->name('katalog.show');
 
 Route::get('/buku-digital', [BukuPublikController::class, 'index'])->name('buku.index');
 Route::get('/buku-digital/baca/{file}', [BukuPublikController::class, 'baca'])->name('buku.baca');

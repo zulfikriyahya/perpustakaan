@@ -100,8 +100,8 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- Tambahkan Validasi dan regex Format Nomor Telepon Indonesia. [628xxx,08xxxx,8xxxxx] secara internal agar tidak mengirimkan format salah ke whatsapp gateway (resiko banned nomor whatsapp)
-
+- tambahkan fitur generate sertifikat untuk hadiah yang memiliki [reward, badge] berdasarkan treshold,
+- update fitur notifikasi whatsapp dan mengirimkan link sertifikat [reward, badge]
 ---
 
 Lanjutkan/selesaikan implementasi proyek ini sesuai seluruh aturan di atas. Untuk setiap gap, jika penyelesaiannya memerlukan keputusan desain yang berdampak ke skema database, keamanan/otorisasi (Policy/Shield), atau kompatibilitas device RFID/firmware yang sudah terpasang di lapangan, **tanyakan secara eksplisit sebelum menulis kode** - jangan menebak lalu menyerahkan perubahan yang berisiko merusak data, akses user, atau koneksi device yang sudah berjalan di production.

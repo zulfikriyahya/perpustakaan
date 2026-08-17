@@ -3,14 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Models\Author;
+use Illuminate\Http\Request;
 
 class AuthorPublikController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $authors = Author::query()->withCount('bukus')->paginate(12);
+        $search = trim((string) $request->query('q', ''));
 
-        return view('authors', compact('authors'));
+        $authors = Author::query()
+            ->withCount('bukus')
+            ->when($search !== '', fn($q) => $q->where('nama', 'like', "%{$search}%"))
+            ->orderBy('nama')
+            ->paginate(12)
+            ->withQueryString();
+
+        return view('authors', compact('authors', 'search'));
     }
 
     public function show(Author $author)

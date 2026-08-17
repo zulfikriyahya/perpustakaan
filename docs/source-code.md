@@ -2520,8 +2520,10 @@ use App\Enums\RoleUser;
 use App\Models\KelasTahunPelajaran;
 use App\Models\User;
 use App\Rules\FormatKartuRfid;
+use App\Rules\FormatNomorTelepon;
 use App\Services\KenaikanKelasService;
 use App\Services\UserImportResolverService;
+use App\Support\NomorTeleponFormatter;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -2596,42 +2598,43 @@ class UserImporter extends Importer
                 ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('VII A')
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan (wajib jika kelas_nama diisi)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('Non_Jurusan')
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('2026/2027')
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example(''),
             ImportColumn::make('no_telepon')
                 ->label('No. Telepon')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255'])
+                ->helperText('Boleh format apa pun (+62, spasi, strip) - otomatis dinormalisasi jadi 628xxxxxxxxx saat disimpan.')
+                ->rules(['required', 'string', 'max:255', new FormatNomorTelepon])
                 ->example('081234567890'),
             ImportColumn::make('no_kartu_rfid')
                 ->label('No. kartu RFID (opsional)')
-                ->helperText('PERHATIAN: kosongkan HANYA jika memang ingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
+                ->helperText('PERHATIAN: kosongkan HANYA jika memangingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
                 ->rules(['nullable', new FormatKartuRfid])
                 ->example('1234567890'),
             ImportColumn::make('password')
                 ->label('Password (opsional)')
-                ->helperText('Isi plaintext (otomatis di-hash saat disimpan). Kosongkan: user baru tetap dapat password random, user lama password TIDAK berubah.')
+                ->helperText('Isi plaintext (otomatis di-hash saat disimpan). Kosongkan: user baru tetap dapat password random, user lamapassword TIDAK berubah.')
                 ->rules(['nullable', 'string', 'min:8', 'max:255'])
                 ->example(''),
             ImportColumn::make('avatar')
                 ->label('Avatar - URL atau path (opsional)')
-                ->helperText('Isi URL gambar (https://...) atau path file yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
+                ->helperText('Isi URL gambar (https://...) atau pathfile yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
                 ->rules(['nullable', 'string', 'max:2048'])
                 ->example('https://contoh-sekolah.id/foto/siswa1.jpg')
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
         ];
     }
 
@@ -2672,6 +2675,13 @@ class UserImporter extends Importer
         if ($kartuDihapus) {
             Cache::increment("import-{$this->import->id}-kartu-dihapus");
         }
+
+        // dinormalisasi jadi 628xxxxxxxxx - rules() di kolom sudah memastikan
+        // FormatNomorTelepon lolos, jadi normalisasi() di sini seharusnya
+        // tidak pernah null, tapi tetap di-guard defensif (fallback ke nilai
+        // asli) supaya import tidak fatal error jika suatu saat asumsi ini keliru.
+        $nomorTernormalisasi = NomorTeleponFormatter::normalisasi($this->data['no_telepon'] ?? null);
+        $this->record->no_telepon = $nomorTernormalisasi ?? $this->data['no_telepon'];
     }
 
     protected function afterSave(): void
@@ -10256,7 +10266,11 @@ namespace App\Filament\Resources\UserResource\Pages;
 use App\Filament\Resources\UserResource;
 use App\Models\KelasTahunPelajaran;
 use App\Services\KenaikanKelasService;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
+use Filament\Support\Exceptions\Halt;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 
 class CreateUser extends CreateRecord
 {
@@ -10285,6 +10299,38 @@ class CreateUser extends CreateRecord
 
     protected ?string $assignKtpId = null;
 
+    /**
+     * BARU (iterasi ini) - jaring terakhir untuk unique constraint DB
+     * pada 'no_telepon' (juga menutupi 'nisn'/'nip'/'no_kartu_rfid' yang
+     * unique) yang lolos validasi form Filament tapi tetap gagal di level
+     * database - paling sering terjadi untuk no_telepon karena normalisasi
+     * (lihat NomorTeleponFormatter) bisa membuat dua input BERBEDA jadi
+     * SAMA setelah dinormalisasi, sementara unique() Filament membandingkan
+     * terhadap nilai mentah yang tersimpan (termasuk data lama yang belum
+     * pernah dinormalisasi). Tanpa ini, QueryException akan menghasilkan
+     * halaman error generik/blank bagi user - digantikan Notification yang
+     * jelas + Halt agar form tidak jadi ter-reset/hilang isian.
+     */
+    protected function handleRecordCreation(array $data): Model
+    {
+        try {
+            return parent::handleRecordCreation($data);
+        } catch (QueryException $e) {
+            if ((string) $e->getCode() !== '23000') {
+                throw $e;
+            }
+
+            Notification::make()
+                ->danger()
+                ->title('Gagal menyimpan User')
+                ->body('Salah satu data (No. Telepon/NISN/NIP/No. Kartu RFID) sudah dipakai user lain yang masih aktif. Periksa kembali isian, khususnya No. Telepon - kemungkinan sudah terdaftar dalam format penulisan yang berbeda.')
+                ->persistent()
+                ->send();
+
+            throw new Halt;
+        }
+    }
+
     protected function afterCreate(): void
     {
         if (! $this->assignKtpId) {
@@ -10310,7 +10356,11 @@ namespace App\Filament\Resources\UserResource\Pages;
 
 use App\Filament\Resources\UserResource;
 use Filament\Actions\DeleteAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Support\Exceptions\Halt;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 
 class EditUser extends EditRecord
 {
@@ -10325,7 +10375,7 @@ class EditUser extends EditRecord
     {
         return [
             DeleteAction::make()
-                ->hidden(fn ($record) => $record && $record->hasRole('super_admin')),
+                ->hidden(fn($record) => $record && $record->hasRole('super_admin')),
         ];
     }
 
@@ -10364,6 +10414,33 @@ class EditUser extends EditRecord
         }
 
         return $data;
+    }
+
+    /**
+     * BARU (iterasi ini) - jaring terakhir untuk unique constraint DB,
+     * pasangan dari CreateUser::handleRecordCreation() - lihat docblock
+     * di sana untuk alasan lengkap (normalisasi no_telepon bisa membuat
+     * dua nilai berbeda jadi sama, unique() form tidak selalu menangkap
+     * ini terhadap data lama yang belum ternormalisasi).
+     */
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        try {
+            return parent::handleRecordUpdate($record, $data);
+        } catch (QueryException $e) {
+            if ((string) $e->getCode() !== '23000') {
+                throw $e;
+            }
+
+            Notification::make()
+                ->danger()
+                ->title('Gagal menyimpan perubahan User')
+                ->body('Salah satu data (No. Telepon/NISN/NIP/No. Kartu RFID) sudah dipakai user lain yang masih aktif. Periksa kembali isian, khususnya No. Telepon - kemungkinan sudah terdaftar dalam format penulisan yang berbeda.')
+                ->persistent()
+                ->send();
+
+            throw new Halt;
+        }
     }
 }
 
@@ -10419,7 +10496,9 @@ use App\Models\KelasTahunPelajaran;
 use App\Models\Peminjaman;
 use App\Models\User;
 use App\Rules\FormatKartuRfid;
+use App\Rules\FormatNomorTelepon;
 use App\Services\KenaikanKelasService;
+use App\Support\NomorTeleponFormatter;
 use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -10482,7 +10561,7 @@ class UserResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        $isProtected = fn (callable $get) => static::isTargetSuperAdmin($get);
+        $isProtected = fn(callable $get) => static::isTargetSuperAdmin($get);
 
         return $schema->components([
             Section::make('Informasi Akun')
@@ -10498,7 +10577,7 @@ class UserResource extends Resource
                             'max' => 'Nama maksimal 255 karakter.',
                         ]),
                     Select::make('role')
-                        ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
+                        ->options(collect(RoleUser::cases())->mapWithKeys(fn($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))]))
                         ->required()
                         ->live()
                         ->hidden($isProtected)
@@ -10514,18 +10593,18 @@ class UserResource extends Resource
                         }),
                     Select::make('jenis_kelamin')
                         ->label('Jenis Kelamin')
-                        ->options(collect(JenisKelamin::cases())->mapWithKeys(fn ($j) => [$j->value => $j->label()]))
+                        ->options(collect(JenisKelamin::cases())->mapWithKeys(fn($j) => [$j->value => $j->label()]))
                         ->native(false)
                         ->hidden($isProtected),
                     TextInput::make('password')
                         ->password()
                         ->revealable()
-                        ->required(fn (string $operation) => $operation === 'create')
-                        ->dehydrated(fn (?string $state) => filled($state))
+                        ->required(fn(string $operation) => $operation === 'create')
+                        ->dehydrated(fn(?string $state) => filled($state))
                         ->maxLength(255)
                         ->helperText('Kosongkan jika tidak ingin mengubah password.')
                         ->validationMessages([
-                            'required' => 'Password wajib diisi saat membuat user baru.',
+                            'required' => 'Password wajib diisi saatmembuat user baru.',
                             'max' => 'Password maksimal 255 karakter.',
                         ]),
                     FileUpload::make('avatar')
@@ -10541,20 +10620,20 @@ class UserResource extends Resource
                 ->schema([
                     TextInput::make('nisn')
                         ->label('NISN')
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
-                        ->visible(fn (callable $get) => $get('role') === RoleUser::Siswa->value)
-                        ->dehydrated(fn (callable $get) => $get('role') === RoleUser::Siswa->value)
+                        ->visible(fn(callable $get) => $get('role') === RoleUser::Siswa->value)
+                        ->dehydrated(fn(callable $get) => $get('role') === RoleUser::Siswa->value)
                         ->validationMessages([
-                            'unique' => 'NISN ini sudah dipakai user lain yang masih aktif.',
+                            'unique' => 'NISN ini sudah dipakai userlain yang masih aktif.',
                             'max' => 'NISN maksimal 255 karakter.',
                         ]),
                     TextInput::make('nip')
                         ->label('NIP')
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
-                        ->visible(fn (callable $get) => $get('role') !== RoleUser::Siswa->value)
-                        ->dehydrated(fn (callable $get) => $get('role') !== RoleUser::Siswa->value)
+                        ->visible(fn(callable $get) => $get('role') !== RoleUser::Siswa->value)
+                        ->dehydrated(fn(callable $get) => $get('role') !== RoleUser::Siswa->value)
                         ->validationMessages([
                             'unique' => 'NIP ini sudah dipakai user lain yang masih aktif.',
                             'max' => 'NIP maksimal 255 karakter.',
@@ -10574,9 +10653,25 @@ class UserResource extends Resource
                     TextInput::make('no_telepon')
                         ->label('No. Telepon')
                         ->required()
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->live(onBlur: true)
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
                         ->tel()
+                        ->rules([new FormatNomorTelepon])
+                        ->afterStateUpdated(function (?string $state, callable $set) {
+                            // Dinormalisasi SAAT BLUR (bukan tiap ketik, supaya
+                            // kursor tidak lompat) - dilakukan di sini (bukan
+                            // cuma di dehydrateStateUsing) supaya validasi
+                            // unique() di bawah membandingkan nilai yang
+                            // SUDAH ternormalisasi terhadap data yang juga
+                            // ternormalisasi di DB (user baru/edit lain yang
+                            // lewat path ini). Data lama yang belum pernah
+                            // ternormalisasi tetap jadi celah yang diketahui
+                            // (lihat TODO di bawah), bukan diam-diam diabaikan.
+                            $set('no_telepon', NomorTeleponFormatter::normalisasi($state) ?? $state);
+                        })
+                        ->dehydrateStateUsing(fn(?string $state) => NomorTeleponFormatter::normalisasi($state) ?? $state)
+                        ->helperText('Boleh diketik format apa pun (mis. +62, spasi, strip) - otomatis dinormalisasi jadi 628xxxxxxxxx saat pindah field/simpan.')
                         ->validationMessages([
                             'required' => 'No. telepon wajib diisi (dipakai untuk notifikasi WhatsApp).',
                             'unique' => 'No. telepon ini sudah dipakai user lain yang masih aktif.',
@@ -10584,7 +10679,7 @@ class UserResource extends Resource
                         ]),
                     TextInput::make('no_kartu_rfid')
                         ->label('No. Kartu RFID')
-                        ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at'))
                         ->maxLength(255)
                         ->rules([new FormatKartuRfid])
                         ->helperText('Harus persis 10 digit angka - sesuai kontrak firmware Attendance Machine.')
@@ -10600,7 +10695,7 @@ class UserResource extends Resource
                 ->schema([
                     Placeholder::make('kelas_tahun_pelajaran_id')
                         ->label('Kelas (Tahun Pelajaran)')
-                        ->content(fn (?User $record) => $record?->kelasTahunPelajaran
+                        ->content(fn(?User $record) => $record?->kelasTahunPelajaran
                             ? "{$record->kelasTahunPelajaran->kelas->nama} - {$record->kelasTahunPelajaran->tahunPelajaran->nama}"
                             : 'Belum di-assign - gunakan aksi "Assign ke Kelas" di daftar User.')
                         ->visibleOn('edit'),
@@ -10610,8 +10705,8 @@ class UserResource extends Resource
                             KelasTahunPelajaran::query()
                                 ->with(['kelas', 'tahunPelajaran'])
                                 ->get()
-                                ->mapWithKeys(fn (KelasTahunPelajaran $ktp) => [
-                                    $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
+                                ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
+                                    $ktp->id => "{$ktp->kelas->nama}- {$ktp->tahunPelajaran->nama}",
                                 ])
                         )
                         ->searchable()
@@ -10619,7 +10714,7 @@ class UserResource extends Resource
                         ->dehydrated()
                         ->visibleOn('create'),
                     Select::make('status_akademik')
-                        ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
+                        ->options(collect(StatusAkademik::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', ' ', $s->value))]))
                         ->disabled()
                         ->dehydrated(false)
                         ->helperText('Berubah otomatis lewat proses Kenaikan Kelas / assignment, tidak bisa diedit manual di sini.')
@@ -10634,17 +10729,17 @@ class UserResource extends Resource
             ->headerActions([
                 ImportAction::make()
                     ->importer(UserImporter::class)
-                    ->authorize(fn () => auth()->user()?->can('create', User::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('create', User::class) ?? false),
                 ExportAction::make()
                     ->exporter(UserExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', User::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', User::class) ?? false),
             ])
             ->columns([
                 ImageColumn::make('avatar')->disk('public')->circular(),
                 TextColumn::make('nama')->searchable()->sortable(),
                 TextColumn::make('role')
                     ->badge()
-                    ->color(fn (RoleUser $state) => match ($state) {
+                    ->color(fn(RoleUser $state) => match ($state) {
                         RoleUser::Admin => 'danger',
                         RoleUser::Pustakawan => 'warning',
                         RoleUser::Pegawai => 'info',
@@ -10655,7 +10750,7 @@ class UserResource extends Resource
                 TextColumn::make('kelasTahunPelajaran.kelas.nama')->label('Kelas')->toggleable()->placeholder('-'),
                 TextColumn::make('status_akademik')
                     ->badge()->toggleable()
-                    ->color(fn (StatusAkademik $state) => match ($state) {
+                    ->color(fn(StatusAkademik $state) => match ($state) {
                         StatusAkademik::Aktif => 'success',
                         StatusAkademik::Lulus => 'info',
                         StatusAkademik::Keluar => 'gray',
@@ -10672,18 +10767,18 @@ class UserResource extends Resource
             ->filters([
                 TrashedFilter::make(),
                 SelectFilter::make('role')
-                    ->options(collect(RoleUser::cases())->mapWithKeys(fn ($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
+                    ->options(collect(RoleUser::cases())->mapWithKeys(fn($r) => [$r->value => ucfirst(str_replace('_', ' ', $r->value))])),
                 SelectFilter::make('status_akademik')
-                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn ($s) => [$s->value => ucfirst(str_replace('_', '', $s->value))])),
+                    ->options(collect(StatusAkademik::cases())->mapWithKeys(fn($s) => [$s->value => ucfirst(str_replace('_', '', $s->value))])),
                 TernaryFilter::make('status_suspend')->label('Status Suspend'),
             ])
             ->recordActions([
                 DeleteAction::make()
-                    ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
+                    ->authorize(fn(User $record) => ! $record->hasRole('super_admin')
                         && (auth()->user()?->can('delete', $record) ?? false)),
                 RestoreAction::make(),
                 ForceDeleteAction::make()
-                    ->authorize(fn (User $record) => ! $record->hasRole('super_admin')
+                    ->authorize(fn(User $record) => ! $record->hasRole('super_admin')
                         && (auth()->user()?->can('forceDelete', $record) ?? false))
                     ->action(function (User $record) {
                         $adaPeminjamanAktif = Peminjaman::query()
@@ -10721,7 +10816,7 @@ class UserResource extends Resource
                                 KelasTahunPelajaran::query()
                                     ->with(['kelas', 'tahunPelajaran'])
                                     ->get()
-                                    ->mapWithKeys(fn (KelasTahunPelajaran $ktp) => [
+                                    ->mapWithKeys(fn(KelasTahunPelajaran $ktp) => [
                                         $ktp->id => "{$ktp->kelas->nama} - {$ktp->tahunPelajaran->nama}",
                                     ])
                             )
@@ -10733,28 +10828,28 @@ class UserResource extends Resource
                     ->action(function (Collection $records, array $data) {
                         $ktp = KelasTahunPelajaran::query()->findOrFail($data['kelas_tahun_pelajaran_id']);
                         $service = app(KenaikanKelasService::class);
-                        $records->each(fn (User $user) => $service->assignKelas($user, $ktp));
+                        $records->each(fn(User $user) => $service->assignKelas($user, $ktp));
 
-                        Notification::make()->success()->title($records->count().' user berhasil di-assign ke kelas.')->send();
+                        Notification::make()->success()->title($records->count() . ' user berhasil di-assign ke kelas.')->send();
                     })
                     ->deselectRecordsAfterCompletion(),
                 DeleteBulkAction::make()
                     ->action(function (Collection $records) {
-                        $dilindungi = $records->filter(fn (User $u) => $u->hasRole('super_admin'));
-                        $bolehHapus = $records->reject(fn (User $u) => $u->hasRole('super_admin'));
+                        $dilindungi = $records->filter(fn(User $u) => $u->hasRole('super_admin'));
+                        $bolehHapus = $records->reject(fn(User $u) => $u->hasRole('super_admin'));
                         $bolehHapus->each->delete();
 
                         if ($dilindungi->isNotEmpty()) {
                             Notification::make()
                                 ->warning()
                                 ->title('Sebagian user tidak dihapus')
-                                ->body($dilindungi->count().' user dengan role super_admin dilewati.')
+                                ->body($dilindungi->count() . ' user dengan role super_admin dilewati.')
                                 ->send();
                         }
                     })
-                    ->authorize(fn () => auth()->user()?->can('deleteAny', User::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('deleteAny', User::class) ?? false),
             ])
-            ->checkIfRecordIsSelectableUsing(fn (User $record) => ! $record->hasRole('super_admin'));
+            ->checkIfRecordIsSelectableUsing(fn(User $record) => ! $record->hasRole('super_admin'));
     }
 
     public static function getPages(): array
@@ -17257,6 +17352,46 @@ class FormatKartuRfid implements ValidationRule
 ```
 ---
 
+## app/Rules/FormatNomorTelepon.php
+```php
+<?php
+
+namespace App\Rules;
+
+use App\Support\NomorTeleponFormatter;
+use Closure;
+use Illuminate\Contracts\Validation\ValidationRule;
+
+/**
+ * Satu sumber kebenaran untuk validasi format No. Telepon (Aturan poin 3).
+ *
+ * Menerima input "kotor" apa pun (boleh mengandung '+', spasi, strip, dan
+ * prefix 08xxx / 628xxx / 8xxx) - validasi dilakukan dengan mencoba
+ * menormalisasi via NomorTeleponFormatter::normalisasi(); jika hasilnya
+ * null (tidak bisa diartikan sebagai nomor seluler Indonesia yang valid),
+ * input ditolak di sini, TIDAK PERNAH sampai tersimpan/dikirim ke gateway.
+ *
+ * Normalisasi hasil AKHIR (628xxxxxxxxx) disimpan ke DB oleh caller
+ * (UserResource::form() via dehydrateStateUsing, UserImporter via
+ * beforeSave()) - Rule ini hanya bertanggung jawab menolak/meloloskan.
+ */
+class FormatNomorTelepon implements ValidationRule
+{
+    public function validate(string $attribute, mixed $value, Closure $fail): void
+    {
+        if ($value === null || $value === '') {
+            return; // nullable-safe, required/required_without diatur terpisah di caller
+        }
+
+        if (NomorTeleponFormatter::normalisasi((string) $value) === null) {
+            $fail('Format No. Telepon tidak valid. Nomor harus bisa diartikan sebagai nomor seluler Indonesia (boleh diawali 628, 08, atau 8, dengan/tanpa "+", spasi, atau strip).');
+        }
+    }
+}
+
+```
+---
+
 ## app/Services/BukuImportResolverService.php
 ```php
 <?php
@@ -19224,6 +19359,7 @@ use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Support\NomorTeleponFormatter;
 
 /**
  * Wrapper untuk WhatsApp Gateway (whatsapp.zedlabs.id API v1, autentikasi HMAC-SHA256).
@@ -19231,10 +19367,22 @@ use Illuminate\Support\Str;
  * dokumen kontrak API bagian 2.1. Jangan format ulang body setelah signing.
  *
  * Kredensial SEKARANG dibaca dari Setting (grup Kredensial, lihat
- * PengaturanSistem) - dengan FALLBACK ke config()/.env jika Setting belum
+ * PengaturanSistem) - dengan FALLBACK ke config()/.env jika Settingbelum
  * diisi (mis. fresh install belum sempat dikonfigurasi Admin lewat panel).
  * Operator `?:` dipakai (bukan `??`) karena Setting::get() bisa
  * mengembalikan string kosong '' yang harus tetap dianggap "belum diisi".
+ *
+ * NORMALISASI NOMOR (baru, iterasi ini): recipient SELALU dinormalisasi ke
+ * format 62xxxxxxxxxx (tanpa '+') sebelum dikirim ke gateway - lihat
+ * normalisasiNomor(). Ini adalah SAFETY NET di satu titik terpusat (Aturan
+ * poin 3), independen dari FormatNomorTelepon (validasi form/import) -
+ * karena data lama yang tersimpan sebelum Rule ini ada (mis. dari import
+ * lama, atau format '0'/'8' tanpa prefix) tetap bisa lolos ke sini lewat
+ * User.no_telepon yang belum sempat divalidasi ulang (dikonfirmasi: data
+ * lama tidak dibackfill). Jika setelah normalisasi hasilnya TETAP tidak
+ * sesuai pola nomor seluler Indonesia, pengiriman digagalkan PERMANEN
+ * (bukan dikirim mentah ke gateway) - mencegah resiko banned nomor WA
+ * gateway karena format salah.
  */
 class WhatsappService
 {
@@ -19268,9 +19416,20 @@ class WhatsappService
         ?array $media = null,
         ?string $referenceId = null,
     ): array {
+        $recipientTernormalisasi = NomorTeleponFormatter::normalisasi($recipient);
+
+        if ($recipientTernormalisasi === null) {
+            Log::error("WhatsappService: recipient '{$recipient}' tidak bisa dinormalisasi menjadi format nomor seluler Indonesia yang valid (628xxxxxxxxx) - pengiriman DIBATALKAN, tidak diteruskan ke gateway, untuk mencegah resiko banned nomor.");
+
+            // dihitung sebagai kegagalan permanen (status 400) oleh
+            // KirimNotifikasiWhatsapp::STATUS_PERMANEN - retry tidak akan
+            // pernah memperbaiki format nomor yang salah.
+            throw new WhatsappGatewayException(400, "Format nomor tujuan '{$recipient}' tidak valid setelah normalisasi.");
+        }
+
         $body = [
             'template_code' => $templateCode,
-            'recipient' => $recipient,
+            'recipient' => $recipientTernormalisasi,
             'variables' => $variables,
             'media' => $media,
         ];
@@ -19330,6 +19489,27 @@ class WhatsappService
     }
 
     /**
+     * Normalisasi nomor ke format baku pengiriman gateway: 62xxxxxxxxxx
+     * (tanpa '+', tanpa spasi/strip). Menangani 3 pola yang divalidasi
+     * FormatNomorTelepon (628xxx, 08xxx, 8xxx) SEKALIGUS input "kotor"
+     * dari data lama (mis. mengandung spasi/strip/'+').
+     */
+    protected function normalisasiNomor(string $nomor): string
+    {
+        $nomor = preg_replace('/[^0-9]/', '', $nomor) ?? '';
+
+        if (str_starts_with($nomor, '0')) {
+            return '62' . substr($nomor, 1);
+        }
+
+        if (! str_starts_with($nomor, '62')) {
+            return '62' . $nomor;
+        }
+
+        return $nomor;
+    }
+
+    /**
      * @return array{0: int, 1: array<string, mixed>}
      */
     protected function kirimRequest(string $method, string $path, string $bodyString): array
@@ -19347,7 +19527,7 @@ class WhatsappService
         $response = Http::withHeaders($headers)
             ->timeout($this->timeout)
             ->withBody($bodyString, 'application/json')
-            ->send($method, $this->baseUrl.$path);
+            ->send($method, $this->baseUrl . $path);
 
         return [$response->status(), $response->json() ?? []];
     }
@@ -19835,6 +20015,72 @@ class MasterDataRegistry
                 'aktif' => fn ($r) => $r->aktif ? 'ya' : 'tidak',
             ]],
         ];
+    }
+}
+
+```
+---
+
+## app/Support/NomorTeleponFormatter.php
+```php
+<?php
+
+namespace App\Support;
+
+/**
+ * Satu sumber kebenaran normalisasi format No. Telepon Indonesia
+ * (Aturan poin 3) - dipakai oleh FormatNomorTelepon (Rule, validasi
+ * form/import) DAN WhatsappService (safety net sebelum kirim ke gateway),
+ * supaya logika normalisasi tidak terduplikasi/drift di dua tempat.
+ *
+ * Menerima input "kotor" apa pun yang masih bisa diartikan sebagai nomor
+ * seluler Indonesia - boleh mengandung '+', spasi, strip, dan salah satu
+ * prefix 08xxx / 628xxx / 8xxx, TERMASUK salah ketik '+62' diikuti '0xxx'
+ * (mis. '+62 0812...' -> digit '620812...') yang dianggap '0' redundan
+ * dan dibuang (dikonfirmasi eksplisit) - lalu mengembalikan bentuk baku
+ * 628xxxxxxxxx (tanpa '+', tanpa spasi/strip). Mengembalikan null jika
+ * setelah dibersihkan hasilnya TIDAK bisa dianggap nomor seluler
+ * Indonesia yang valid - caller (Rule/WhatsappService) yang memutuskan
+ * bagaimana menangani null (reject validasi / gagal kirim + log).
+ *
+ * TODO: GAP-SPEC - panjang digit setelah '628' dibatasi 7-11 (total nomor
+ * dengan prefix 628 jadi 10-14 digit) - sesuaikan jika ada nomor valid di
+ * luar rentang ini yang tertolak keliru.
+ */
+class NomorTeleponFormatter
+{
+    public static function normalisasi(?string $nomor): ?string
+    {
+        if ($nomor === null || trim($nomor) === '') {
+            return null;
+        }
+
+        // Buang semua karakter selain digit ('+', spasi, strip, dsb.)
+        $digitSaja = preg_replace('/[^0-9]/', '', $nomor) ?? '';
+
+        if ($digitSaja === '') {
+            return null;
+        }
+
+        // '620xxx...' - '+62' diikuti '0xxx' (salah ketik lazim, dikonfirmasi
+        // dianggap '0' redundan) - buang '0' setelah '62' lalu proses sebagai
+        // digit ber-prefix '62' biasa.
+        if (str_starts_with($digitSaja, '620')) {
+            $digitSaja = '62' . substr($digitSaja, 3);
+        }
+
+        $ternormalisasi = match (true) {
+            str_starts_with($digitSaja, '62') => $digitSaja,
+            str_starts_with($digitSaja, '0') => '62' . substr($digitSaja, 1),
+            str_starts_with($digitSaja, '8') => '62' . $digitSaja,
+            default => null,
+        };
+
+        if ($ternormalisasi === null) {
+            return null;
+        }
+
+        return preg_match('/^628[0-9]{7,11}$/', $ternormalisasi) ? $ternormalisasi : null;
     }
 }
 

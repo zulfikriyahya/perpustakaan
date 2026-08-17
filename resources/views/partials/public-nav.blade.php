@@ -5,6 +5,7 @@
         </a>
         <nav class="hidden md:flex gap-8 text-sm font-medium">
             <a href="{{ route('home') }}" class="hover:text-teal-200">Beranda</a>
+            <a href="{{ route('katalog.index') }}" class="hover:text-teal-200">Buku</a>
             <a href="{{ route('buku.index') }}" class="hover:text-teal-200">Buku Digital</a>
             <a href="{{ route('authors.index') }}" class="hover:text-teal-200">Authors</a>
             <a href="{{ route('faq') }}" class="hover:text-teal-200">FAQ</a>

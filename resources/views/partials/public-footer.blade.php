@@ -7,6 +7,7 @@
         <div>
             <h3 class="font-semibold text-white mb-2">Tautan</h3>
             <ul class="space-y-1 text-teal-200">
+                <li><a href="{{ route('katalog.index') }}" class="hover:text-white">Buku</a></li>
                 <li><a href="{{ route('buku.index') }}" class="hover:text-white">Buku Digital</a></li>
                 <li><a href="{{ route('authors.index') }}" class="hover:text-white">Authors</a></li>
                 <li><a href="{{ route('faq') }}" class="hover:text-white">FAQ</a></li>

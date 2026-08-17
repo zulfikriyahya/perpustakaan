@@ -317,175 +317,175 @@
         }
     </style>
 
-<script>
-    function registerAlpineComponentsSirkulasi() {
-        Alpine.data('transaksiCepatIdleTimer', () => ({
-            idleTimeoutMs: 10000,
-            tickMs: 100,
-            msLeft: 10000,
-            timerId: null,
-            listenersAttached: false,
+    <script>
+        function registerAlpineComponentsSirkulasi() {
+            Alpine.data('transaksiCepatIdleTimer', () => ({
+                idleTimeoutMs: 10000,
+                tickMs: 100,
+                msLeft: 10000,
+                timerId: null,
+                listenersAttached: false,
 
-            init() {
-                this.resetTimer();
+                init() {
+                    this.resetTimer();
 
-                if (! this.listenersAttached) {
-                    const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
-                    this._onActivity = () => this.resetTimer();
-                    activityEvents.forEach(evt => document.addEventListener(evt, this._onActivity));
+                    if (! this.listenersAttached) {
+                        const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
+                        this._onActivity = () => this.resetTimer();
+                        activityEvents.forEach(evt => document.addEventListener(evt, this._onActivity));
+
+                        document.addEventListener('livewire:navigating', () => {
+                            this.stopTimer();
+                            activityEvents.forEach(evt => document.removeEventListener(evt, this._onActivity));
+                        }, { once: true });
+
+                        this.listenersAttached = true;
+                    }
+                },
+
+                resetTimer() {
+                    this.msLeft = this.idleTimeoutMs;
+                    if (this.timerId) clearInterval(this.timerId);
+                    this.timerId = setInterval(() => {
+                        this.msLeft -= this.tickMs;
+                        if (this.msLeft <= 0) {
+                            this.stopTimer();
+                            this.msLeft = this.idleTimeoutMs;
+                            this.$wire.selesai();
+                        }
+                    }, this.tickMs);
+                },
+
+                stopTimer() {
+                    if (this.timerId) {
+                        clearInterval(this.timerId);
+                        this.timerId = null;
+                    }
+                },
+
+                get progress() {
+                    return Math.max(0, Math.min(1, this.msLeft / this.idleTimeoutMs));
+                },
+
+                get secondsLeft() {
+                    return Math.ceil(Math.max(0, this.msLeft) / 1000);
+                },
+
+                get ringDashoffset() {
+                    const circumference = 263.89;
+                    return circumference * (1 - this.progress);
+                },
+
+                get ringColor() {
+                    if (this.progress > 0.4) return '#22c55e';
+                    if (this.progress > 0.2) return '#eab308';
+                    return '#ef4444';
+                },
+            }));
+
+            Alpine.data('jamSirkulasi', () => ({
+                now: new Date(),
+                timerId: null,
+
+                init() {
+                    this.timerId = setInterval(() => { this.now = new Date(); }, 1000);
+                    document.addEventListener('livewire:navigating', () => {
+                        if (this.timerId) clearInterval(this.timerId);
+                    }, { once: true });
+                },
+
+                get jamDigital() {
+                    return this.now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                },
+
+                get tanggalHariIni() {
+                    return this.now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                },
+
+                get derajatJam() {
+                    return (this.now.getHours() % 12) * 30 + (this.now.getMinutes() * 0.5);
+                },
+
+                get derajatMenit() {
+                    return this.now.getMinutes() * 6 + (this.now.getSeconds() * 0.1);
+                },
+
+                get derajatDetik() {
+                    return this.now.getSeconds() * 6;
+                },
+            }));
+
+            Alpine.data('sirkulasiAutoFocus', () => ({
+                init() {
+                    const refocus = () => {
+                        const el = document.querySelector('[data-sirkulasi-scan-input]');
+                        if (el && document.activeElement !== el) {
+                            el.focus();
+                        }
+                    };
+
+                    this._refocus = refocus;
+                    document.addEventListener('livewire:morphed', refocus);
+                    document.addEventListener('click', () => setTimeout(refocus, 60));
+                    setTimeout(refocus, 150);
 
                     document.addEventListener('livewire:navigating', () => {
-                        this.stopTimer();
-                        activityEvents.forEach(evt => document.removeEventListener(evt, this._onActivity));
+                        document.removeEventListener('livewire:morphed', this._refocus);
                     }, { once: true });
 
-                    this.listenersAttached = true;
-                }
-            },
+                    // BARU (gap: "Uncaught (in promise) Object {status:null,...}"
+                    // di layar Sirkulasi standby) - reload PENUH halaman (bukan
+                    // wire:navigate) setelah kiosk benar-benar idle dalam waktu
+                    // lama, supaya session/CSRF selalu segar SEBELUM sempat
+                    // expired di tengah request otomatis (idle-timer
+                    // transaksiCepatIdleTimer / poll notifikasi Filament yang
+                    // tetap jalan di background walau kiosk tidak disentuh).
+                    //
+                    // TODO: ASUMSI - threshold 15 menit (jauh di bawah
+                    // SESSION_LIFETIME 120 menit di config/session.php) dipilih
+                    // sebagai margin aman default; sesuaikan jika pola pemakaian
+                    // kiosk di lapangan berbeda (mis. jeda antar siswa lebih
+                    // lama dari ini secara normal, bukan berarti "idle").
+                    this.initReloadIdleKiosk();
+                },
 
-            resetTimer() {
-                this.msLeft = this.idleTimeoutMs;
-                if (this.timerId) clearInterval(this.timerId);
-                this.timerId = setInterval(() => {
-                    this.msLeft -= this.tickMs;
-                    if (this.msLeft <= 0) {
-                        this.stopTimer();
-                        this.msLeft = this.idleTimeoutMs;
-                        this.$wire.selesai();
-                    }
-                }, this.tickMs);
-            },
+                initReloadIdleKiosk() {
+                    const idleReloadMs = 15 * 60 * 1000;
+                    const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
+                    let timerId = null;
 
-            stopTimer() {
-                if (this.timerId) {
-                    clearInterval(this.timerId);
-                    this.timerId = null;
-                }
-            },
+                    const jadwalkanReload = () => {
+                        if (timerId) clearTimeout(timerId);
+                        timerId = setTimeout(() => window.location.reload(), idleReloadMs);
+                    };
 
-            get progress() {
-                return Math.max(0, Math.min(1, this.msLeft / this.idleTimeoutMs));
-            },
+                    const onActivity = () => jadwalkanReload();
 
-            get secondsLeft() {
-                return Math.ceil(Math.max(0, this.msLeft) / 1000);
-            },
+                    activityEvents.forEach(evt => document.addEventListener(evt, onActivity));
+                    // livewire:morphed dihitung sebagai "aktivitas" juga - kalau
+                    // transaksi memang sedang berjalan (scan berhasil dsb.),
+                    // kiosk TIDAK dianggap idle walau tidak ada keydown/klik
+                    // dalam window waktu tertentu (mis. antrean beberapa siswa
+                    // scan berurutan tanpa jeda mengetik).
+                    document.addEventListener('livewire:morphed', onActivity);
 
-            get ringDashoffset() {
-                const circumference = 263.89;
-                return circumference * (1 - this.progress);
-            },
+                    document.addEventListener('livewire:navigating', () => {
+                        if (timerId) clearTimeout(timerId);
+                        activityEvents.forEach(evt => document.removeEventListener(evt, onActivity));
+                        document.removeEventListener('livewire:morphed', onActivity);
+                    }, { once: true });
 
-            get ringColor() {
-                if (this.progress > 0.4) return '#22c55e';
-                if (this.progress > 0.2) return '#eab308';
-                return '#ef4444';
-            },
-        }));
+                    jadwalkanReload();
+                },
+            }));
+        }
 
-        Alpine.data('jamSirkulasi', () => ({
-            now: new Date(),
-            timerId: null,
-
-            init() {
-                this.timerId = setInterval(() => { this.now = new Date(); }, 1000);
-                document.addEventListener('livewire:navigating', () => {
-                    if (this.timerId) clearInterval(this.timerId);
-                }, { once: true });
-            },
-
-            get jamDigital() {
-                return this.now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            },
-
-            get tanggalHariIni() {
-                return this.now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-            },
-
-            get derajatJam() {
-                return (this.now.getHours() % 12) * 30 + (this.now.getMinutes() * 0.5);
-            },
-
-            get derajatMenit() {
-                return this.now.getMinutes() * 6 + (this.now.getSeconds() * 0.1);
-            },
-
-            get derajatDetik() {
-                return this.now.getSeconds() * 6;
-            },
-        }));
-
-        Alpine.data('sirkulasiAutoFocus', () => ({
-            init() {
-                const refocus = () => {
-                    const el = document.querySelector('[data-sirkulasi-scan-input]');
-                    if (el && document.activeElement !== el) {
-                        el.focus();
-                    }
-                };
-
-                this._refocus = refocus;
-                document.addEventListener('livewire:morphed', refocus);
-                document.addEventListener('click', () => setTimeout(refocus, 60));
-                setTimeout(refocus, 150);
-
-                document.addEventListener('livewire:navigating', () => {
-                    document.removeEventListener('livewire:morphed', this._refocus);
-                }, { once: true });
-
-                // BARU (gap: "Uncaught (in promise) Object {status:null,...}"
-                // di layar Sirkulasi standby) - reload PENUH halaman (bukan
-                // wire:navigate) setelah kiosk benar-benar idle dalam waktu
-                // lama, supaya session/CSRF selalu segar SEBELUM sempat
-                // expired di tengah request otomatis (idle-timer
-                // transaksiCepatIdleTimer / poll notifikasi Filament yang
-                // tetap jalan di background walau kiosk tidak disentuh).
-                //
-                // TODO: ASUMSI - threshold 15 menit (jauh di bawah
-                // SESSION_LIFETIME 120 menit di config/session.php) dipilih
-                // sebagai margin aman default; sesuaikan jika pola pemakaian
-                // kiosk di lapangan berbeda (mis. jeda antar siswa lebih
-                // lama dari ini secara normal, bukan berarti "idle").
-                this.initReloadIdleKiosk();
-            },
-
-            initReloadIdleKiosk() {
-                const idleReloadMs = 15 * 60 * 1000;
-                const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
-                let timerId = null;
-
-                const jadwalkanReload = () => {
-                    if (timerId) clearTimeout(timerId);
-                    timerId = setTimeout(() => window.location.reload(), idleReloadMs);
-                };
-
-                const onActivity = () => jadwalkanReload();
-
-                activityEvents.forEach(evt => document.addEventListener(evt, onActivity));
-                // livewire:morphed dihitung sebagai "aktivitas" juga - kalau
-                // transaksi memang sedang berjalan (scan berhasil dsb.),
-                // kiosk TIDAK dianggap idle walau tidak ada keydown/klik
-                // dalam window waktu tertentu (mis. antrean beberapa siswa
-                // scan berurutan tanpa jeda mengetik).
-                document.addEventListener('livewire:morphed', onActivity);
-
-                document.addEventListener('livewire:navigating', () => {
-                    if (timerId) clearTimeout(timerId);
-                    activityEvents.forEach(evt => document.removeEventListener(evt, onActivity));
-                    document.removeEventListener('livewire:morphed', onActivity);
-                }, { once: true });
-
-                jadwalkanReload();
-            },
-        }));
-    }
-
-    if (window.Alpine) {
-        registerAlpineComponentsSirkulasi();
-    } else {
-        document.addEventListener('alpine:init', registerAlpineComponentsSirkulasi);
-    }
-</script>
+        if (window.Alpine) {
+            registerAlpineComponentsSirkulasi();
+        } else {
+            document.addEventListener('alpine:init', registerAlpineComponentsSirkulasi);
+        }
+    </script>
 
     <div class="sirkulasi-page-wrapper" x-data="sirkulasiAutoFocus">
 
@@ -736,53 +736,6 @@
                                     </div>
                                 </div>
                             @endif
-
-                            <div class="dark:border-white/10" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 1.5rem;">
-                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                                    <p class="text-gray-950 dark:text-white" style="font-size: 0.875rem; font-weight: 600; margin: 0;">Riwayat Scan (sesi ini)</p>
-                                    @if (count($riwayatScan) > 0)
-                                        <x-filament::badge color="gray">{{ count($riwayatScan) }} item</x-filament::badge>
-                                    @endif
-                                </div>
-
-                                <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 260px; overflow-y: auto;">
-                                    @forelse ($riwayatScan as $item)
-                                        <div
-                                            x-data="{ show: false }"
-                                            x-init="requestAnimationFrame(() => show = true)"
-                                            x-transition:enter="transition ease-out duration-300"
-                                            x-transition:enter-start="opacity-0"
-                                            x-transition:enter-end="opacity-100"
-                                            class="bg-gray-50 dark:bg-white/5"
-                                            style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 12px;"
-                                        >
-                                            <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: {{ $item['sukses'] ? 'var(--success-100)' : 'var(--danger-100)' }}; color: {{ $item['sukses'] ? 'var(--success-700)' : 'var(--danger-700)' }};">
-                                                @if (! $item['sukses'])
-                                                    <x-filament::icon icon="heroicon-o-x-mark" style="width: 16px; height: 16px;" />
-                                                @elseif ($item['aksi'] === 'dipinjamkan')
-                                                    <x-filament::icon icon="heroicon-o-arrow-up-circle" style="width: 16px; height: 16px;" />
-                                                @else
-                                                    <x-filament::icon icon="heroicon-o-arrow-down-circle" style="width: 16px; height: 16px;" />
-                                                @endif
-                                            </div>
-                                            <div style="flex: 1; min-width: 0;">
-                                                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                                    <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['judul'] }}</p>
-                                                    @if ($item['sukses'])
-                                                        <x-filament::badge :color="$item['aksi'] === 'dipinjamkan' ? 'primary' : 'success'" size="sm">{{ ucfirst($item['aksi']) }}</x-filament::badge>
-                                                    @endif
-                                                </div>
-                                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['barcode'] }} &middot; {{ $item['pesan'] }}</p>
-                                            </div>
-                                        </div>
-                                    @empty
-                                        <div class="text-gray-400 dark:text-gray-500" style="text-align: center; padding: 2rem 0;">
-                                            <x-filament::icon icon="heroicon-o-book-open" style="width: 32px; height: 32px; margin: 0 auto 0.5rem;" />
-                                            <p style="font-size: 0.875rem; margin: 0;">Belum ada buku yang di-scan.</p>
-                                        </div>
-                                    @endforelse
-                                </div>
-                            </div>
                         </div>
                     @endif
                 </div>

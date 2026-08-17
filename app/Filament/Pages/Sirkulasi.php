@@ -14,6 +14,7 @@ use App\Services\PointService;
 use App\Services\WhatsappService;
 use Illuminate\Database\QueryException;
 use App\Services\KunjunganService;
+use Filament\Notifications\Notification;
 
 /**
  * Halaman "Sirkulasi": DUPLIKAT fungsi & fitur Transaksi Cepat, tapi TANPA
@@ -181,5 +182,35 @@ class Sirkulasi extends TransaksiCepat
         parent::prosesEksemplar($eksemplar);
 
         $this->dispatch('transaksi-sirkulasi-berhasil');
+    }
+
+    /**
+     * Override dari TransaksiCepat::tambahRiwayat() - TETAP panggil
+     * parent (Aturan poin 3, DRY) supaya $riwayatScan tetap terisi untuk
+     * statistik ringkasan (Dipinjamkan/Dikembalikan/Gagal, lihat
+     * sirkulasi.blade.php) - HANYA menambahkan toast notifikasi sebagai
+     * pengganti daftar list "Riwayat Scan (sesi ini)" yang dihapus dari
+     * tampilan (dikonfirmasi eksplisit: statistik ringkasan tetap
+     * dipertahankan, hanya list-nya yang jadi toast).
+     */
+    protected function tambahRiwayat(string $barcode, string $judul, string $aksi, string $pesan, bool $sukses): void
+    {
+        parent::tambahRiwayat($barcode, $judul, $aksi, $pesan, $sukses);
+
+        if (! $sukses) {
+            Notification::make()
+                ->danger()
+                ->title($judul !== '-' ? $judul : 'Gagal diproses')
+                ->body($pesan)
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->success()
+            ->title($aksi === 'dipinjamkan' ? 'Berhasil dipinjamkan' : 'Berhasil dikembalikan')
+            ->body($judul)
+            ->send();
     }
 }

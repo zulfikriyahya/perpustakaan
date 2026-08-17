@@ -21,6 +21,8 @@ class RewardLog extends Model
         'user_id',
         'reward_id',
         'tanggal_didapat',
+        'sertifikat_path',
+        'nomor_sertifikat',
     ];
 
     /**

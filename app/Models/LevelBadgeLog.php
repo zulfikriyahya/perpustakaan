@@ -16,6 +16,8 @@ class LevelBadgeLog extends Model
         'user_id',
         'level_badge_id',
         'tanggal_didapat',
+        'sertifikat_path',
+        'nomor_sertifikat',
     ];
 
     protected function casts(): array

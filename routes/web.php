@@ -6,6 +6,7 @@ use App\Http\Controllers\BukuPublikController;
 use App\Http\Controllers\BulkDataJobDownloadController;
 use App\Http\Controllers\ChartExportController;
 use App\Http\Controllers\LandingPageController;
+use App\Http\Controllers\SertifikatPublikController;
 use App\Http\Controllers\SitemapController;
 use Illuminate\Support\Facades\Route;
 
@@ -25,12 +26,16 @@ Route::get('/tentang', [LandingPageController::class, 'tentang'])->name('tentang
 Route::get('/authors', [AuthorPublikController::class, 'index'])->name('authors.index');
 Route::get('/authors/{author}', [AuthorPublikController::class, 'show'])->name('authors.show');
 
-// BARU - katalog buku fisik, terpisah dari buku digital (route di bawah).
+// Katalog buku fisik, terpisah dari buku digital (route di bawah).
 Route::get('/buku', [BukuKatalogController::class, 'index'])->name('katalog.index');
 Route::get('/buku/{buku}', [BukuKatalogController::class, 'show'])->name('katalog.show');
 
 Route::get('/buku-digital', [BukuPublikController::class, 'index'])->name('buku.index');
 Route::get('/buku-digital/baca/{file}', [BukuPublikController::class, 'baca'])->name('buku.baca');
+
+// BARU - akses publik sertifikat Reward/Badge, dikirim via link WhatsApp.
+Route::get('/sertifikat/reward/{rewardLog}', [SertifikatPublikController::class, 'reward'])->name('sertifikat.reward');
+Route::get('/sertifikat/badge/{levelBadgeLog}', [SertifikatPublikController::class, 'badge'])->name('sertifikat.badge');
 
 Route::post('/dashboard/chart-export/pdf', [ChartExportController::class, 'pdf'])
     ->middleware(['web', 'auth'])

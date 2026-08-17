@@ -5,11 +5,13 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\RewardLogExporter;
 use App\Filament\Resources\RewardLogResource\Pages;
 use App\Models\RewardLog;
+use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * // TODO: ASUMSI - dibuat sebagai Resource terpisah (bukan RelationManager
@@ -19,7 +21,9 @@ use Filament\Tables\Table;
  *
  * Read-only - RewardLog HANYA dihasilkan otomatis oleh PointService saat
  * threshold tercapai (Aturan poin 3, DRY). Tidak ada Import - insert
- * manual lewat spreadsheet akan melewati validasi threshold PointService.
+ * manual lewat spreadsheet akan melewati validasi threshold PointService
+ * DAN tidak akan pernah menghasilkan sertifikat (hanya dibuat via
+ * SertifikatService yang dipanggil PointService).
  */
 class RewardLogResource extends Resource
 {
@@ -42,18 +46,29 @@ class RewardLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(RewardLogExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
                 TextColumn::make('reward.nama')->label('Reward')->searchable()->sortable(),
                 TextColumn::make('tanggal_didapat')->dateTime('d F Y H:i')->sortable(),
+                TextColumn::make('nomor_sertifikat')
+                    ->label('No. Sertifikat')
+                    ->placeholder('Belum tersedia')
+                    ->searchable(),
             ])
             ->filters([
                 SelectFilter::make('reward_id')->label('Reward')->relationship('reward', 'nama'),
             ])
             ->defaultSort('tanggal_didapat', 'desc')
-            ->recordActions([])
+            ->recordActions([
+                Action::make('downloadSertifikat')
+                    ->label('Download Sertifikat')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->visible(fn(RewardLog $record) => filled($record->sertifikat_path))
+                    ->url(fn(RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    ->openUrlInNewTab(),
+            ])
             ->toolbarActions([]);
     }
 

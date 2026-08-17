@@ -4,7 +4,11 @@ namespace App\Filament\Resources\UserResource\Pages;
 
 use App\Filament\Resources\UserResource;
 use Filament\Actions\DeleteAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Support\Exceptions\Halt;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 
 class EditUser extends EditRecord
 {
@@ -19,7 +23,7 @@ class EditUser extends EditRecord
     {
         return [
             DeleteAction::make()
-                ->hidden(fn ($record) => $record && $record->hasRole('super_admin')),
+                ->hidden(fn($record) => $record && $record->hasRole('super_admin')),
         ];
     }
 
@@ -58,5 +62,32 @@ class EditUser extends EditRecord
         }
 
         return $data;
+    }
+
+    /**
+     * BARU (iterasi ini) - jaring terakhir untuk unique constraint DB,
+     * pasangan dari CreateUser::handleRecordCreation() - lihat docblock
+     * di sana untuk alasan lengkap (normalisasi no_telepon bisa membuat
+     * dua nilai berbeda jadi sama, unique() form tidak selalu menangkap
+     * ini terhadap data lama yang belum ternormalisasi).
+     */
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        try {
+            return parent::handleRecordUpdate($record, $data);
+        } catch (QueryException $e) {
+            if ((string) $e->getCode() !== '23000') {
+                throw $e;
+            }
+
+            Notification::make()
+                ->danger()
+                ->title('Gagal menyimpan perubahan User')
+                ->body('Salah satu data (No. Telepon/NISN/NIP/No. Kartu RFID) sudah dipakai user lain yang masih aktif. Periksa kembali isian, khususnya No. Telepon - kemungkinan sudah terdaftar dalam format penulisan yang berbeda.')
+                ->persistent()
+                ->send();
+
+            throw new Halt;
+        }
     }
 }

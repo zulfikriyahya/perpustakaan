@@ -6,8 +6,10 @@ use App\Enums\RoleUser;
 use App\Models\KelasTahunPelajaran;
 use App\Models\User;
 use App\Rules\FormatKartuRfid;
+use App\Rules\FormatNomorTelepon;
 use App\Services\KenaikanKelasService;
 use App\Services\UserImportResolverService;
+use App\Support\NomorTeleponFormatter;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -82,42 +84,43 @@ class UserImporter extends Importer
                 ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('VII A')
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan (wajib jika kelas_nama diisi)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('Non_Jurusan')
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('2026/2027')
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example(''),
             ImportColumn::make('no_telepon')
                 ->label('No. Telepon')
                 ->requiredMapping()
-                ->rules(['required', 'string', 'max:255'])
+                ->helperText('Boleh format apa pun (+62, spasi, strip) - otomatis dinormalisasi jadi 628xxxxxxxxx saat disimpan.')
+                ->rules(['required', 'string', 'max:255', new FormatNomorTelepon])
                 ->example('081234567890'),
             ImportColumn::make('no_kartu_rfid')
                 ->label('No. kartu RFID (opsional)')
-                ->helperText('PERHATIAN: kosongkan HANYA jika memang ingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
+                ->helperText('PERHATIAN: kosongkan HANYA jika memangingin menghapus kartu yang sudah terdaftar untuk user ini - user tidak akan bisa tap RFID lagi sampai didaftarkan ulang. Harus persis 10 digit angka.')
                 ->rules(['nullable', new FormatKartuRfid])
                 ->example('1234567890'),
             ImportColumn::make('password')
                 ->label('Password (opsional)')
-                ->helperText('Isi plaintext (otomatis di-hash saat disimpan). Kosongkan: user baru tetap dapat password random, user lama password TIDAK berubah.')
+                ->helperText('Isi plaintext (otomatis di-hash saat disimpan). Kosongkan: user baru tetap dapat password random, user lamapassword TIDAK berubah.')
                 ->rules(['nullable', 'string', 'min:8', 'max:255'])
                 ->example(''),
             ImportColumn::make('avatar')
                 ->label('Avatar - URL atau path (opsional)')
-                ->helperText('Isi URL gambar (https://...) atau path file yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
+                ->helperText('Isi URL gambar (https://...) atau pathfile yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
                 ->rules(['nullable', 'string', 'max:2048'])
                 ->example('https://contoh-sekolah.id/foto/siswa1.jpg')
-                ->fillRecordUsing(fn (?string $state) => null),
+                ->fillRecordUsing(fn(?string $state) => null),
         ];
     }
 
@@ -158,6 +161,13 @@ class UserImporter extends Importer
         if ($kartuDihapus) {
             Cache::increment("import-{$this->import->id}-kartu-dihapus");
         }
+
+        // dinormalisasi jadi 628xxxxxxxxx - rules() di kolom sudah memastikan
+        // FormatNomorTelepon lolos, jadi normalisasi() di sini seharusnya
+        // tidak pernah null, tapi tetap di-guard defensif (fallback ke nilai
+        // asli) supaya import tidak fatal error jika suatu saat asumsi ini keliru.
+        $nomorTernormalisasi = NomorTeleponFormatter::normalisasi($this->data['no_telepon'] ?? null);
+        $this->record->no_telepon = $nomorTernormalisasi ?? $this->data['no_telepon'];
     }
 
     protected function afterSave(): void

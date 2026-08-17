@@ -8,6 +8,7 @@ use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Support\NomorTeleponFormatter;
 
 /**
  * Wrapper untuk WhatsApp Gateway (whatsapp.zedlabs.id API v1, autentikasi HMAC-SHA256).
@@ -15,10 +16,22 @@ use Illuminate\Support\Str;
  * dokumen kontrak API bagian 2.1. Jangan format ulang body setelah signing.
  *
  * Kredensial SEKARANG dibaca dari Setting (grup Kredensial, lihat
- * PengaturanSistem) - dengan FALLBACK ke config()/.env jika Setting belum
+ * PengaturanSistem) - dengan FALLBACK ke config()/.env jika Settingbelum
  * diisi (mis. fresh install belum sempat dikonfigurasi Admin lewat panel).
  * Operator `?:` dipakai (bukan `??`) karena Setting::get() bisa
  * mengembalikan string kosong '' yang harus tetap dianggap "belum diisi".
+ *
+ * NORMALISASI NOMOR (baru, iterasi ini): recipient SELALU dinormalisasi ke
+ * format 62xxxxxxxxxx (tanpa '+') sebelum dikirim ke gateway - lihat
+ * normalisasiNomor(). Ini adalah SAFETY NET di satu titik terpusat (Aturan
+ * poin 3), independen dari FormatNomorTelepon (validasi form/import) -
+ * karena data lama yang tersimpan sebelum Rule ini ada (mis. dari import
+ * lama, atau format '0'/'8' tanpa prefix) tetap bisa lolos ke sini lewat
+ * User.no_telepon yang belum sempat divalidasi ulang (dikonfirmasi: data
+ * lama tidak dibackfill). Jika setelah normalisasi hasilnya TETAP tidak
+ * sesuai pola nomor seluler Indonesia, pengiriman digagalkan PERMANEN
+ * (bukan dikirim mentah ke gateway) - mencegah resiko banned nomor WA
+ * gateway karena format salah.
  */
 class WhatsappService
 {
@@ -52,9 +65,20 @@ class WhatsappService
         ?array $media = null,
         ?string $referenceId = null,
     ): array {
+        $recipientTernormalisasi = NomorTeleponFormatter::normalisasi($recipient);
+
+        if ($recipientTernormalisasi === null) {
+            Log::error("WhatsappService: recipient '{$recipient}' tidak bisa dinormalisasi menjadi format nomor seluler Indonesia yang valid (628xxxxxxxxx) - pengiriman DIBATALKAN, tidak diteruskan ke gateway, untuk mencegah resiko banned nomor.");
+
+            // dihitung sebagai kegagalan permanen (status 400) oleh
+            // KirimNotifikasiWhatsapp::STATUS_PERMANEN - retry tidak akan
+            // pernah memperbaiki format nomor yang salah.
+            throw new WhatsappGatewayException(400, "Format nomor tujuan '{$recipient}' tidak valid setelah normalisasi.");
+        }
+
         $body = [
             'template_code' => $templateCode,
-            'recipient' => $recipient,
+            'recipient' => $recipientTernormalisasi,
             'variables' => $variables,
             'media' => $media,
         ];
@@ -114,6 +138,27 @@ class WhatsappService
     }
 
     /**
+     * Normalisasi nomor ke format baku pengiriman gateway: 62xxxxxxxxxx
+     * (tanpa '+', tanpa spasi/strip). Menangani 3 pola yang divalidasi
+     * FormatNomorTelepon (628xxx, 08xxx, 8xxx) SEKALIGUS input "kotor"
+     * dari data lama (mis. mengandung spasi/strip/'+').
+     */
+    protected function normalisasiNomor(string $nomor): string
+    {
+        $nomor = preg_replace('/[^0-9]/', '', $nomor) ?? '';
+
+        if (str_starts_with($nomor, '0')) {
+            return '62' . substr($nomor, 1);
+        }
+
+        if (! str_starts_with($nomor, '62')) {
+            return '62' . $nomor;
+        }
+
+        return $nomor;
+    }
+
+    /**
      * @return array{0: int, 1: array<string, mixed>}
      */
     protected function kirimRequest(string $method, string $path, string $bodyString): array
@@ -131,7 +176,7 @@ class WhatsappService
         $response = Http::withHeaders($headers)
             ->timeout($this->timeout)
             ->withBody($bodyString, 'application/json')
-            ->send($method, $this->baseUrl.$path);
+            ->send($method, $this->baseUrl . $path);
 
         return [$response->status(), $response->json() ?? []];
     }

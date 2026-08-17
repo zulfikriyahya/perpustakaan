@@ -4058,7 +4058,19 @@ class ProsesKenaikanKelas extends Page
 
 namespace App\Filament\Pages;
 
+use App\Enums\EventTypePoint;
+use App\Enums\KondisiBuku;
+use App\Enums\SourceKunjungan;
+use App\Enums\StatusEksemplar;
+use App\Enums\StatusPeminjaman;
 use App\Models\Eksemplar;
+use App\Models\Kunjungan;
+use App\Models\User;
+use App\Services\PointService;
+use App\Services\WhatsappService;
+use Illuminate\Database\QueryException;
+use App\Services\KunjunganService;
+use Filament\Notifications\Notification;
 
 /**
  * Halaman "Sirkulasi": DUPLIKAT fungsi & fitur Transaksi Cepat, tapi TANPA
@@ -4070,42 +4082,41 @@ use App\Models\Eksemplar;
  * limit anti-scan-ganda, fallback pencarian nama/judul, dst.) TIDAK
  * terduplikasi (Aturan poin 3 - DRY).
  *
- * LAYOUT (gap iterasi ini) - 2 area:
- *  1. Section utama: form scan (kartu/kode) - identik dengan Transaksi
- *     Cepat, logic diwarisi. Jam analog ditampilkan di sampingnya (posisi
- *     visual jam vs form diatur murni lewat CSS `order` di view, TIDAK
- *     memengaruhi logic apa pun di sini).
- *  2. Riwayat harian (total pengguna hari ini, riwayat 5 transaksi
- *     terbaru, seluruh riwayat hari ini) - method computed-nya DIPINDAH
- *     ke child Livewire component terpisah (App\Livewire\RiwayatSirkulasiHarian,
- *     lihat class tsb) supaya render-nya TIDAK ikut ter-trigger ulang
- *     setiap kali form scan berubah (wire:model.live.debounce di
- *     kartuInput/kodeInput). Ini alasan MURNI PERFORMA (scan terasa
- *     "stuck" sebelumnya karena query riwayat berat ikut jalan tiap
- *     keystroke) - bukan perubahan kebijakan data.
+ * FITUR BARU (iterasi ini) - AUTO KUNJUNGAN SAAT TAP PERTAMA HARI INI:
+ * di-hook lewat override muatUser() (SATU titik yang dipanggil baik dari
+ * scanKartu() exact-match maupun pilihUser() fallback nama di parent
+ * TransaksiCepat - Aturan poin 3, DRY, tidak menduplikasi logic resolve
+ * user).
  *
- * KEPUTUSAN YANG TETAP DIPEGANG (dari iterasi sebelumnya, tidak berubah):
- *  - Sumber data riwayat: Peminjaman/Pengembalian (BUKAN Kunjungan) -
- *    dikonfirmasi eksplisit sebelumnya.
- *  - TIDAK ADA polling - riwayat dihitung ulang saat page load/navigate,
- *    dan SEKARANG JUGA saat event 'transaksi-sirkulasi-berhasil'
- *    di-dispatch dari prosesEksemplar() override di bawah (bukan
- *    berdasarkan interval waktu).
- *  - TIDAK ada Widget Filament riwayat kunjungan di halaman ini.
- *  - Halaman ini TETAP TIDAK menulis ke tabel kunjungans/peminjamans di
- *    luar jalur scan yang sudah ada.
+ * Alur:
+ *  - User BELUM punya Kunjungan hari ini -> catat Kunjungan (source
+ *    Rfid - tetap tap kartu RFID fisik via reader keyboard-wedge yang
+ *    sama dengan RfidResolverService, HANYA jalur transportnya beda dari
+ *    Attendance Machine/ESP32; dikonfirmasi eksplisit BUKAN Manual),
+ *    trigger PointService::catatEvent(Kunjungan) + notifikasi WhatsApp
+ *    (pola SAMA seperti PerpustakaanDeviceController::prosesSatuTap() /
+ *    kirimLangsung()) - lalu tampilkan modal "Selamat datang" dan
+ *    KEMBALI ke state standby Sirkulasi (TIDAK lanjut memuat panel
+ *    pinjam/kembali buku - parent::muatUser() TIDAK dipanggil).
+ *  - User SUDAH punya Kunjungan hari ini -> panggil parent::muatUser()
+ *    seperti biasa, lanjut alur sirkulasi pinjam/kembali (tidak berubah).
  *
- * Otorisasi: reuse canAccess() yang diwarisi dari TransaksiCepat
- * (Create:Peminjaman) - TIDAK ada permission baru. Child Livewire
- * component riwayat TIDAK punya otorisasi sendiri karena hanya dirender
- * di dalam halaman ini yang sudah digerbang canAccess() - TODO: GAP-SPEC,
- * belum diverifikasi eksplisit bahwa component tsb tidak bisa diakses
- * langsung lewat mekanisme lain di luar halaman ini (biasanya aman by
- * default untuk child component non-full-page Livewire).
+ * TODO: GAP-SPEC - berbeda dari PerpustakaanDeviceController, jalur ini
+ * TIDAK ikut membuat Transaksi log (catatTransaksiKunjungan() di device
+ * controller) - hanya Kunjungan + Point + WA yang dikonfirmasi eksplisit
+ * untuk fitur ini. Jika Transaksi log jenis 'kunjungan' juga diharapkan
+ * konsisten dari jalur manual ini, perlu konfirmasi terpisah (menyentuh
+ * konsistensi laporan/Export Transaksi).
  *
- * TODO: verifikasi signature terhadap versi package yang terpasang -
- * Livewire\Attributes\Computed/On dipakai sama seperti sebelumnya, cek
- * ulang terhadap composer.lock jika belum diverifikasi sebelumnya.
+ * TODO: ASUMSI - label 'device' pada variabel WhatsApp (event
+ * 'kunjungan_tercatat') diisi string statis 'Sirkulasi (Manual)' karena
+ * tidak ada device_id sesungguhnya di jalur ini (bukan tap fisik
+ * Attendance Machine) - sesuaikan jika template WA di gateway zedlabs
+ * mengasumsikan format device_id tertentu (mis. MAC address).
+ *
+ * TODO: GAP-SPEC - durasi modal "Selamat datang" auto-dismiss diasumsikan
+ * 4 detik (lihat DURASI_MODAL_SELAMAT_DATANG_MS) - sesuaikan jika operator
+ * di lapangan merasa terlalu cepat/lambat.
  */
 class Sirkulasi extends TransaksiCepat
 {
@@ -4117,49 +4128,146 @@ class Sirkulasi extends TransaksiCepat
 
     protected string $view = 'filament.pages.sirkulasi';
 
+    /**
+     * Durasi tampil modal "Selamat datang" sebelum otomatis tertutup
+     * (dibaca dari sisi JS/Alpine di sirkulasi.blade.php).
+     */
+    public const DURASI_MODAL_SELAMAT_DATANG_MS = 4000;
+
+    /**
+     * State modal "Selamat datang, {nama}" - true saat Kunjungan baru
+     * saja tercatat lewat tap pertama hari ini.
+     */
+    public bool $tampilkanModalSelamatDatang = false;
+
+    public ?string $namaModalSelamatDatang = null;
+
+    public ?int $pointModalSelamatDatang = null;
+
     public static function shouldRegisterNavigation(): bool
     {
         return false;
     }
-    /**
-     * BARU (gap iterasi ini) - halaman Sirkulasi dipakai sebagai layar
-     * operasional full-screen (sidebar & topbar sirkulasi minimal, lihat
-     * CSS di sirkulasi.blade.php) - heading besar "Sirkulasi" bawaan
-     * Filament (di atas logo/topbar) dianggap noise, dihilangkan supaya
-     * layar lebih ringkas utk operator. TIDAK memengaruhi navigationLabel
-     * (tetap "Sirkulasi" untuk referensi internal, meski
-     * shouldRegisterNavigation() sudah false sehingga label itu pun
-     * tidak pernah tampil di sidebar).
-     *
-     * TODO: verifikasi signature terhadap versi package yang terpasang -
-     * getHeading(): string|Htmlable|null adalah API dasar
-     * Filament\Pages\Page sejak v3, dipertahankan di v4 - cek ulang jika
-     * versi filament/filament di composer.lock berbeda dari asumsi ini.
-     */
+
     public function getHeading(): string
     {
         return '';
     }
 
     /**
-     * Override RINGAN dari TransaksiCepat::prosesEksemplar() - HANYA
-     * menambahkan dispatch event ke RiwayatSirkulasiHarian (child
-     * component) setelah proses pinjam/kembali diproses, supaya section
-     * riwayat ikut refresh TANPA polling dan TANPA numpang di siklus
-     * render form scan untuk kasus normal (mengetik/scan yang masih
-     * mencari kandidat tidak memicu apa pun di sini - hanya dipanggil
-     * SETELAH eksemplar benar-benar diproses).
-     *
-     * TIDAK menduplikasi logic pinjam/kembali - tetap panggil parent
-     * (Aturan poin 3, DRY). Dispatch dilakukan baik hasil sukses maupun
-     * gagal/ditolak (rate limit) supaya counter riwayat tetap konsisten
-     * dengan kondisi terbaru database, bukan berdasarkan asumsi sukses.
+     * Override dari TransaksiCepat::muatUser() - hook TUNGGAL untuk fitur
+     * auto-Kunjungan (lihat docblock class). Dipanggil dari scanKartu()
+     * (exact-match kartu/NISN) maupun pilihUser() (fallback nama) yang
+     * diwarisi dari parent - TIDAK ada logic resolve user yang
+     * diduplikasi di sini (Aturan poin 3, DRY).
      */
+    protected function muatUser(User $user): void
+    {
+        $sudahKunjunganHariIni = Kunjungan::query()
+            ->where('user_id', $user->id)
+            ->where('tanggal', today())
+            ->exists();
+
+        if ($sudahKunjunganHariIni) {
+            parent::muatUser($user);
+
+            return;
+        }
+
+        $this->catatKunjunganPertama($user);
+    }
+
+    /**
+     * Satu sumber kebenaran pencatatan Kunjungan tap-pertama dari halaman
+     * Sirkulasi - SEKARANG delegasi penuh ke KunjunganService (Point +
+     * Transaksi log + WhatsApp), SAMA PERSIS dengan jalur
+     * PerpustakaanDeviceController.
+     *
+     * source = SourceKunjungan::Rfid - tetap tap kartu RFID fisik via
+     * reader keyboard-wedge yang sama dengan RfidResolverService, hanya
+     * jalur transportnya beda dari Attendance Machine/ESP32.
+     *
+     * CATATAN: $user->fresh() WAJIB dipanggil setelah catatKunjungan() -
+     * PointService::catatEvent() mengubah akumulasi_point lewat
+     * increment()+refresh() pada instance User yang DIPEGANG SERVICE
+     * (parameter $user yang di-pass ke KunjunganService::catatKunjungan()),
+     * bukan instance $user milik page ini - properti $user->akumulasi_point
+     * di sini TETAP nilai lama tanpa fresh() ulang.
+     */
+    protected function catatKunjunganPertama(User $user): void
+    {
+        try {
+            app(KunjunganService::class)->catatKunjungan(
+                user: $user,
+                source: SourceKunjungan::Rfid,
+                sumberLabel: 'Sirkulasi (RFID Reader Web)',
+            );
+        } catch (QueryException $e) {
+            // Race condition dengan unique index kunjungans_unik_aktif_unique
+            // (mis. 2 klik/tap beruntun) - anggap sudah tercatat, tetap
+            // tampilkan modal supaya operator/siswa tidak bingung tidak ada
+            // respons sama sekali.
+        }
+
+        $this->tampilkanModalKunjungan($user->nama, $user->fresh()->akumulasi_point);
+    }
+
+    protected function tampilkanModalKunjungan(string $nama, int $totalPoint): void
+    {
+        $this->namaModalSelamatDatang = $nama;
+        $this->pointModalSelamatDatang = $totalPoint;
+        $this->tampilkanModalSelamatDatang = true;
+    }
+
+    /**
+     * Dipanggil dari JS (Alpine setTimeout) setelah
+     * DURASI_MODAL_SELAMAT_DATANG_MS - menutup modal dan mengembalikan
+     * halaman ke state standby (tidak memuat user ke panel sirkulasi,
+     * karena parent::muatUser() memang tidak pernah dipanggil untuk
+     * tap-pertama ini).
+     */
+    public function tutupModalSelamatDatang(): void
+    {
+        $this->tampilkanModalSelamatDatang = false;
+        $this->namaModalSelamatDatang = null;
+        $this->pointModalSelamatDatang = null;
+    }
+
     protected function prosesEksemplar(Eksemplar $eksemplar): void
     {
         parent::prosesEksemplar($eksemplar);
 
         $this->dispatch('transaksi-sirkulasi-berhasil');
+    }
+
+    /**
+     * Override dari TransaksiCepat::tambahRiwayat() - TETAP panggil
+     * parent (Aturan poin 3, DRY) supaya $riwayatScan tetap terisi untuk
+     * statistik ringkasan (Dipinjamkan/Dikembalikan/Gagal, lihat
+     * sirkulasi.blade.php) - HANYA menambahkan toast notifikasi sebagai
+     * pengganti daftar list "Riwayat Scan (sesi ini)" yang dihapus dari
+     * tampilan (dikonfirmasi eksplisit: statistik ringkasan tetap
+     * dipertahankan, hanya list-nya yang jadi toast).
+     */
+    protected function tambahRiwayat(string $barcode, string $judul, string $aksi, string $pesan, bool $sukses): void
+    {
+        parent::tambahRiwayat($barcode, $judul, $aksi, $pesan, $sukses);
+
+        if (! $sukses) {
+            Notification::make()
+                ->danger()
+                ->title($judul !== '-' ? $judul : 'Gagal diproses')
+                ->body($pesan)
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->success()
+            ->title($aksi === 'dipinjamkan' ? 'Berhasil dipinjamkan' : 'Berhasil dikembalikan')
+            ->body($judul)
+            ->send();
     }
 }
 
@@ -11728,8 +11836,6 @@ class WhatsappLogWidget extends TableWidget
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\EventTypePoint;
-use App\Enums\JenisTransaksi;
 use App\Enums\SourceKunjungan;
 use App\Enums\StatusOtaFirmware;
 use App\Http\Controllers\Controller;
@@ -11737,11 +11843,9 @@ use App\Models\DeviceLog;
 use App\Models\FirmwareRelease;
 use App\Models\Kunjungan;
 use App\Models\Setting;
-use App\Models\Transaksi;
 use App\Models\User;
-use App\Services\PointService;
+use App\Services\KunjunganService;
 use App\Services\RfidResolverService;
-use App\Services\WhatsappService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11753,48 +11857,20 @@ use Illuminate\Http\Response;
  * response shape di sini WAJIB dicek ulang terhadap parsing firmware
  * (mis. downloadRfidDb() parsing baris per baris plain text, BUKAN JSON).
  *
- * FITUR: setiap Kunjungan yang berhasil tercatat (baik lewat syncBulk()
- * maupun kirimLangsung()) membuat 1 Transaksi (jenis: kunjungan) - lihat
- * catatTransaksiKunjungan(). Ini TIDAK mengubah response/HTTP status yang
- * dikirim ke device sama sekali (kontrak firmware poin 17 Aturan tetap
- * utuh) - murni penambahan log di sisi server setelah Kunjungan berhasil
- * dibuat.
- *
- * TODO: GAP-SPEC - Transaksi hasil ini TIDAK menyimpan FK balik ke
- * Kunjungan (tabel kunjungans tidak punya kolom transaksi_id, sengaja
- * tidak ditambah migration baru - lihat diskusi terkait). Transaksi
- * murni log independen, keterangan berisi ringkasan (jam tap + device_id)
- * untuk audit manual.
- *
- * FITUR BARU (iterasi ini): setiap Kunjungan yang berhasil tercatat JUGA
- * mengirim notifikasi WhatsApp ke user bersangkutan (berlaku SEMUA role -
- * dikonfirmasi eksplisit), lewat kirimNotifikasiKunjungan() - dipanggil
- * dari prosesSatuTap() (batch) dan kirimLangsung() (real-time), satu
- * sumber kebenaran (Aturan poin 3). TIDAK mengubah response ke device.
- *
- * TODO: ASUMSI - eventCode 'kunjungan_tercatat' dan variabel
- * nama/jam_tap/device BELUM terdaftar di panel gateway zedlabs pada saat
- * penulisan kode ini (tidak ada di dokumen Template WhatsApp - Perpustakaan
- * yang tersedia). WAJIB didaftarkan manual di panel gateway dengan
- * template_code PERSIS 'kunjungan_tercatat' dan variabel dengan nama yang
- * sama, sebelum notifikasi ini benar-benar terkirim dengan isi yang benar.
- * Setting 'wa_template_kunjungan_tercatat' (lihat SettingSeeder/
- * PengaturanSistem) menyimpan template_code yang dipakai - ubah di panel
- * Pengaturan Sistem jika template_code di gateway berbeda dari default.
- *
- * PERINGATAN VOLUME (dikonfirmasi, risiko diterima sadar) - setiap tap
- * RFID sekarang mengirim 1 WA ke SEMUA role (siswa/pegawai/pustakawan/
- * admin) tanpa throttle/rate-limit tambahan. Job tetap lewat queue
- * 'whatsapp' (tidak blocking request device) - tapi volume kirim harian
- * bisa signifikan tergantung jumlah user aktif; pastikan kuota/limit di
- * sisi gateway WhatsApp mencukupi.
+ * REFACTOR (iterasi ini) - efek samping saat Kunjungan berhasil tercatat
+ * (Point, Transaksi log jenis kunjungan, notifikasi WhatsApp) DIPINDAH ke
+ * App\Services\KunjunganService - SEKARANG dipakai bersama dengan halaman
+ * Sirkulasi (tap via RFID reader web), supaya kedua jalur benar-benar
+ * identik hasilnya (Aturan poin 3, DRY - "cara kedua" adalah redundansi
+ * dari cara device, dikonfirmasi eksplisit). PERUBAHAN INI MURNI INTERNAL:
+ * request/response shape, HTTP status code, dan urutan validasi ke device
+ * TIDAK BERUBAH SAMA SEKALI - kontrak firmware (Aturan poin 17) tetap utuh.
  */
 class PerpustakaanDeviceController extends Controller
 {
     public function __construct(
         protected RfidResolverService $rfidResolver,
-        protected PointService $pointService,
-        protected WhatsappService $whatsappService,
+        protected KunjunganService $kunjunganService,
     ) {}
 
     public function ping(): JsonResponse
@@ -11816,28 +11892,10 @@ class PerpustakaanDeviceController extends Controller
      * Firmware menolak baris yang bukan persis 10 digit angka (lihat parsing
      * di downloadRfidDb: isdigit check, len == 10).
      *
-     * KONTRAK BARU (v2.3.2, GAP-SPEC lama soal Content-Length ditutup) - baris
-     * TERAKHIR body SEKARANG SELALU "EOF" (persis, tanpa newline trailing
-     * setelahnya). Ini WAJIB ada karena server berjalan di belakang Cloudflare
-     * dengan HTTP/2 - tidak ada header Content-Length yang dikirim ke device,
-     * dan koneksi tidak ditutup segera setelah body selesai (keep-alive), jadi
-     * device (ESP32/HTTPClient) tidak punya cara lain yang andal untuk tahu
-     * transfer sudah selesai vs baru stall/putus di tengah jalan. Firmware
-     * v2.3.2 ke atas menunggu baris "EOF" sebagai satu-satunya penanda sukses
-     * sebelum menimpa rfid_db.txt lama dan menaikkan versi lokal (lihat
-     * downloadRfidDb() di firmware) - TANPA baris ini, device v2.3.2+ akan
-     * SELALU menganggap transfer gagal/terpotong dan retry terus setiap
-     * siklus RFID_DB_CHECK_INTERVAL.
-     *
-     * Endpoint ini HANYA dipakai device Attendance Machine perpustakaan ini
-     * (dikonfirmasi) - aman mengubah format body tanpa memengaruhi konsumen
-     * lain.
-     *
-     * TODO: GAP-SPEC - hanya user dengan no_kartu_rfid berformat 10 digit
-     * numeric yang akan ikut ter-generate ke daftar ini; kartu format lain
-     * (mis. seeder lama 'RFID58354503') otomatis TIDAK akan muncul di device
-     * karena tidak lolos filter regex di bawah - bukan bug, tapi konsekuensi
-     * kontrak firmware. Data lama wajib diperbaiki ke format 10 digit.
+     * KONTRAK: baris TERAKHIR body SELALU "EOF" (persis, tanpa newline
+     * trailing setelahnya) - firmware v2.3.2+ menunggu baris ini sebagai
+     * satu-satunya penanda sukses transfer (lihat catatan versi
+     * sebelumnya) - TIDAK BERUBAH oleh refactor ini.
      */
     public function rfidList(): Response
     {
@@ -11848,10 +11906,7 @@ class PerpustakaanDeviceController extends Controller
             ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
             ->pluck('no_kartu_rfid');
 
-        // BARU: baris "EOF" wajib jadi baris TERAKHIR - lihat docblock method
-        // ini. implode("\n") tidak menyertakan newline trailing, sehingga
-        // "EOF" persis jadi baris terakhir tanpa baris kosong setelahnya.
-        $body = "ver:{$ver}\n".$kartuList->implode("\n")."\nEOF";
+        $body = "ver:{$ver}\n" . $kartuList->implode("\n") . "\nEOF";
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -11860,34 +11915,14 @@ class PerpustakaanDeviceController extends Controller
      * Firmware: nvsSyncToServer() / syncQueueFile() - POST batch.
      * Request: { "data": [ { rfid, timestamp, device_id, sync_mode: true } ] }
      * Response WAJIB: { "data": [ { rfid, timestamp, status: "ok"|"error", message? } ] }
-     * karena firmware membaca field "status" per item untuk logging kegagalan
-     * (appendFailedLogToSD) - status HTTP selalu 200 selama body valid JSON,
-     * kegagalan per-record dilaporkan lewat "status" per item, bukan HTTP code.
-     *
-     * KONTRAK BARU (v2.3.4, menutup celah silent data loss) - sebelumnya
-     * $request->input('data', []) diam-diam jatuh ke array kosong jika body
-     * bukan JSON valid/field 'data' tidak ada, lalu tetap membalas HTTP 200
-     * dengan {"data":[]} - firmware lama menganggap ini SUKSES (kode 200) dan
-     * MENGHAPUS file antrian, padahal NOL record tersimpan - silent data loss
-     * tanpa jejak di server maupun perangkat. SEKARANG: body yang tidak
-     * memuat array 'data' non-kosong yang valid akan ditolak HTTP 422 (bukan
-     * 200) - firmware v2.3.4+ menangani ini sebagai kegagalan yang di-retry
-     * (lihat syncQueueFileWithRetry()), TIDAK menghapus file.
-     *
-     * Firmware v2.3.4+ JUGA memvalidasi jumlah item di response 'data' sama
-     * dengan jumlah yang dikirim SEBELUM menghapus file antrian (lihat
-     * syncQueueFile()) - lapisan pertahanan kedua kalau body rusak sebagian
-     * (bukan kosong total, tapi item hilang di tengah jalan).
+     * - kontrak validasi body/count TIDAK BERUBAH oleh refactor ini (lihat
+     * catatan versi v2.3.4 sebelumnya, masih berlaku persis sama).
      */
     public function syncBulk(Request $request): JsonResponse
     {
         $items = $request->input('data');
 
         if (! is_array($items) || count($items) === 0) {
-            // BARU: body tidak valid/field 'data' tidak ada/kosong - TOLAK
-            // tegas, jangan diam-diam balas 200 dengan data kosong (itu yang
-            // menyebabkan device menghapus antrian tanpa satu pun record
-            // benar-benar tersimpan).
             return response()->json([
                 'error' => 'field "data" wajib berupa array berisi minimal 1 item',
             ], 422);
@@ -11897,10 +11932,6 @@ class PerpustakaanDeviceController extends Controller
 
         foreach ($items as $item) {
             if (! is_array($item)) {
-                // BARU: item individual yang bukan object/array valid - catat
-                // sebagai error per-item, bukan diabaikan diam-diam (supaya
-                // count response tetap sama dengan count request, lihat
-                // validasi count di firmware).
                 $hasil[] = ['rfid' => '', 'timestamp' => '', 'status' => 'error', 'message' => 'item tidak valid'];
 
                 continue;
@@ -11947,26 +11978,17 @@ class PerpustakaanDeviceController extends Controller
         }
 
         try {
-            $kunjungan = Kunjungan::create([
-                'user_id' => $user->id,
-                'tanggal' => $tanggal,
-                'jam_tap' => $this->parseJamDariTimestamp($timestamp),
-                'source' => SourceKunjungan::Rfid,
-            ]);
+            $this->kunjunganService->catatKunjungan(
+                user: $user,
+                source: SourceKunjungan::Rfid,
+                sumberLabel: $deviceId,
+                tanggal: $tanggal,
+                jamTap: $this->parseJamDariTimestamp($timestamp),
+            );
         } catch (QueryException $e) {
             // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return response()->json(['error' => 'sudah tercatat hari ini'], 400);
         }
-
-        $this->pointService->catatEvent(
-            $user,
-            EventTypePoint::Kunjungan,
-            'kunjungan',
-            $kunjungan->id,
-        );
-
-        $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
-        $this->kirimNotifikasiKunjungan($user, $kunjungan, $deviceId);
 
         return response()->json(['status' => 'ok'], 200);
     }
@@ -12021,7 +12043,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {
@@ -12052,78 +12074,23 @@ class PerpustakaanDeviceController extends Controller
             ->exists();
 
         if ($duplikat) {
-            // Bukan error sesungguhnya (device sudah kirim data valid, hanya
-            // duplikat) - tetap dilaporkan "error" karena firmware hanya
-            // mengenal dua status ("ok"/lainnya) untuk keputusan logging lokal.
             return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'duplikat'];
         }
 
         try {
-            $kunjungan = Kunjungan::create([
-                'user_id' => $user->id,
-                'tanggal' => $tanggal,
-                'jam_tap' => $this->parseJamDariTimestamp($timestamp),
-                'source' => SourceKunjungan::Rfid,
-            ]);
+            $this->kunjunganService->catatKunjungan(
+                user: $user,
+                source: SourceKunjungan::Rfid,
+                sumberLabel: $deviceId,
+                tanggal: $tanggal,
+                jamTap: $this->parseJamDariTimestamp($timestamp),
+            );
         } catch (QueryException $e) {
             // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'duplikat'];
         }
 
-        $this->pointService->catatEvent(
-            $user,
-            EventTypePoint::Kunjungan,
-            'kunjungan',
-            $kunjungan->id,
-        );
-
-        $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
-        $this->kirimNotifikasiKunjungan($user, $kunjungan, $deviceId);
-
         return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'ok'];
-    }
-
-    /**
-     * Satu sumber kebenaran pembuatan Transaksi jenis 'kunjungan' - dipanggil
-     * dari prosesSatuTap() (batch) maupun kirimLangsung() (real-time),
-     * jangan duplikasi query Transaksi::create() di tempat lain (Aturan
-     * poin 3).
-     */
-    protected function catatTransaksiKunjungan(User $user, Kunjungan $kunjungan, string $deviceId): Transaksi
-    {
-        return Transaksi::create([
-            'user_id' => $user->id,
-            'jenis' => JenisTransaksi::Kunjungan,
-            'diproses_oleh' => null, // otomatis oleh device, bukan staff
-            'tanggal' => now(),
-            'keterangan' => "Kunjungan RFID jam {$kunjungan->jam_tap} via device '{$deviceId}'.",
-        ]);
-    }
-
-    /**
-     * Satu sumber kebenaran notifikasi WhatsApp untuk event Kunjungan -
-     * dipanggil dari prosesSatuTap() (batch) maupun kirimLangsung()
-     * (real-time), jangan duplikasi pemanggilan WhatsappService di tempat
-     * lain (Aturan poin 3). Berlaku SEMUA role (dikonfirmasi eksplisit) -
-     * tidak ada filter berdasarkan User.role di sini.
-     *
-     * TODO: ASUMSI - template_code 'kunjungan_tercatat' dan variabel
-     * nama/jam_tap/device belum terdaftar di dokumen Template WhatsApp
-     * yang tersedia saat penulisan kode ini - WAJIB didaftarkan manual di
-     * panel gateway zedlabs sebelum notifikasi ini terkirim dengan benar.
-     */
-    protected function kirimNotifikasiKunjungan(User $user, Kunjungan $kunjungan, string $deviceId): void
-    {
-        $this->whatsappService->kirimEvent(
-            eventCode: 'kunjungan_tercatat',
-            nomorTujuan: $user->no_telepon,
-            variables: [
-                'nama' => $user->nama,
-                'jam_tap' => (string) $kunjungan->jam_tap,
-                'device' => $deviceId,
-            ],
-            referenceId: "kunjungan-{$kunjungan->id}",
-        );
     }
 
     protected function parseTanggalDariTimestamp(string $timestamp): string
@@ -12150,16 +12117,10 @@ class PerpustakaanDeviceController extends Controller
     }
 
     /**
-     * Kontrak BARU: firmware lapor hasil OTA setelah proses update/reboot.
+     * Kontrak: firmware lapor hasil OTA setelah proses update/reboot.
      * Request: { "device_id": string, "version": string, "status": "success"|"failed","error"?: string }
      * Response selalu { "status": "ok" } dengan HTTP 200 selama device_id
-     * terisi - device tidak perlu retry berdasarkan response ini (best
-     * effort logging, bukan bagian kritis alur OTA).
-     *
-     * Jika status "success", firmware_version di DeviceLog ikut
-     * diperbarui ke versi baru (device sudah berhasil boot versi
-     * tersebut). Jika "failed", firmware_version TIDAK diubah (device
-     * masih menjalankan versi lama) - hanya ota_error yang dicatat.
+     * terisi - TIDAK BERUBAH oleh refactor ini.
      */
     public function firmwareReport(Request $request): JsonResponse
     {
@@ -17601,6 +17562,120 @@ class KenaikanKelasService
                 'status' => $statusBaru,
                 'tanggal_selesai' => now()->toDateString(),
             ]);
+    }
+}
+
+```
+---
+
+## app/Services/KunjunganService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Enums\EventTypePoint;
+use App\Enums\JenisTransaksi;
+use App\Enums\SourceKunjungan;
+use App\Models\Kunjungan;
+use App\Models\Transaksi;
+use App\Models\User;
+
+/**
+ * Satu sumber kebenaran untuk SELURUH efek samping saat Kunjungan berhasil
+ * tercatat (Point, Transaksi log, notifikasi WhatsApp) - dipakai bersama
+ * oleh PerpustakaanDeviceController (tap fisik via Attendance Machine
+ * ESP32) DAN Sirkulasi (tap via RFID reader keyboard-wedge di halaman
+ * web) - Aturan poin 3 (DRY). Method ini TIDAK melakukan pengecekan
+ * duplikat (exists() hari ini) - itu tetap tanggung jawab caller, karena
+ * masing-masing caller punya kebutuhan response yang berbeda saat
+ * duplikat terdeteksi (mis. device controller balas HTTP 400/'error',
+ * Sirkulasi cukup tetap tampilkan modal).
+ *
+ * Kontrak: caller WAJIB menangkap Illuminate\Database\QueryException
+ * sendiri untuk race condition unique index kunjungans_unik_aktif_unique
+ * (lihat pemanggil di PerpustakaanDeviceController/Sirkulasi) - method ini
+ * sengaja TIDAK menangkapnya supaya caller bisa memutuskan response yang
+ * sesuai kontrak masing-masing (Aturan poin 17 - kontrak device binding,
+ * tidak boleh diseragamkan diam-diam).
+ */
+class KunjunganService
+{
+    public function __construct(
+        protected PointService $pointService,
+        protected WhatsappService $whatsappService,
+    ) {}
+
+    /**
+     * @param string $sumberLabel label singkat sumber tap untuk audit
+     *   manual - dipakai di keterangan Transaksi maupun variabel 'device'
+     *   di WhatsApp (mis. device_id fisik ESP32, atau
+     *   'Sirkulasi (RFID Reader Web)' untuk tap via halaman web).
+     */
+    public function catatKunjungan(
+        User $user,
+        SourceKunjungan $source,
+        string $sumberLabel,
+        ?string $tanggal = null,
+        ?string $jamTap = null,
+    ): Kunjungan {
+        $kunjungan = Kunjungan::create([
+            'user_id' => $user->id,
+            'tanggal' => $tanggal ?? today()->toDateString(),
+            'jam_tap' => $jamTap ?? now()->toTimeString(),
+            'source' => $source,
+        ]);
+
+        $this->pointService->catatEvent(
+            $user,
+            EventTypePoint::Kunjungan,
+            'kunjungan',
+            $kunjungan->id,
+        );
+
+        $this->catatTransaksiKunjungan($user, $kunjungan, $sumberLabel);
+        $this->kirimNotifikasiKunjungan($user, $kunjungan, $sumberLabel);
+
+        return $kunjungan;
+    }
+
+    /**
+     * TODO: GAP-SPEC - Transaksi hasil ini TIDAK menyimpan FK balik ke
+     * Kunjungan (tabel kunjungans tidak punya kolom transaksi_id, sengaja
+     * tidak ditambah migration baru - lihat diskusi terkait di
+     * PerpustakaanDeviceController versi sebelumnya). Transaksi murni log
+     * independen, keterangan berisi ringkasan (jam tap + sumber) untuk
+     * audit manual.
+     */
+    protected function catatTransaksiKunjungan(User $user, Kunjungan $kunjungan, string $sumberLabel): Transaksi
+    {
+        return Transaksi::create([
+            'user_id' => $user->id,
+            'jenis' => JenisTransaksi::Kunjungan,
+            'diproses_oleh' => null, // otomatis (device/tap), bukan input manual staff
+            'tanggal' => now(),
+            'keterangan' => "Kunjungan RFID jam {$kunjungan->jam_tap} via '{$sumberLabel}'.",
+        ]);
+    }
+
+    /**
+     * TODO: ASUMSI - eventCode 'kunjungan_tercatat' dan variabel
+     * nama/jam_tap/device WAJIB terdaftar di panel gateway zedlabs dengan
+     * template_code PERSIS 'kunjungan_tercatat' (lihat catatan lama di
+     * PerpustakaanDeviceController) - berlaku sama untuk kedua sumber tap.
+     */
+    protected function kirimNotifikasiKunjungan(User $user, Kunjungan $kunjungan, string $sumberLabel): void
+    {
+        $this->whatsappService->kirimEvent(
+            eventCode: 'kunjungan_tercatat',
+            nomorTujuan: $user->no_telepon,
+            variables: [
+                'nama' => $user->nama,
+                'jam_tap' => (string) $kunjungan->jam_tap,
+                'device' => $sumberLabel,
+            ],
+            referenceId: "kunjungan-{$kunjungan->id}",
+        );
     }
 }
 
@@ -27371,12 +27446,12 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
             display: none !important;
         }
 
-        /* BARU (gap iterasi ini) - heading halaman ("Sirkulasi") sudah
-           dikosongkan lewat getHeading() di Sirkulasi.php, tapi container
-           header tetap dirender (kosong) oleh layout panel dan
-           menyisakan spacing kosong di atas konten - fallback CSS ini
-           menyembunyikan container tsb sepenuhnya, murni kosmetik
-           konsisten dgn pola sembunyi-sidebar di atas. */
+        /* Heading halaman ("Sirkulasi") sudah dikosongkan lewat
+           getHeading() di Sirkulasi.php, tapi container header tetap
+           dirender (kosong) oleh layout panel dan menyisakan spacing
+           kosong di atas konten - fallback CSS ini menyembunyikan
+           container tsb sepenuhnya, murni kosmetik konsisten dgn pola
+           sembunyi-sidebar di atas. */
         .fi-header {
             display: none !important;
         }
@@ -27386,7 +27461,8 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
             border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 20px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
-            padding: 1.25rem;
+            padding: clamp(0.875rem, 1.5vh, 1.25rem);
+            box-sizing: border-box;
         }
 
         html.dark .sirkulasi-section {
@@ -27402,6 +27478,7 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
             background: #ffffff;
             border: 1px solid rgba(0, 0, 0, 0.08);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
+            box-sizing: border-box;
         }
 
         html.dark .transaksi-cepat-card {
@@ -27415,9 +27492,37 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 
         .transaksi-cepat-avatar-wrap {
             position: relative;
-            width: 88px;
-            height: 88px;
+            width: clamp(64px, 9vh, 88px);
+            height: clamp(64px, 9vh, 88px);
             margin-bottom: 0.75rem;
+        }
+
+        .transaksi-cepat-avatar-inner {
+            position: absolute;
+            inset: 4px;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            border-radius: 50%;
+            object-fit: cover;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: clamp(16px, 2.2vh, 22px);
+            color: #fff;
+        }
+
+        .transaksi-cepat-avatar-badge {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: clamp(18px, 2.5vh, 24px);
+            height: clamp(18px, 2.5vh, 24px);
+            border-radius: 50%;
+            border: 2px solid #fff;
         }
 
         .transaksi-cepat-ring {
@@ -27442,18 +27547,15 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
             stroke-linecap: round;
         }
 
-        /* BARU: kolom ditukar (1fr utama, 320px jam) - SEBELUMNYA tetap
-           "320px 1fr" walau urutan visual sudah ditukar lewat `order`,
-           akibatnya section utama (order: 1, masuk track pertama) malah
-           kepencet ke 320px dan jam (order: 2) melebar 1fr - kebalik dari
-           yang dimaksud. Ukuran track sekarang ikut ditukar supaya
-           section utama benar-benar lebar (1fr) dan jam tetap ringkas
-           (320px), konsisten dengan posisi visualnya. */
+        /* Grid 2 kolom (form utama 1fr, jam ringkas) - lebar kolom jam
+           responsif via clamp() supaya proporsional di berbagai
+           DPI/scale layar 14" (1366x768 s.d. 1920x1080@125-150%). */
         .sirkulasi-grid {
             display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 1.25rem;
+            grid-template-columns: 1fr clamp(220px, 20vw, 320px);
+            gap: clamp(0.75rem, 1.25vw, 1.25rem);
             align-items: stretch;
+            min-height: 0;
         }
 
         @media (max-width: 900px) {
@@ -27472,6 +27574,7 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
 
         .sirkulasi-grid > .transaksi-cepat-card {
             order: 1;
+            min-width: 0;
         }
 
         @media (max-width: 900px) {
@@ -27481,32 +27584,37 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
             }
         }
 
-        /* Wrapper - min-height percobaan sebelumnya DIHAPUS (nilainya
-           tidak akurat, menyebabkan footer terdorong ke luar layar).
-           Footer sekarang fixed ke viewport (lihat app-footer--fixed-
-           sirkulasi), jadi wrapper cukup diberi padding-bottom supaya
-           konten paling bawah tidak tertutup footer fixed tersebut. */
         .sirkulasi-page-wrapper {
             display: flex;
             flex-direction: column;
             padding-bottom: 3.5rem;
+            min-height: 100vh;
+            box-sizing: border-box;
         }
 
         .sirkulasi-page-content {
             flex: 1 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.75rem, 1.5vh, 1.25rem);
+            padding: clamp(0.75rem, 1.5vh, 1.25rem) clamp(0.75rem, 1.5vw, 1rem);
+            box-sizing: border-box;
         }
 
-        /* BARU: jam analog dibuat lebih "berkelas" - dial kaca dengan
-           gradient halus, index jam+menit bertingkat, jarum meruncing
-           dengan drop-shadow tipis, cap tengah metalik. Murni visual,
-           TIDAK mengubah binding Alpine (derajatJam/Menit/Detik tetap
-           sama). */
+        /* Jam analog - dial kaca dengan gradient halus, index jam+menit
+           bertingkat, jarum meruncing dengan drop-shadow tipis, cap
+           tengah metalik. Ukuran SEKARANG responsif (clamp berbasis vh)
+           supaya proporsional terhadap ruang yang tersisa di layar 14"
+           setelah dikurangi section form & riwayat - TIDAK mengubah
+           binding Alpine (derajatJam/Menit/Detik tetap sama). */
         .jam-analog-wrapper {
             position: relative;
         }
 
         .jam-analog-svg {
             filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.12));
+            width: clamp(120px, 16vh, 200px);
+            height: clamp(120px, 16vh, 200px);
         }
 
         html.dark .jam-analog-svg {
@@ -27581,179 +27689,268 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
         .jam-analog-svg .cap-tengah-dalam {
             fill: var(--primary-500);
         }
+
+        .modal-selamat-datang-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-selamat-datang-card {
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 3rem 2.5rem;
+            text-align: center;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+        }
+
+        html.dark .modal-selamat-datang-card {
+            background: #1e293b;
+        }
+
+        .modal-selamat-datang-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 88px;
+            height: 88px;
+            border-radius: 50%;
+            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, var(--success-400), var(--success-600));
+        }
+
+        /* RESPONSIF (gap iterasi ini) - riwayat harian
+           (livewire:riwayat-sirkulasi-harian) sebelumnya max-height fixed
+           320px inline di riwayat-sirkulasi-harian.blade.php - class ini
+           menggantikannya, dibatasi via clamp(vh) supaya proporsional
+           dan seluruh section (jam + form + riwayat) tetap muat dalam 1
+           layar 14" tanpa scroll wrapper luar. Lihat perubahan terkait
+           di riwayat-sirkulasi-harian.blade.php (ganti style inline
+           max-height:320px menjadi class ini). */
+        .riwayat-harian-scroll {
+            max-height: clamp(180px, 22vh, 320px) !important;
+        }
+
+        /* RESPONSIF - viewport pendek (tinggi <= 800px, umum di layar
+           14" 1366x768 native atau discale) - perkecil heading utama &
+           spacing wrapper supaya seluruh konten (jam analog, form scan,
+           riwayat) tetap muat penuh tanpa terpotong/scroll. */
+        @media (max-height: 800px) {
+            .transaksi-cepat-card h2 {
+                font-size: 1rem !important;
+            }
+
+            .sirkulasi-page-content {
+                gap: 0.625rem;
+                padding: 0.625rem 0.75rem;
+            }
+        }
     </style>
 
-<script>
-    function registerAlpineComponentsSirkulasi() {
-        Alpine.data('transaksiCepatIdleTimer', () => ({
-            idleTimeoutMs: 10000,
-            tickMs: 100,
-            msLeft: 10000,
-            timerId: null,
-            listenersAttached: false,
+    <script>
+        function registerAlpineComponentsSirkulasi() {
+            Alpine.data('transaksiCepatIdleTimer', () => ({
+                idleTimeoutMs: 10000,
+                tickMs: 100,
+                msLeft: 10000,
+                timerId: null,
+                listenersAttached: false,
 
-            init() {
-                this.resetTimer();
+                init() {
+                    this.resetTimer();
 
-                if (! this.listenersAttached) {
-                    const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
-                    this._onActivity = () => this.resetTimer();
-                    activityEvents.forEach(evt => document.addEventListener(evt, this._onActivity));
+                    if (! this.listenersAttached) {
+                        const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
+                        this._onActivity = () => this.resetTimer();
+                        activityEvents.forEach(evt => document.addEventListener(evt, this._onActivity));
+
+                        document.addEventListener('livewire:navigating', () => {
+                            this.stopTimer();
+                            activityEvents.forEach(evt => document.removeEventListener(evt, this._onActivity));
+                        }, { once: true });
+
+                        this.listenersAttached = true;
+                    }
+                },
+
+                resetTimer() {
+                    this.msLeft = this.idleTimeoutMs;
+                    if (this.timerId) clearInterval(this.timerId);
+                    this.timerId = setInterval(() => {
+                        this.msLeft -= this.tickMs;
+                        if (this.msLeft <= 0) {
+                            this.stopTimer();
+                            this.msLeft = this.idleTimeoutMs;
+                            this.$wire.selesai();
+                        }
+                    }, this.tickMs);
+                },
+
+                stopTimer() {
+                    if (this.timerId) {
+                        clearInterval(this.timerId);
+                        this.timerId = null;
+                    }
+                },
+
+                get progress() {
+                    return Math.max(0, Math.min(1, this.msLeft / this.idleTimeoutMs));
+                },
+
+                get secondsLeft() {
+                    return Math.ceil(Math.max(0, this.msLeft) / 1000);
+                },
+
+                get ringDashoffset() {
+                    const circumference = 263.89;
+                    return circumference * (1 - this.progress);
+                },
+
+                get ringColor() {
+                    if (this.progress > 0.4) return '#22c55e';
+                    if (this.progress > 0.2) return '#eab308';
+                    return '#ef4444';
+                },
+            }));
+
+            Alpine.data('jamSirkulasi', () => ({
+                now: new Date(),
+                timerId: null,
+
+                init() {
+                    this.timerId = setInterval(() => { this.now = new Date(); }, 1000);
+                    document.addEventListener('livewire:navigating', () => {
+                        if (this.timerId) clearInterval(this.timerId);
+                    }, { once: true });
+                },
+
+                get jamDigital() {
+                    return this.now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                },
+
+                get tanggalHariIni() {
+                    return this.now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                },
+
+                get derajatJam() {
+                    return (this.now.getHours() % 12) * 30 + (this.now.getMinutes() * 0.5);
+                },
+
+                get derajatMenit() {
+                    return this.now.getMinutes() * 6 + (this.now.getSeconds() * 0.1);
+                },
+
+                get derajatDetik() {
+                    return this.now.getSeconds() * 6;
+                },
+            }));
+
+            Alpine.data('sirkulasiAutoFocus', () => ({
+                init() {
+                    const refocus = () => {
+                        const el = document.querySelector('[data-sirkulasi-scan-input]');
+                        if (el && document.activeElement !== el) {
+                            el.focus();
+                        }
+                    };
+
+                    this._refocus = refocus;
+                    document.addEventListener('livewire:morphed', refocus);
+                    document.addEventListener('click', () => setTimeout(refocus, 60));
+                    setTimeout(refocus, 150);
 
                     document.addEventListener('livewire:navigating', () => {
-                        this.stopTimer();
-                        activityEvents.forEach(evt => document.removeEventListener(evt, this._onActivity));
+                        document.removeEventListener('livewire:morphed', this._refocus);
                     }, { once: true });
 
-                    this.listenersAttached = true;
-                }
-            },
+                    // BARU (gap: "Uncaught (in promise) Object {status:null,...}"
+                    // di layar Sirkulasi standby) - reload PENUH halaman (bukan
+                    // wire:navigate) setelah kiosk benar-benar idle dalam waktu
+                    // lama, supaya session/CSRF selalu segar SEBELUM sempat
+                    // expired di tengah request otomatis (idle-timer
+                    // transaksiCepatIdleTimer / poll notifikasi Filament yang
+                    // tetap jalan di background walau kiosk tidak disentuh).
+                    //
+                    // TODO: ASUMSI - threshold 15 menit (jauh di bawah
+                    // SESSION_LIFETIME 120 menit di config/session.php) dipilih
+                    // sebagai margin aman default; sesuaikan jika pola pemakaian
+                    // kiosk di lapangan berbeda (mis. jeda antar siswa lebih
+                    // lama dari ini secara normal, bukan berarti "idle").
+                    this.initReloadIdleKiosk();
+                },
 
-            resetTimer() {
-                this.msLeft = this.idleTimeoutMs;
-                if (this.timerId) clearInterval(this.timerId);
-                this.timerId = setInterval(() => {
-                    this.msLeft -= this.tickMs;
-                    if (this.msLeft <= 0) {
-                        this.stopTimer();
-                        this.msLeft = this.idleTimeoutMs;
-                        this.$wire.selesai();
-                    }
-                }, this.tickMs);
-            },
+                initReloadIdleKiosk() {
+                    const idleReloadMs = 15 * 60 * 1000;
+                    const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
+                    let timerId = null;
 
-            stopTimer() {
-                if (this.timerId) {
-                    clearInterval(this.timerId);
-                    this.timerId = null;
-                }
-            },
+                    const jadwalkanReload = () => {
+                        if (timerId) clearTimeout(timerId);
+                        timerId = setTimeout(() => window.location.reload(), idleReloadMs);
+                    };
 
-            get progress() {
-                return Math.max(0, Math.min(1, this.msLeft / this.idleTimeoutMs));
-            },
+                    const onActivity = () => jadwalkanReload();
 
-            get secondsLeft() {
-                return Math.ceil(Math.max(0, this.msLeft) / 1000);
-            },
+                    activityEvents.forEach(evt => document.addEventListener(evt, onActivity));
+                    // livewire:morphed dihitung sebagai "aktivitas" juga - kalau
+                    // transaksi memang sedang berjalan (scan berhasil dsb.),
+                    // kiosk TIDAK dianggap idle walau tidak ada keydown/klik
+                    // dalam window waktu tertentu (mis. antrean beberapa siswa
+                    // scan berurutan tanpa jeda mengetik).
+                    document.addEventListener('livewire:morphed', onActivity);
 
-            get ringDashoffset() {
-                const circumference = 263.89;
-                return circumference * (1 - this.progress);
-            },
+                    document.addEventListener('livewire:navigating', () => {
+                        if (timerId) clearTimeout(timerId);
+                        activityEvents.forEach(evt => document.removeEventListener(evt, onActivity));
+                        document.removeEventListener('livewire:morphed', onActivity);
+                    }, { once: true });
 
-            get ringColor() {
-                if (this.progress > 0.4) return '#22c55e';
-                if (this.progress > 0.2) return '#eab308';
-                return '#ef4444';
-            },
-        }));
+                    jadwalkanReload();
+                },
+            }));
+        }
 
-        Alpine.data('jamSirkulasi', () => ({
-            now: new Date(),
-            timerId: null,
-
-            init() {
-                this.timerId = setInterval(() => { this.now = new Date(); }, 1000);
-                document.addEventListener('livewire:navigating', () => {
-                    if (this.timerId) clearInterval(this.timerId);
-                }, { once: true });
-            },
-
-            get jamDigital() {
-                return this.now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            },
-
-            get tanggalHariIni() {
-                return this.now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-            },
-
-            get derajatJam() {
-                return (this.now.getHours() % 12) * 30 + (this.now.getMinutes() * 0.5);
-            },
-
-            get derajatMenit() {
-                return this.now.getMinutes() * 6 + (this.now.getSeconds() * 0.1);
-            },
-
-            get derajatDetik() {
-                return this.now.getSeconds() * 6;
-            },
-        }));
-
-        Alpine.data('sirkulasiAutoFocus', () => ({
-            init() {
-                const refocus = () => {
-                    const el = document.querySelector('[data-sirkulasi-scan-input]');
-                    if (el && document.activeElement !== el) {
-                        el.focus();
-                    }
-                };
-
-                this._refocus = refocus;
-                document.addEventListener('livewire:morphed', refocus);
-                document.addEventListener('click', () => setTimeout(refocus, 60));
-                setTimeout(refocus, 150);
-
-                document.addEventListener('livewire:navigating', () => {
-                    document.removeEventListener('livewire:morphed', this._refocus);
-                }, { once: true });
-
-                // BARU (gap: "Uncaught (in promise) Object {status:null,...}"
-                // di layar Sirkulasi standby) - reload PENUH halaman (bukan
-                // wire:navigate) setelah kiosk benar-benar idle dalam waktu
-                // lama, supaya session/CSRF selalu segar SEBELUM sempat
-                // expired di tengah request otomatis (idle-timer
-                // transaksiCepatIdleTimer / poll notifikasi Filament yang
-                // tetap jalan di background walau kiosk tidak disentuh).
-                //
-                // TODO: ASUMSI - threshold 15 menit (jauh di bawah
-                // SESSION_LIFETIME 120 menit di config/session.php) dipilih
-                // sebagai margin aman default; sesuaikan jika pola pemakaian
-                // kiosk di lapangan berbeda (mis. jeda antar siswa lebih
-                // lama dari ini secara normal, bukan berarti "idle").
-                this.initReloadIdleKiosk();
-            },
-
-            initReloadIdleKiosk() {
-                const idleReloadMs = 15 * 60 * 1000;
-                const activityEvents = ['keydown', 'input', 'click', 'mousemove'];
-                let timerId = null;
-
-                const jadwalkanReload = () => {
-                    if (timerId) clearTimeout(timerId);
-                    timerId = setTimeout(() => window.location.reload(), idleReloadMs);
-                };
-
-                const onActivity = () => jadwalkanReload();
-
-                activityEvents.forEach(evt => document.addEventListener(evt, onActivity));
-                // livewire:morphed dihitung sebagai "aktivitas" juga - kalau
-                // transaksi memang sedang berjalan (scan berhasil dsb.),
-                // kiosk TIDAK dianggap idle walau tidak ada keydown/klik
-                // dalam window waktu tertentu (mis. antrean beberapa siswa
-                // scan berurutan tanpa jeda mengetik).
-                document.addEventListener('livewire:morphed', onActivity);
-
-                document.addEventListener('livewire:navigating', () => {
-                    if (timerId) clearTimeout(timerId);
-                    activityEvents.forEach(evt => document.removeEventListener(evt, onActivity));
-                    document.removeEventListener('livewire:morphed', onActivity);
-                }, { once: true });
-
-                jadwalkanReload();
-            },
-        }));
-    }
-
-    if (window.Alpine) {
-        registerAlpineComponentsSirkulasi();
-    } else {
-        document.addEventListener('alpine:init', registerAlpineComponentsSirkulasi);
-    }
-</script>
+        if (window.Alpine) {
+            registerAlpineComponentsSirkulasi();
+        } else {
+            document.addEventListener('alpine:init', registerAlpineComponentsSirkulasi);
+        }
+    </script>
 
     <div class="sirkulasi-page-wrapper" x-data="sirkulasiAutoFocus">
+
+        @if ($tampilkanModalSelamatDatang)
+            <div
+                class="modal-selamat-datang-overlay"
+                x-data
+                x-init="setTimeout(() => $wire.tutupModalSelamatDatang(), {{ \App\Filament\Pages\Sirkulasi::DURASI_MODAL_SELAMAT_DATANG_MS }})"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+            >
+                <div class="modal-selamat-datang-card">
+                    <div class="modal-selamat-datang-icon">
+                        <x-filament::icon icon="heroicon-o-check" style="width: 44px; height: 44px; color: #fff;" />
+                    </div>
+                    <h2 class="text-gray-950 dark:text-white" style="font-size: 1.375rem; font-weight: 600; margin: 0 0 0.5rem;">
+                        Selamat datang, {{ $namaModalSelamatDatang }}!
+                    </h2>
+                    <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.9375rem; margin: 0 0 1rem;">
+                        Data kunjungan Anda hari ini sudah tercatat.
+                    </p>
+                    <x-filament::badge color="warning" size="lg">
+                        Total {{ $pointModalSelamatDatang }} Point
+                    </x-filament::badge>
+                </div>
+            </div>
+        @endif
+
         <div class="sirkulasi-page-content" style="display: flex; flex-direction: column; gap: 1.25rem; padding: 1.25rem 1rem;">
 
             <div class="sirkulasi-grid">
@@ -27862,9 +28059,14 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
                             <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
                                 <div class="transaksi-cepat-avatar-wrap">
                                     @if ($user->avatar)
-                                        <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar) }}" alt="{{ $user->nama }}" width="80" height="80" style="display: block; width: 80px; height: 80px; margin: 4px; border-radius: 50%; object-fit: cover; border: 3px solid {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};" />
+                                        <img
+                                            src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar) }}"
+                                            alt="{{ $user->nama }}"
+                                            class="transaksi-cepat-avatar-inner"
+                                            style="border: 3px solid {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};"
+                                        />
                                     @else
-                                        <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; margin: 4px; border-radius: 50%; font-weight: 600; font-size: 22px; color: #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};">
+                                        <div class="transaksi-cepat-avatar-inner" style="background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};">
                                             {{ collect(explode(' ', $user->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
                                         </div>
                                     @endif
@@ -27873,10 +28075,10 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
                                         <circle cx="44" cy="44" r="42" :stroke="ringColor" stroke-dasharray="263.89" :stroke-dashoffset="ringDashoffset" stroke-linecap="round"></circle>
                                     </svg>
 
-                                    <span style="position: absolute; bottom: 2px; right: 2px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--success-500)' }};">
+                                    <span class="transaksi-cepat-avatar-badge" style="background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--success-500)' }};">
                                         <x-filament::icon
                                             :icon="$user->status_suspend ? 'heroicon-s-lock-closed' : 'heroicon-s-check'"
-                                            style="width: 14px; height: 14px; color: #fff;"
+                                            style="width: 60%; height: 60%; color: #fff;"
                                         />
                                     </span>
                                 </div>
@@ -27970,53 +28172,6 @@ window.ChartExport = { downloadChartImage, downloadChartPdf };
                                     </div>
                                 </div>
                             @endif
-
-                            <div class="dark:border-white/10" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 1.5rem; margin-top: 1.5rem;">
-                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                                    <p class="text-gray-950 dark:text-white" style="font-size: 0.875rem; font-weight: 600; margin: 0;">Riwayat Scan (sesi ini)</p>
-                                    @if (count($riwayatScan) > 0)
-                                        <x-filament::badge color="gray">{{ count($riwayatScan) }} item</x-filament::badge>
-                                    @endif
-                                </div>
-
-                                <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 260px; overflow-y: auto;">
-                                    @forelse ($riwayatScan as $item)
-                                        <div
-                                            x-data="{ show: false }"
-                                            x-init="requestAnimationFrame(() => show = true)"
-                                            x-transition:enter="transition ease-out duration-300"
-                                            x-transition:enter-start="opacity-0"
-                                            x-transition:enter-end="opacity-100"
-                                            class="bg-gray-50 dark:bg-white/5"
-                                            style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 12px;"
-                                        >
-                                            <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: {{ $item['sukses'] ? 'var(--success-100)' : 'var(--danger-100)' }}; color: {{ $item['sukses'] ? 'var(--success-700)' : 'var(--danger-700)' }};">
-                                                @if (! $item['sukses'])
-                                                    <x-filament::icon icon="heroicon-o-x-mark" style="width: 16px; height: 16px;" />
-                                                @elseif ($item['aksi'] === 'dipinjamkan')
-                                                    <x-filament::icon icon="heroicon-o-arrow-up-circle" style="width: 16px; height: 16px;" />
-                                                @else
-                                                    <x-filament::icon icon="heroicon-o-arrow-down-circle" style="width: 16px; height: 16px;" />
-                                                @endif
-                                            </div>
-                                            <div style="flex: 1; min-width: 0;">
-                                                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                                    <p class="text-gray-950 dark:text-white" style="font-weight: 500; font-size: 0.875rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['judul'] }}</p>
-                                                    @if ($item['sukses'])
-                                                        <x-filament::badge :color="$item['aksi'] === 'dipinjamkan' ? 'primary' : 'success'" size="sm">{{ ucfirst($item['aksi']) }}</x-filament::badge>
-                                                    @endif
-                                                </div>
-                                                <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.75rem; margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $item['barcode'] }} &middot; {{ $item['pesan'] }}</p>
-                                            </div>
-                                        </div>
-                                    @empty
-                                        <div class="text-gray-400 dark:text-gray-500" style="text-align: center; padding: 2rem 0;">
-                                            <x-filament::icon icon="heroicon-o-book-open" style="width: 32px; height: 32px; margin: 0 auto 0.5rem;" />
-                                            <p style="font-size: 0.875rem; margin: 0;">Belum ada buku yang di-scan.</p>
-                                        </div>
-                                    @endforelse
-                                </div>
-                            </div>
                         </div>
                     @endif
                 </div>
@@ -28515,7 +28670,7 @@ window.ChartExport = window.ChartExport || (function () {
              sebelumnya tumbuh tanpa batas seiring transaksi hari ini
              bertambah, ikut mendorong footer di bawah halaman keluar
              viewport (gap: footer harus terlihat tanpa scroll dahulu). --}}
-        <div style="overflow-x: auto; overflow-y: auto; max-height: 320px;">
+                <div class="riwayat-harian-scroll" style="overflow-x: auto; overflow-y: auto;">
             <table style="width: 100%; border-collapse: collapse; font-size: 0.8125rem;">
                 <thead>
                     <tr class="text-gray-500 dark:text-gray-400" style="text-align: left; border-bottom: 1px solid rgba(0,0,0,0.08);">

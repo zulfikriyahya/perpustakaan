@@ -66,6 +66,8 @@
         .transaksi-cepat-avatar-inner {
             position: absolute;
             inset: 4px;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
             border-radius: 50%;
             object-fit: cover;
             display: flex;

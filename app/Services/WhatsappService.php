@@ -5,10 +5,10 @@ namespace App\Services;
 use App\Exceptions\WhatsappGatewayException;
 use App\Jobs\KirimNotifikasiWhatsapp;
 use App\Models\Setting;
+use App\Support\NomorTeleponFormatter;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use App\Support\NomorTeleponFormatter;
 
 /**
  * Wrapper untuk WhatsApp Gateway (whatsapp.zedlabs.id API v1, autentikasi HMAC-SHA256).
@@ -148,11 +148,11 @@ class WhatsappService
         $nomor = preg_replace('/[^0-9]/', '', $nomor) ?? '';
 
         if (str_starts_with($nomor, '0')) {
-            return '62' . substr($nomor, 1);
+            return '62'.substr($nomor, 1);
         }
 
         if (! str_starts_with($nomor, '62')) {
-            return '62' . $nomor;
+            return '62'.$nomor;
         }
 
         return $nomor;
@@ -176,7 +176,7 @@ class WhatsappService
         $response = Http::withHeaders($headers)
             ->timeout($this->timeout)
             ->withBody($bodyString, 'application/json')
-            ->send($method, $this->baseUrl . $path);
+            ->send($method, $this->baseUrl.$path);
 
         return [$response->status(), $response->json() ?? []];
     }

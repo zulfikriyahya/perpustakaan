@@ -72,7 +72,7 @@ class PerpustakaanDeviceController extends Controller
             ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
             ->pluck('no_kartu_rfid');
 
-        $body = "ver:{$ver}\n" . $kartuList->implode("\n") . "\nEOF";
+        $body = "ver:{$ver}\n".$kartuList->implode("\n")."\nEOF";
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -209,7 +209,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {

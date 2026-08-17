@@ -6,6 +6,7 @@ use App\Models\Peminjaman;
 use App\Models\Pengembalian;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -65,7 +66,7 @@ class RiwayatSirkulasiHarian extends Component
             ->whereDate('tanggal_pinjam', today())
             ->with(['user', 'eksemplar.buku', 'diprosesOleh'])
             ->get()
-            ->map(fn(Peminjaman $p) => [
+            ->map(fn (Peminjaman $p) => [
                 'waktu' => $p->created_at,
                 'aksi' => 'dipinjamkan',
                 'nama_user' => $p->user?->nama ?? '-',
@@ -79,7 +80,7 @@ class RiwayatSirkulasiHarian extends Component
             ->whereDate('tanggal_kembali', today())
             ->with(['peminjaman.user', 'peminjaman.eksemplar.buku', 'diprosesOleh'])
             ->get()
-            ->map(fn(Pengembalian $pg) => [
+            ->map(fn (Pengembalian $pg) => [
                 'waktu' => $pg->created_at,
                 'aksi' => 'dikembalikan',
                 'nama_user' => $pg->peminjaman?->user?->nama ?? '-',
@@ -101,7 +102,7 @@ class RiwayatSirkulasiHarian extends Component
      * render form scan untuk kasus normal (mengetik/scan yang gagal/masih
      * mencari tidak memicu query berat ini).
      */
-    #[\Livewire\Attributes\On('transaksi-sirkulasi-berhasil')]
+    #[On('transaksi-sirkulasi-berhasil')]
     public function refreshRiwayat(): void
     {
         unset($this->totalPenggunaHariIni, $this->riwayatTransaksiHariIni, $this->riwayatLengkapHariIni);

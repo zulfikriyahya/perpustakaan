@@ -41,13 +41,13 @@ class NomorTeleponFormatter
         // dianggap '0' redundan) - buang '0' setelah '62' lalu proses sebagai
         // digit ber-prefix '62' biasa.
         if (str_starts_with($digitSaja, '620')) {
-            $digitSaja = '62' . substr($digitSaja, 3);
+            $digitSaja = '62'.substr($digitSaja, 3);
         }
 
         $ternormalisasi = match (true) {
             str_starts_with($digitSaja, '62') => $digitSaja,
-            str_starts_with($digitSaja, '0') => '62' . substr($digitSaja, 1),
-            str_starts_with($digitSaja, '8') => '62' . $digitSaja,
+            str_starts_with($digitSaja, '0') => '62'.substr($digitSaja, 1),
+            str_starts_with($digitSaja, '8') => '62'.$digitSaja,
             default => null,
         };
 

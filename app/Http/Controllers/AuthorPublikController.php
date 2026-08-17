@@ -13,7 +13,7 @@ class AuthorPublikController extends Controller
 
         $authors = Author::query()
             ->withCount('bukus')
-            ->when($search !== '', fn($q) => $q->where('nama', 'like', "%{$search}%"))
+            ->when($search !== '', fn ($q) => $q->where('nama', 'like', "%{$search}%"))
             ->orderBy('nama')
             ->paginate(12)
             ->withQueryString();

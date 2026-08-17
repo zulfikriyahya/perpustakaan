@@ -41,8 +41,8 @@ class DashboardPanelProvider extends PanelProvider
             ->path('dashboard')
             ->login(Login::class)
             ->brandLogo(new HtmlString(
-                '<img src="' . asset('images/brand-lightmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />' .
-                    '<img src="' . asset('images/brand-darkmode.png') . '" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
+                '<img src="'.asset('images/brand-lightmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-light" />'.
+                    '<img src="'.asset('images/brand-darkmode.png').'" alt="Logo MTs Negeri 1 Pandeglang" class="fi-logo-dark" />'
             ))
             ->brandLogoHeight('2.5rem')
             ->spa(hasPrefetching: true)
@@ -51,18 +51,18 @@ class DashboardPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn(): string => view('filament.partials.global-logo-style')->render()
-                    . view('filament.partials.global-footer-style')->render(),
+                fn (): string => view('filament.partials.global-logo-style')->render()
+                    .view('filament.partials.global-footer-style')->render(),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): string => request()->routeIs('filament.dashboard.auth.*')
+                fn (): string => request()->routeIs('filament.dashboard.auth.*')
                     ? ''
                     : view('filament.partials.app-footer')->render(),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): string => view('filament.partials.chart-export-script')->render(),
+                fn (): string => view('filament.partials.chart-export-script')->render(),
             )
             /**
              * BARU (gap: "Uncaught (in promise) Object {status:null,...}")
@@ -75,11 +75,11 @@ class DashboardPanelProvider extends PanelProvider
              */
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): string => view('filament.partials.global-request-error-guard')->render(),
+                fn (): string => view('filament.partials.global-request-error-guard')->render(),
             )
             ->renderHook(
                 PanelsRenderHook::TOPBAR_END,
-                fn(): string => request()->routeIs('filament.dashboard.auth.*')
+                fn (): string => request()->routeIs('filament.dashboard.auth.*')
                     ? ''
                     : view('filament.partials.sirkulasi-topbar-button')->render(),
             )

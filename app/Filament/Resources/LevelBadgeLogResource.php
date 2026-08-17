@@ -41,7 +41,7 @@ class LevelBadgeLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(LevelBadgeLogExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
@@ -60,8 +60,8 @@ class LevelBadgeLogResource extends Resource
                 Action::make('downloadSertifikat')
                     ->label('Download Sertifikat')
                     ->icon('heroicon-o-document-arrow-down')
-                    ->visible(fn(LevelBadgeLog $record) => filled($record->sertifikat_path))
-                    ->url(fn(LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    ->visible(fn (LevelBadgeLog $record) => filled($record->sertifikat_path))
+                    ->url(fn (LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path))
                     ->openUrlInNewTab(),
             ])
             ->toolbarActions([]);

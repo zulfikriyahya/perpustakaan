@@ -23,7 +23,7 @@ class EditUser extends EditRecord
     {
         return [
             DeleteAction::make()
-                ->hidden(fn($record) => $record && $record->hasRole('super_admin')),
+                ->hidden(fn ($record) => $record && $record->hasRole('super_admin')),
         ];
     }
 

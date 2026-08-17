@@ -46,7 +46,7 @@ class RewardLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(RewardLogExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
@@ -65,8 +65,8 @@ class RewardLogResource extends Resource
                 Action::make('downloadSertifikat')
                     ->label('Download Sertifikat')
                     ->icon('heroicon-o-document-arrow-down')
-                    ->visible(fn(RewardLog $record) => filled($record->sertifikat_path))
-                    ->url(fn(RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    ->visible(fn (RewardLog $record) => filled($record->sertifikat_path))
+                    ->url(fn (RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path))
                     ->openUrlInNewTab(),
             ])
             ->toolbarActions([]);

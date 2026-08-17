@@ -18,11 +18,11 @@ class BukuPublikController extends Controller
         $search = trim((string) $request->query('q', ''));
 
         $ebooks = Buku::query()
-            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
                 JenisFileBuku::Pdf->value,
                 JenisFileBuku::Epub->value,
             ]))
-            ->when($search !== '', fn($q) => $q->where(function ($q) use ($search) {
+            ->when($search !== '', fn ($q) => $q->where(function ($q) use ($search) {
                 $q->where('judul', 'like', "%{$search}%")
                     ->orWhere('penulis', 'like', "%{$search}%");
             }))
@@ -32,11 +32,11 @@ class BukuPublikController extends Controller
             ->withQueryString();
 
         $audiobooks = Buku::query()
-            ->whereHas('files', fn($q) => $q->whereIn('jenis', [
+            ->whereHas('files', fn ($q) => $q->whereIn('jenis', [
                 JenisFileBuku::AudioMp3->value,
                 JenisFileBuku::AudioWav->value,
             ]))
-            ->when($search !== '', fn($q) => $q->where(function ($q) use ($search) {
+            ->when($search !== '', fn ($q) => $q->where(function ($q) use ($search) {
                 $q->where('judul', 'like', "%{$search}%")
                     ->orWhere('penulis', 'like', "%{$search}%");
             }))

@@ -19,7 +19,7 @@ class BukuKatalogController extends Controller
         $search = trim((string) $request->query('q', ''));
 
         $bukus = Buku::query()
-            ->when($search !== '', fn($q) => $q->where(function ($q) use ($search) {
+            ->when($search !== '', fn ($q) => $q->where(function ($q) use ($search) {
                 $q->where('judul', 'like', "%{$search}%")
                     ->orWhere('penulis', 'like', "%{$search}%");
             }))

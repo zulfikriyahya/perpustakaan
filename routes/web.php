@@ -51,7 +51,7 @@ Route::get('/robots.txt', function () {
         'Disallow: /dashboard',
         'Disallow: /unduh-bulk-data',
         '',
-        'Sitemap: ' . route('sitemap'),
+        'Sitemap: '.route('sitemap'),
     ];
 
     return response(implode("\n", $lines), 200, ['Content-Type' => 'text/plain']);

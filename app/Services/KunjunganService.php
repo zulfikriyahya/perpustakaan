@@ -35,10 +35,10 @@ class KunjunganService
     ) {}
 
     /**
-     * @param string $sumberLabel label singkat sumber tap untuk audit
-     *   manual - dipakai di keterangan Transaksi maupun variabel 'device'
-     *   di WhatsApp (mis. device_id fisik ESP32, atau
-     *   'Sirkulasi (RFID Reader Web)' untuk tap via halaman web).
+     * @param  string  $sumberLabel  label singkat sumber tap untuk audit
+     *                               manual - dipakai di keterangan Transaksi maupun variabel 'device'
+     *                               di WhatsApp (mis. device_id fisik ESP32, atau
+     *                               'Sirkulasi (RFID Reader Web)' untuk tap via halaman web).
      */
     public function catatKunjungan(
         User $user,

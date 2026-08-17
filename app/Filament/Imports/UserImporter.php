@@ -84,18 +84,18 @@ class UserImporter extends Importer
                 ->helperText('Kosongkan jika bukan siswa atau belum mau ditempatkan ke kelas.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('VII A')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jurusan_kode')
                 ->label('Kode jurusan (wajib jika kelas_nama diisi)')
                 ->helperText('Lihat daftar kode di menu Master Data > Jurusan.')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('Non_Jurusan')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('tahun_pelajaran_nama')
                 ->label('Tahun pelajaran (wajib jika kelas_nama diisi)')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example('2026/2027')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
             ImportColumn::make('jabatan')
                 ->rules(['nullable', 'string', 'max:255'])
                 ->example(''),
@@ -120,7 +120,7 @@ class UserImporter extends Importer
                 ->helperText('Isi URL gambar (https://...) atau pathfile yang bisa diakses server. Kosongkan jika tidak ingin mengubah avatar.')
                 ->rules(['nullable', 'string', 'max:2048'])
                 ->example('https://contoh-sekolah.id/foto/siswa1.jpg')
-                ->fillRecordUsing(fn(?string $state) => null),
+                ->fillRecordUsing(fn (?string $state) => null),
         ];
     }
 

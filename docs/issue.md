@@ -102,53 +102,34 @@ Ketentuan:
 
 - Perbaiki:
 ```
-Uncaught (in promise)
-Object { status: null, body: null, json: null, errors: null }
-2
-Uncaught (in promise)
-Object { status: null, body: null, json: null, errors: null }
-​
-body: null
-​
-errors: null
-​
-json: null
-​
-status: null
-​
-<prototype>: Object { … }
-​​
-__defineGetter__: function __defineGetter__()
-​​
-__defineSetter__: function __defineSetter__()
-​​
-__lookupGetter__: function __lookupGetter__()
-​​
-__lookupSetter__: function __lookupSetter__()
-​​
-__proto__:
-​​
-constructor: function Object()
-​​
-hasOwnProperty: function hasOwnProperty()
-​​
-isPrototypeOf: function isPrototypeOf()
-​​
-propertyIsEnumerable: function propertyIsEnumerable()
-​​
-toLocaleString: function toLocaleString()
-​​
-toString: function toString()
-​​
-valueOf: function valueOf()
-​​
-<get __proto__()>: function __proto__()
-​​
-<set __proto__()>: function __proto__()
-2
-Uncaught (in promise)
-Object { status: null, body: null, json: null, errors: null }
-2
+perpustakaan on main ≡  ~5 via  24.13.1
+➜ pamfs
+
+
+   Illuminate\Database\QueryException
+
+  SQLSTATE[HY000] [2002] Connection refused (Connection: mysql, Host: 127.0.0.1, Port: 3306,Database: perpustakaan_mtsn1pandeglang, SQL: select exists (select 1 from information_schema.tables where table_schema = schema() and table_name = 'migrations' and table_type in ('BASE TABLE', 'SYSTEM VERSIONED')) as `exists`)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:857
+    853▕             $exceptionType = ($isUniqueConstraintError = $this->isUniqueConstraintError($e))
+    854▕                 ? UniqueConstraintViolationException::class
+    855▕                 : QueryException::class;
+    856▕
+  ➜ 857▕             $exception = new $exceptionType(
+    858▕                 $this->getNameWithReadWriteType(),
+    859▕                 $query,
+    860▕                 $this->prepareBindings($bindings),
+    861▕                 $e,
+
+      +53 vendor frames
+
+  54  artisan:16
+      Illuminate\Foundation\Application::handleCommand()
+
+perpustakaan on main ≡  ~5 via  24.13.1 x
+➜
+
+
 
 ​
 ```

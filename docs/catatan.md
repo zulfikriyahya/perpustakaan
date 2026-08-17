@@ -24,14 +24,9 @@
 
 Bahan bahan :
 
-    Amplifier XH543
+Controller Huidu HD-WF1 Wifi RGB Full Color Running Text P10
 
-  Link pembelian : https://shp.ee/hrddic8
+Led running text module p10 rgb full color outdoor scan 1/8
 
-    Tune Control Ne555
+ESP32 C3 Super Mini
 
-  Link pembelian : https://shp.ee/7pndsgn
-
-    Bluetooth MP3
-
-  Link pembelian : https://shp.ee/2sj4yx9

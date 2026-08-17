@@ -359,15 +359,8 @@
 │       └── MasterDataRegistry.php
 ├── bootstrap
 │   ├── cache
-│   │   ├── filament
-│   │   │   └── panels
-│   │   │       └── dashboard.php
-│   │   ├── blade-icons.php
-│   │   ├── config.php
-│   │   ├── events.php
 │   │   ├── .gitignore
 │   │   ├── packages.php
-│   │   ├── routes-v7.php
 │   │   └── services.php
 │   ├── app.php
 │   └── providers.php
@@ -500,6 +493,7 @@
 │       │       ├── chart-export-script.blade.php
 │       │       ├── global-footer-style.blade.php
 │       │       ├── global-logo-style.blade.php
+│       │       ├── global-request-error-guard.blade.php
 │       │       └── sirkulasi-topbar-button.blade.php
 │       ├── livewire
 │       │   └── riwayat-sirkulasi-harian.blade.php
@@ -543,4 +537,4 @@
 ├── vite.config.js
 └── yarn.lock
 
-123 directories, 421 files
+121 directories, 417 files

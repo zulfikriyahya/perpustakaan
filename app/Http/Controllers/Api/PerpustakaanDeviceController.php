@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\EventTypePoint;
-use App\Enums\JenisTransaksi;
 use App\Enums\SourceKunjungan;
 use App\Enums\StatusOtaFirmware;
 use App\Http\Controllers\Controller;
@@ -11,11 +9,9 @@ use App\Models\DeviceLog;
 use App\Models\FirmwareRelease;
 use App\Models\Kunjungan;
 use App\Models\Setting;
-use App\Models\Transaksi;
 use App\Models\User;
-use App\Services\PointService;
+use App\Services\KunjunganService;
 use App\Services\RfidResolverService;
-use App\Services\WhatsappService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,48 +23,20 @@ use Illuminate\Http\Response;
  * response shape di sini WAJIB dicek ulang terhadap parsing firmware
  * (mis. downloadRfidDb() parsing baris per baris plain text, BUKAN JSON).
  *
- * FITUR: setiap Kunjungan yang berhasil tercatat (baik lewat syncBulk()
- * maupun kirimLangsung()) membuat 1 Transaksi (jenis: kunjungan) - lihat
- * catatTransaksiKunjungan(). Ini TIDAK mengubah response/HTTP status yang
- * dikirim ke device sama sekali (kontrak firmware poin 17 Aturan tetap
- * utuh) - murni penambahan log di sisi server setelah Kunjungan berhasil
- * dibuat.
- *
- * TODO: GAP-SPEC - Transaksi hasil ini TIDAK menyimpan FK balik ke
- * Kunjungan (tabel kunjungans tidak punya kolom transaksi_id, sengaja
- * tidak ditambah migration baru - lihat diskusi terkait). Transaksi
- * murni log independen, keterangan berisi ringkasan (jam tap + device_id)
- * untuk audit manual.
- *
- * FITUR BARU (iterasi ini): setiap Kunjungan yang berhasil tercatat JUGA
- * mengirim notifikasi WhatsApp ke user bersangkutan (berlaku SEMUA role -
- * dikonfirmasi eksplisit), lewat kirimNotifikasiKunjungan() - dipanggil
- * dari prosesSatuTap() (batch) dan kirimLangsung() (real-time), satu
- * sumber kebenaran (Aturan poin 3). TIDAK mengubah response ke device.
- *
- * TODO: ASUMSI - eventCode 'kunjungan_tercatat' dan variabel
- * nama/jam_tap/device BELUM terdaftar di panel gateway zedlabs pada saat
- * penulisan kode ini (tidak ada di dokumen Template WhatsApp - Perpustakaan
- * yang tersedia). WAJIB didaftarkan manual di panel gateway dengan
- * template_code PERSIS 'kunjungan_tercatat' dan variabel dengan nama yang
- * sama, sebelum notifikasi ini benar-benar terkirim dengan isi yang benar.
- * Setting 'wa_template_kunjungan_tercatat' (lihat SettingSeeder/
- * PengaturanSistem) menyimpan template_code yang dipakai - ubah di panel
- * Pengaturan Sistem jika template_code di gateway berbeda dari default.
- *
- * PERINGATAN VOLUME (dikonfirmasi, risiko diterima sadar) - setiap tap
- * RFID sekarang mengirim 1 WA ke SEMUA role (siswa/pegawai/pustakawan/
- * admin) tanpa throttle/rate-limit tambahan. Job tetap lewat queue
- * 'whatsapp' (tidak blocking request device) - tapi volume kirim harian
- * bisa signifikan tergantung jumlah user aktif; pastikan kuota/limit di
- * sisi gateway WhatsApp mencukupi.
+ * REFACTOR (iterasi ini) - efek samping saat Kunjungan berhasil tercatat
+ * (Point, Transaksi log jenis kunjungan, notifikasi WhatsApp) DIPINDAH ke
+ * App\Services\KunjunganService - SEKARANG dipakai bersama dengan halaman
+ * Sirkulasi (tap via RFID reader web), supaya kedua jalur benar-benar
+ * identik hasilnya (Aturan poin 3, DRY - "cara kedua" adalah redundansi
+ * dari cara device, dikonfirmasi eksplisit). PERUBAHAN INI MURNI INTERNAL:
+ * request/response shape, HTTP status code, dan urutan validasi ke device
+ * TIDAK BERUBAH SAMA SEKALI - kontrak firmware (Aturan poin 17) tetap utuh.
  */
 class PerpustakaanDeviceController extends Controller
 {
     public function __construct(
         protected RfidResolverService $rfidResolver,
-        protected PointService $pointService,
-        protected WhatsappService $whatsappService,
+        protected KunjunganService $kunjunganService,
     ) {}
 
     public function ping(): JsonResponse
@@ -90,28 +58,10 @@ class PerpustakaanDeviceController extends Controller
      * Firmware menolak baris yang bukan persis 10 digit angka (lihat parsing
      * di downloadRfidDb: isdigit check, len == 10).
      *
-     * KONTRAK BARU (v2.3.2, GAP-SPEC lama soal Content-Length ditutup) - baris
-     * TERAKHIR body SEKARANG SELALU "EOF" (persis, tanpa newline trailing
-     * setelahnya). Ini WAJIB ada karena server berjalan di belakang Cloudflare
-     * dengan HTTP/2 - tidak ada header Content-Length yang dikirim ke device,
-     * dan koneksi tidak ditutup segera setelah body selesai (keep-alive), jadi
-     * device (ESP32/HTTPClient) tidak punya cara lain yang andal untuk tahu
-     * transfer sudah selesai vs baru stall/putus di tengah jalan. Firmware
-     * v2.3.2 ke atas menunggu baris "EOF" sebagai satu-satunya penanda sukses
-     * sebelum menimpa rfid_db.txt lama dan menaikkan versi lokal (lihat
-     * downloadRfidDb() di firmware) - TANPA baris ini, device v2.3.2+ akan
-     * SELALU menganggap transfer gagal/terpotong dan retry terus setiap
-     * siklus RFID_DB_CHECK_INTERVAL.
-     *
-     * Endpoint ini HANYA dipakai device Attendance Machine perpustakaan ini
-     * (dikonfirmasi) - aman mengubah format body tanpa memengaruhi konsumen
-     * lain.
-     *
-     * TODO: GAP-SPEC - hanya user dengan no_kartu_rfid berformat 10 digit
-     * numeric yang akan ikut ter-generate ke daftar ini; kartu format lain
-     * (mis. seeder lama 'RFID58354503') otomatis TIDAK akan muncul di device
-     * karena tidak lolos filter regex di bawah - bukan bug, tapi konsekuensi
-     * kontrak firmware. Data lama wajib diperbaiki ke format 10 digit.
+     * KONTRAK: baris TERAKHIR body SELALU "EOF" (persis, tanpa newline
+     * trailing setelahnya) - firmware v2.3.2+ menunggu baris ini sebagai
+     * satu-satunya penanda sukses transfer (lihat catatan versi
+     * sebelumnya) - TIDAK BERUBAH oleh refactor ini.
      */
     public function rfidList(): Response
     {
@@ -122,10 +72,7 @@ class PerpustakaanDeviceController extends Controller
             ->where('no_kartu_rfid', 'REGEXP', '^[0-9]{10}$')
             ->pluck('no_kartu_rfid');
 
-        // BARU: baris "EOF" wajib jadi baris TERAKHIR - lihat docblock method
-        // ini. implode("\n") tidak menyertakan newline trailing, sehingga
-        // "EOF" persis jadi baris terakhir tanpa baris kosong setelahnya.
-        $body = "ver:{$ver}\n".$kartuList->implode("\n")."\nEOF";
+        $body = "ver:{$ver}\n" . $kartuList->implode("\n") . "\nEOF";
 
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
@@ -134,34 +81,14 @@ class PerpustakaanDeviceController extends Controller
      * Firmware: nvsSyncToServer() / syncQueueFile() - POST batch.
      * Request: { "data": [ { rfid, timestamp, device_id, sync_mode: true } ] }
      * Response WAJIB: { "data": [ { rfid, timestamp, status: "ok"|"error", message? } ] }
-     * karena firmware membaca field "status" per item untuk logging kegagalan
-     * (appendFailedLogToSD) - status HTTP selalu 200 selama body valid JSON,
-     * kegagalan per-record dilaporkan lewat "status" per item, bukan HTTP code.
-     *
-     * KONTRAK BARU (v2.3.4, menutup celah silent data loss) - sebelumnya
-     * $request->input('data', []) diam-diam jatuh ke array kosong jika body
-     * bukan JSON valid/field 'data' tidak ada, lalu tetap membalas HTTP 200
-     * dengan {"data":[]} - firmware lama menganggap ini SUKSES (kode 200) dan
-     * MENGHAPUS file antrian, padahal NOL record tersimpan - silent data loss
-     * tanpa jejak di server maupun perangkat. SEKARANG: body yang tidak
-     * memuat array 'data' non-kosong yang valid akan ditolak HTTP 422 (bukan
-     * 200) - firmware v2.3.4+ menangani ini sebagai kegagalan yang di-retry
-     * (lihat syncQueueFileWithRetry()), TIDAK menghapus file.
-     *
-     * Firmware v2.3.4+ JUGA memvalidasi jumlah item di response 'data' sama
-     * dengan jumlah yang dikirim SEBELUM menghapus file antrian (lihat
-     * syncQueueFile()) - lapisan pertahanan kedua kalau body rusak sebagian
-     * (bukan kosong total, tapi item hilang di tengah jalan).
+     * - kontrak validasi body/count TIDAK BERUBAH oleh refactor ini (lihat
+     * catatan versi v2.3.4 sebelumnya, masih berlaku persis sama).
      */
     public function syncBulk(Request $request): JsonResponse
     {
         $items = $request->input('data');
 
         if (! is_array($items) || count($items) === 0) {
-            // BARU: body tidak valid/field 'data' tidak ada/kosong - TOLAK
-            // tegas, jangan diam-diam balas 200 dengan data kosong (itu yang
-            // menyebabkan device menghapus antrian tanpa satu pun record
-            // benar-benar tersimpan).
             return response()->json([
                 'error' => 'field "data" wajib berupa array berisi minimal 1 item',
             ], 422);
@@ -171,10 +98,6 @@ class PerpustakaanDeviceController extends Controller
 
         foreach ($items as $item) {
             if (! is_array($item)) {
-                // BARU: item individual yang bukan object/array valid - catat
-                // sebagai error per-item, bukan diabaikan diam-diam (supaya
-                // count response tetap sama dengan count request, lihat
-                // validasi count di firmware).
                 $hasil[] = ['rfid' => '', 'timestamp' => '', 'status' => 'error', 'message' => 'item tidak valid'];
 
                 continue;
@@ -221,26 +144,17 @@ class PerpustakaanDeviceController extends Controller
         }
 
         try {
-            $kunjungan = Kunjungan::create([
-                'user_id' => $user->id,
-                'tanggal' => $tanggal,
-                'jam_tap' => $this->parseJamDariTimestamp($timestamp),
-                'source' => SourceKunjungan::Rfid,
-            ]);
+            $this->kunjunganService->catatKunjungan(
+                user: $user,
+                source: SourceKunjungan::Rfid,
+                sumberLabel: $deviceId,
+                tanggal: $tanggal,
+                jamTap: $this->parseJamDariTimestamp($timestamp),
+            );
         } catch (QueryException $e) {
             // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return response()->json(['error' => 'sudah tercatat hari ini'], 400);
         }
-
-        $this->pointService->catatEvent(
-            $user,
-            EventTypePoint::Kunjungan,
-            'kunjungan',
-            $kunjungan->id,
-        );
-
-        $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
-        $this->kirimNotifikasiKunjungan($user, $kunjungan, $deviceId);
 
         return response()->json(['status' => 'ok'], 200);
     }
@@ -295,7 +209,7 @@ class PerpustakaanDeviceController extends Controller
         $rilisTerbaru = FirmwareRelease::query()
             ->where('aktif', true)
             ->get()
-            ->sortByDesc(fn ($r) => $this->normalisasiVersi($r->version))
+            ->sortByDesc(fn($r) => $this->normalisasiVersi($r->version))
             ->first();
 
         if (! $rilisTerbaru || $this->bandingkanVersi($rilisTerbaru->version, $versiDevice) <= 0) {
@@ -326,78 +240,23 @@ class PerpustakaanDeviceController extends Controller
             ->exists();
 
         if ($duplikat) {
-            // Bukan error sesungguhnya (device sudah kirim data valid, hanya
-            // duplikat) - tetap dilaporkan "error" karena firmware hanya
-            // mengenal dua status ("ok"/lainnya) untuk keputusan logging lokal.
             return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'duplikat'];
         }
 
         try {
-            $kunjungan = Kunjungan::create([
-                'user_id' => $user->id,
-                'tanggal' => $tanggal,
-                'jam_tap' => $this->parseJamDariTimestamp($timestamp),
-                'source' => SourceKunjungan::Rfid,
-            ]);
+            $this->kunjunganService->catatKunjungan(
+                user: $user,
+                source: SourceKunjungan::Rfid,
+                sumberLabel: $deviceId,
+                tanggal: $tanggal,
+                jamTap: $this->parseJamDariTimestamp($timestamp),
+            );
         } catch (QueryException $e) {
             // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'duplikat'];
         }
 
-        $this->pointService->catatEvent(
-            $user,
-            EventTypePoint::Kunjungan,
-            'kunjungan',
-            $kunjungan->id,
-        );
-
-        $this->catatTransaksiKunjungan($user, $kunjungan, $deviceId);
-        $this->kirimNotifikasiKunjungan($user, $kunjungan, $deviceId);
-
         return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'ok'];
-    }
-
-    /**
-     * Satu sumber kebenaran pembuatan Transaksi jenis 'kunjungan' - dipanggil
-     * dari prosesSatuTap() (batch) maupun kirimLangsung() (real-time),
-     * jangan duplikasi query Transaksi::create() di tempat lain (Aturan
-     * poin 3).
-     */
-    protected function catatTransaksiKunjungan(User $user, Kunjungan $kunjungan, string $deviceId): Transaksi
-    {
-        return Transaksi::create([
-            'user_id' => $user->id,
-            'jenis' => JenisTransaksi::Kunjungan,
-            'diproses_oleh' => null, // otomatis oleh device, bukan staff
-            'tanggal' => now(),
-            'keterangan' => "Kunjungan RFID jam {$kunjungan->jam_tap} via device '{$deviceId}'.",
-        ]);
-    }
-
-    /**
-     * Satu sumber kebenaran notifikasi WhatsApp untuk event Kunjungan -
-     * dipanggil dari prosesSatuTap() (batch) maupun kirimLangsung()
-     * (real-time), jangan duplikasi pemanggilan WhatsappService di tempat
-     * lain (Aturan poin 3). Berlaku SEMUA role (dikonfirmasi eksplisit) -
-     * tidak ada filter berdasarkan User.role di sini.
-     *
-     * TODO: ASUMSI - template_code 'kunjungan_tercatat' dan variabel
-     * nama/jam_tap/device belum terdaftar di dokumen Template WhatsApp
-     * yang tersedia saat penulisan kode ini - WAJIB didaftarkan manual di
-     * panel gateway zedlabs sebelum notifikasi ini terkirim dengan benar.
-     */
-    protected function kirimNotifikasiKunjungan(User $user, Kunjungan $kunjungan, string $deviceId): void
-    {
-        $this->whatsappService->kirimEvent(
-            eventCode: 'kunjungan_tercatat',
-            nomorTujuan: $user->no_telepon,
-            variables: [
-                'nama' => $user->nama,
-                'jam_tap' => (string) $kunjungan->jam_tap,
-                'device' => $deviceId,
-            ],
-            referenceId: "kunjungan-{$kunjungan->id}",
-        );
     }
 
     protected function parseTanggalDariTimestamp(string $timestamp): string
@@ -424,16 +283,10 @@ class PerpustakaanDeviceController extends Controller
     }
 
     /**
-     * Kontrak BARU: firmware lapor hasil OTA setelah proses update/reboot.
+     * Kontrak: firmware lapor hasil OTA setelah proses update/reboot.
      * Request: { "device_id": string, "version": string, "status": "success"|"failed","error"?: string }
      * Response selalu { "status": "ok" } dengan HTTP 200 selama device_id
-     * terisi - device tidak perlu retry berdasarkan response ini (best
-     * effort logging, bukan bagian kritis alur OTA).
-     *
-     * Jika status "success", firmware_version di DeviceLog ikut
-     * diperbarui ke versi baru (device sudah berhasil boot versi
-     * tersebut). Jika "failed", firmware_version TIDAK diubah (device
-     * masih menjalankan versi lama) - hanya ota_error yang dicatat.
+     * terisi - TIDAK BERUBAH oleh refactor ini.
      */
     public function firmwareReport(Request $request): JsonResponse
     {

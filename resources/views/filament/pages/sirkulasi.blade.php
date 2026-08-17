@@ -222,6 +222,41 @@
         .jam-analog-svg .cap-tengah-dalam {
             fill: var(--primary-500);
         }
+
+        .modal-selamat-datang-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-selamat-datang-card {
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 3rem 2.5rem;
+            text-align: center;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+        }
+
+        html.dark .modal-selamat-datang-card {
+            background: #1e293b;
+        }
+
+        .modal-selamat-datang-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 88px;
+            height: 88px;
+            border-radius: 50%;
+            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, var(--success-400), var(--success-600));
+        }
     </style>
 
 <script>
@@ -395,6 +430,33 @@
 </script>
 
     <div class="sirkulasi-page-wrapper" x-data="sirkulasiAutoFocus">
+
+        @if ($tampilkanModalSelamatDatang)
+            <div
+                class="modal-selamat-datang-overlay"
+                x-data
+                x-init="setTimeout(() => $wire.tutupModalSelamatDatang(), {{ \App\Filament\Pages\Sirkulasi::DURASI_MODAL_SELAMAT_DATANG_MS }})"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+            >
+                <div class="modal-selamat-datang-card">
+                    <div class="modal-selamat-datang-icon">
+                        <x-filament::icon icon="heroicon-o-check" style="width: 44px; height: 44px; color: #fff;" />
+                    </div>
+                    <h2 class="text-gray-950 dark:text-white" style="font-size: 1.375rem; font-weight: 600; margin: 0 0 0.5rem;">
+                        Selamat datang, {{ $namaModalSelamatDatang }}!
+                    </h2>
+                    <p class="text-gray-500 dark:text-gray-400" style="font-size: 0.9375rem; margin: 0 0 1rem;">
+                        Data kunjungan Anda hari ini sudah tercatat.
+                    </p>
+                    <x-filament::badge color="warning" size="lg">
+                        Total {{ $pointModalSelamatDatang }} Point
+                    </x-filament::badge>
+                </div>
+            </div>
+        @endif
+
         <div class="sirkulasi-page-content" style="display: flex; flex-direction: column; gap: 1.25rem; padding: 1.25rem 1rem;">
 
             <div class="sirkulasi-grid">

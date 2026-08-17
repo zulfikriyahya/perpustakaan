@@ -2,7 +2,18 @@
 
 namespace App\Filament\Pages;
 
+use App\Enums\EventTypePoint;
+use App\Enums\KondisiBuku;
+use App\Enums\SourceKunjungan;
+use App\Enums\StatusEksemplar;
+use App\Enums\StatusPeminjaman;
 use App\Models\Eksemplar;
+use App\Models\Kunjungan;
+use App\Models\User;
+use App\Services\PointService;
+use App\Services\WhatsappService;
+use Illuminate\Database\QueryException;
+use App\Services\KunjunganService;
 
 /**
  * Halaman "Sirkulasi": DUPLIKAT fungsi & fitur Transaksi Cepat, tapi TANPA
@@ -14,42 +25,41 @@ use App\Models\Eksemplar;
  * limit anti-scan-ganda, fallback pencarian nama/judul, dst.) TIDAK
  * terduplikasi (Aturan poin 3 - DRY).
  *
- * LAYOUT (gap iterasi ini) - 2 area:
- *  1. Section utama: form scan (kartu/kode) - identik dengan Transaksi
- *     Cepat, logic diwarisi. Jam analog ditampilkan di sampingnya (posisi
- *     visual jam vs form diatur murni lewat CSS `order` di view, TIDAK
- *     memengaruhi logic apa pun di sini).
- *  2. Riwayat harian (total pengguna hari ini, riwayat 5 transaksi
- *     terbaru, seluruh riwayat hari ini) - method computed-nya DIPINDAH
- *     ke child Livewire component terpisah (App\Livewire\RiwayatSirkulasiHarian,
- *     lihat class tsb) supaya render-nya TIDAK ikut ter-trigger ulang
- *     setiap kali form scan berubah (wire:model.live.debounce di
- *     kartuInput/kodeInput). Ini alasan MURNI PERFORMA (scan terasa
- *     "stuck" sebelumnya karena query riwayat berat ikut jalan tiap
- *     keystroke) - bukan perubahan kebijakan data.
+ * FITUR BARU (iterasi ini) - AUTO KUNJUNGAN SAAT TAP PERTAMA HARI INI:
+ * di-hook lewat override muatUser() (SATU titik yang dipanggil baik dari
+ * scanKartu() exact-match maupun pilihUser() fallback nama di parent
+ * TransaksiCepat - Aturan poin 3, DRY, tidak menduplikasi logic resolve
+ * user).
  *
- * KEPUTUSAN YANG TETAP DIPEGANG (dari iterasi sebelumnya, tidak berubah):
- *  - Sumber data riwayat: Peminjaman/Pengembalian (BUKAN Kunjungan) -
- *    dikonfirmasi eksplisit sebelumnya.
- *  - TIDAK ADA polling - riwayat dihitung ulang saat page load/navigate,
- *    dan SEKARANG JUGA saat event 'transaksi-sirkulasi-berhasil'
- *    di-dispatch dari prosesEksemplar() override di bawah (bukan
- *    berdasarkan interval waktu).
- *  - TIDAK ada Widget Filament riwayat kunjungan di halaman ini.
- *  - Halaman ini TETAP TIDAK menulis ke tabel kunjungans/peminjamans di
- *    luar jalur scan yang sudah ada.
+ * Alur:
+ *  - User BELUM punya Kunjungan hari ini -> catat Kunjungan (source
+ *    Rfid - tetap tap kartu RFID fisik via reader keyboard-wedge yang
+ *    sama dengan RfidResolverService, HANYA jalur transportnya beda dari
+ *    Attendance Machine/ESP32; dikonfirmasi eksplisit BUKAN Manual),
+ *    trigger PointService::catatEvent(Kunjungan) + notifikasi WhatsApp
+ *    (pola SAMA seperti PerpustakaanDeviceController::prosesSatuTap() /
+ *    kirimLangsung()) - lalu tampilkan modal "Selamat datang" dan
+ *    KEMBALI ke state standby Sirkulasi (TIDAK lanjut memuat panel
+ *    pinjam/kembali buku - parent::muatUser() TIDAK dipanggil).
+ *  - User SUDAH punya Kunjungan hari ini -> panggil parent::muatUser()
+ *    seperti biasa, lanjut alur sirkulasi pinjam/kembali (tidak berubah).
  *
- * Otorisasi: reuse canAccess() yang diwarisi dari TransaksiCepat
- * (Create:Peminjaman) - TIDAK ada permission baru. Child Livewire
- * component riwayat TIDAK punya otorisasi sendiri karena hanya dirender
- * di dalam halaman ini yang sudah digerbang canAccess() - TODO: GAP-SPEC,
- * belum diverifikasi eksplisit bahwa component tsb tidak bisa diakses
- * langsung lewat mekanisme lain di luar halaman ini (biasanya aman by
- * default untuk child component non-full-page Livewire).
+ * TODO: GAP-SPEC - berbeda dari PerpustakaanDeviceController, jalur ini
+ * TIDAK ikut membuat Transaksi log (catatTransaksiKunjungan() di device
+ * controller) - hanya Kunjungan + Point + WA yang dikonfirmasi eksplisit
+ * untuk fitur ini. Jika Transaksi log jenis 'kunjungan' juga diharapkan
+ * konsisten dari jalur manual ini, perlu konfirmasi terpisah (menyentuh
+ * konsistensi laporan/Export Transaksi).
  *
- * TODO: verifikasi signature terhadap versi package yang terpasang -
- * Livewire\Attributes\Computed/On dipakai sama seperti sebelumnya, cek
- * ulang terhadap composer.lock jika belum diverifikasi sebelumnya.
+ * TODO: ASUMSI - label 'device' pada variabel WhatsApp (event
+ * 'kunjungan_tercatat') diisi string statis 'Sirkulasi (Manual)' karena
+ * tidak ada device_id sesungguhnya di jalur ini (bukan tap fisik
+ * Attendance Machine) - sesuaikan jika template WA di gateway zedlabs
+ * mengasumsikan format device_id tertentu (mis. MAC address).
+ *
+ * TODO: GAP-SPEC - durasi modal "Selamat datang" auto-dismiss diasumsikan
+ * 4 detik (lihat DURASI_MODAL_SELAMAT_DATANG_MS) - sesuaikan jika operator
+ * di lapangan merasa terlalu cepat/lambat.
  */
 class Sirkulasi extends TransaksiCepat
 {
@@ -61,44 +71,111 @@ class Sirkulasi extends TransaksiCepat
 
     protected string $view = 'filament.pages.sirkulasi';
 
+    /**
+     * Durasi tampil modal "Selamat datang" sebelum otomatis tertutup
+     * (dibaca dari sisi JS/Alpine di sirkulasi.blade.php).
+     */
+    public const DURASI_MODAL_SELAMAT_DATANG_MS = 4000;
+
+    /**
+     * State modal "Selamat datang, {nama}" - true saat Kunjungan baru
+     * saja tercatat lewat tap pertama hari ini.
+     */
+    public bool $tampilkanModalSelamatDatang = false;
+
+    public ?string $namaModalSelamatDatang = null;
+
+    public ?int $pointModalSelamatDatang = null;
+
     public static function shouldRegisterNavigation(): bool
     {
         return false;
     }
-    /**
-     * BARU (gap iterasi ini) - halaman Sirkulasi dipakai sebagai layar
-     * operasional full-screen (sidebar & topbar sirkulasi minimal, lihat
-     * CSS di sirkulasi.blade.php) - heading besar "Sirkulasi" bawaan
-     * Filament (di atas logo/topbar) dianggap noise, dihilangkan supaya
-     * layar lebih ringkas utk operator. TIDAK memengaruhi navigationLabel
-     * (tetap "Sirkulasi" untuk referensi internal, meski
-     * shouldRegisterNavigation() sudah false sehingga label itu pun
-     * tidak pernah tampil di sidebar).
-     *
-     * TODO: verifikasi signature terhadap versi package yang terpasang -
-     * getHeading(): string|Htmlable|null adalah API dasar
-     * Filament\Pages\Page sejak v3, dipertahankan di v4 - cek ulang jika
-     * versi filament/filament di composer.lock berbeda dari asumsi ini.
-     */
+
     public function getHeading(): string
     {
         return '';
     }
 
     /**
-     * Override RINGAN dari TransaksiCepat::prosesEksemplar() - HANYA
-     * menambahkan dispatch event ke RiwayatSirkulasiHarian (child
-     * component) setelah proses pinjam/kembali diproses, supaya section
-     * riwayat ikut refresh TANPA polling dan TANPA numpang di siklus
-     * render form scan untuk kasus normal (mengetik/scan yang masih
-     * mencari kandidat tidak memicu apa pun di sini - hanya dipanggil
-     * SETELAH eksemplar benar-benar diproses).
-     *
-     * TIDAK menduplikasi logic pinjam/kembali - tetap panggil parent
-     * (Aturan poin 3, DRY). Dispatch dilakukan baik hasil sukses maupun
-     * gagal/ditolak (rate limit) supaya counter riwayat tetap konsisten
-     * dengan kondisi terbaru database, bukan berdasarkan asumsi sukses.
+     * Override dari TransaksiCepat::muatUser() - hook TUNGGAL untuk fitur
+     * auto-Kunjungan (lihat docblock class). Dipanggil dari scanKartu()
+     * (exact-match kartu/NISN) maupun pilihUser() (fallback nama) yang
+     * diwarisi dari parent - TIDAK ada logic resolve user yang
+     * diduplikasi di sini (Aturan poin 3, DRY).
      */
+    protected function muatUser(User $user): void
+    {
+        $sudahKunjunganHariIni = Kunjungan::query()
+            ->where('user_id', $user->id)
+            ->where('tanggal', today())
+            ->exists();
+
+        if ($sudahKunjunganHariIni) {
+            parent::muatUser($user);
+
+            return;
+        }
+
+        $this->catatKunjunganPertama($user);
+    }
+
+    /**
+     * Satu sumber kebenaran pencatatan Kunjungan tap-pertama dari halaman
+     * Sirkulasi - SEKARANG delegasi penuh ke KunjunganService (Point +
+     * Transaksi log + WhatsApp), SAMA PERSIS dengan jalur
+     * PerpustakaanDeviceController.
+     *
+     * source = SourceKunjungan::Rfid - tetap tap kartu RFID fisik via
+     * reader keyboard-wedge yang sama dengan RfidResolverService, hanya
+     * jalur transportnya beda dari Attendance Machine/ESP32.
+     *
+     * CATATAN: $user->fresh() WAJIB dipanggil setelah catatKunjungan() -
+     * PointService::catatEvent() mengubah akumulasi_point lewat
+     * increment()+refresh() pada instance User yang DIPEGANG SERVICE
+     * (parameter $user yang di-pass ke KunjunganService::catatKunjungan()),
+     * bukan instance $user milik page ini - properti $user->akumulasi_point
+     * di sini TETAP nilai lama tanpa fresh() ulang.
+     */
+    protected function catatKunjunganPertama(User $user): void
+    {
+        try {
+            app(KunjunganService::class)->catatKunjungan(
+                user: $user,
+                source: SourceKunjungan::Rfid,
+                sumberLabel: 'Sirkulasi (RFID Reader Web)',
+            );
+        } catch (QueryException $e) {
+            // Race condition dengan unique index kunjungans_unik_aktif_unique
+            // (mis. 2 klik/tap beruntun) - anggap sudah tercatat, tetap
+            // tampilkan modal supaya operator/siswa tidak bingung tidak ada
+            // respons sama sekali.
+        }
+
+        $this->tampilkanModalKunjungan($user->nama, $user->fresh()->akumulasi_point);
+    }
+
+    protected function tampilkanModalKunjungan(string $nama, int $totalPoint): void
+    {
+        $this->namaModalSelamatDatang = $nama;
+        $this->pointModalSelamatDatang = $totalPoint;
+        $this->tampilkanModalSelamatDatang = true;
+    }
+
+    /**
+     * Dipanggil dari JS (Alpine setTimeout) setelah
+     * DURASI_MODAL_SELAMAT_DATANG_MS - menutup modal dan mengembalikan
+     * halaman ke state standby (tidak memuat user ke panel sirkulasi,
+     * karena parent::muatUser() memang tidak pernah dipanggil untuk
+     * tap-pertama ini).
+     */
+    public function tutupModalSelamatDatang(): void
+    {
+        $this->tampilkanModalSelamatDatang = false;
+        $this->namaModalSelamatDatang = null;
+        $this->pointModalSelamatDatang = null;
+    }
+
     protected function prosesEksemplar(Eksemplar $eksemplar): void
     {
         parent::prosesEksemplar($eksemplar);

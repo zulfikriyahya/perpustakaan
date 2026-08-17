@@ -12,12 +12,12 @@
             display: none !important;
         }
 
-        /* BARU (gap iterasi ini) - heading halaman ("Sirkulasi") sudah
-           dikosongkan lewat getHeading() di Sirkulasi.php, tapi container
-           header tetap dirender (kosong) oleh layout panel dan
-           menyisakan spacing kosong di atas konten - fallback CSS ini
-           menyembunyikan container tsb sepenuhnya, murni kosmetik
-           konsisten dgn pola sembunyi-sidebar di atas. */
+        /* Heading halaman ("Sirkulasi") sudah dikosongkan lewat
+           getHeading() di Sirkulasi.php, tapi container header tetap
+           dirender (kosong) oleh layout panel dan menyisakan spacing
+           kosong di atas konten - fallback CSS ini menyembunyikan
+           container tsb sepenuhnya, murni kosmetik konsisten dgn pola
+           sembunyi-sidebar di atas. */
         .fi-header {
             display: none !important;
         }
@@ -27,7 +27,8 @@
             border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 20px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
-            padding: 1.25rem;
+            padding: clamp(0.875rem, 1.5vh, 1.25rem);
+            box-sizing: border-box;
         }
 
         html.dark .sirkulasi-section {
@@ -43,6 +44,7 @@
             background: #ffffff;
             border: 1px solid rgba(0, 0, 0, 0.08);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
+            box-sizing: border-box;
         }
 
         html.dark .transaksi-cepat-card {
@@ -56,9 +58,35 @@
 
         .transaksi-cepat-avatar-wrap {
             position: relative;
-            width: 88px;
-            height: 88px;
+            width: clamp(64px, 9vh, 88px);
+            height: clamp(64px, 9vh, 88px);
             margin-bottom: 0.75rem;
+        }
+
+        .transaksi-cepat-avatar-inner {
+            position: absolute;
+            inset: 4px;
+            border-radius: 50%;
+            object-fit: cover;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: clamp(16px, 2.2vh, 22px);
+            color: #fff;
+        }
+
+        .transaksi-cepat-avatar-badge {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: clamp(18px, 2.5vh, 24px);
+            height: clamp(18px, 2.5vh, 24px);
+            border-radius: 50%;
+            border: 2px solid #fff;
         }
 
         .transaksi-cepat-ring {
@@ -83,18 +111,15 @@
             stroke-linecap: round;
         }
 
-        /* BARU: kolom ditukar (1fr utama, 320px jam) - SEBELUMNYA tetap
-           "320px 1fr" walau urutan visual sudah ditukar lewat `order`,
-           akibatnya section utama (order: 1, masuk track pertama) malah
-           kepencet ke 320px dan jam (order: 2) melebar 1fr - kebalik dari
-           yang dimaksud. Ukuran track sekarang ikut ditukar supaya
-           section utama benar-benar lebar (1fr) dan jam tetap ringkas
-           (320px), konsisten dengan posisi visualnya. */
+        /* Grid 2 kolom (form utama 1fr, jam ringkas) - lebar kolom jam
+           responsif via clamp() supaya proporsional di berbagai
+           DPI/scale layar 14" (1366x768 s.d. 1920x1080@125-150%). */
         .sirkulasi-grid {
             display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 1.25rem;
+            grid-template-columns: 1fr clamp(220px, 20vw, 320px);
+            gap: clamp(0.75rem, 1.25vw, 1.25rem);
             align-items: stretch;
+            min-height: 0;
         }
 
         @media (max-width: 900px) {
@@ -113,6 +138,7 @@
 
         .sirkulasi-grid > .transaksi-cepat-card {
             order: 1;
+            min-width: 0;
         }
 
         @media (max-width: 900px) {
@@ -122,32 +148,37 @@
             }
         }
 
-        /* Wrapper - min-height percobaan sebelumnya DIHAPUS (nilainya
-           tidak akurat, menyebabkan footer terdorong ke luar layar).
-           Footer sekarang fixed ke viewport (lihat app-footer--fixed-
-           sirkulasi), jadi wrapper cukup diberi padding-bottom supaya
-           konten paling bawah tidak tertutup footer fixed tersebut. */
         .sirkulasi-page-wrapper {
             display: flex;
             flex-direction: column;
             padding-bottom: 3.5rem;
+            min-height: 100vh;
+            box-sizing: border-box;
         }
 
         .sirkulasi-page-content {
             flex: 1 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.75rem, 1.5vh, 1.25rem);
+            padding: clamp(0.75rem, 1.5vh, 1.25rem) clamp(0.75rem, 1.5vw, 1rem);
+            box-sizing: border-box;
         }
 
-        /* BARU: jam analog dibuat lebih "berkelas" - dial kaca dengan
-           gradient halus, index jam+menit bertingkat, jarum meruncing
-           dengan drop-shadow tipis, cap tengah metalik. Murni visual,
-           TIDAK mengubah binding Alpine (derajatJam/Menit/Detik tetap
-           sama). */
+        /* Jam analog - dial kaca dengan gradient halus, index jam+menit
+           bertingkat, jarum meruncing dengan drop-shadow tipis, cap
+           tengah metalik. Ukuran SEKARANG responsif (clamp berbasis vh)
+           supaya proporsional terhadap ruang yang tersisa di layar 14"
+           setelah dikurangi section form & riwayat - TIDAK mengubah
+           binding Alpine (derajatJam/Menit/Detik tetap sama). */
         .jam-analog-wrapper {
             position: relative;
         }
 
         .jam-analog-svg {
             filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.12));
+            width: clamp(120px, 16vh, 200px);
+            height: clamp(120px, 16vh, 200px);
         }
 
         html.dark .jam-analog-svg {
@@ -256,6 +287,33 @@
             border-radius: 50%;
             margin: 0 auto 1.5rem;
             background: linear-gradient(135deg, var(--success-400), var(--success-600));
+        }
+
+        /* RESPONSIF (gap iterasi ini) - riwayat harian
+           (livewire:riwayat-sirkulasi-harian) sebelumnya max-height fixed
+           320px inline di riwayat-sirkulasi-harian.blade.php - class ini
+           menggantikannya, dibatasi via clamp(vh) supaya proporsional
+           dan seluruh section (jam + form + riwayat) tetap muat dalam 1
+           layar 14" tanpa scroll wrapper luar. Lihat perubahan terkait
+           di riwayat-sirkulasi-harian.blade.php (ganti style inline
+           max-height:320px menjadi class ini). */
+        .riwayat-harian-scroll {
+            max-height: clamp(180px, 22vh, 320px) !important;
+        }
+
+        /* RESPONSIF - viewport pendek (tinggi <= 800px, umum di layar
+           14" 1366x768 native atau discale) - perkecil heading utama &
+           spacing wrapper supaya seluruh konten (jam analog, form scan,
+           riwayat) tetap muat penuh tanpa terpotong/scroll. */
+        @media (max-height: 800px) {
+            .transaksi-cepat-card h2 {
+                font-size: 1rem !important;
+            }
+
+            .sirkulasi-page-content {
+                gap: 0.625rem;
+                padding: 0.625rem 0.75rem;
+            }
         }
     </style>
 
@@ -565,9 +623,14 @@
                             <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
                                 <div class="transaksi-cepat-avatar-wrap">
                                     @if ($user->avatar)
-                                        <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar) }}" alt="{{ $user->nama }}" width="80" height="80" style="display: block; width: 80px; height: 80px; margin: 4px; border-radius: 50%; object-fit: cover; border: 3px solid {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};" />
+                                        <img
+                                            src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar) }}"
+                                            alt="{{ $user->nama }}"
+                                            class="transaksi-cepat-avatar-inner"
+                                            style="border: 3px solid {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};"
+                                        />
                                     @else
-                                        <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; margin: 4px; border-radius: 50%; font-weight: 600; font-size: 22px; color: #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};">
+                                        <div class="transaksi-cepat-avatar-inner" style="background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--primary-500)' }};">
                                             {{ collect(explode(' ', $user->nama))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}
                                         </div>
                                     @endif
@@ -576,10 +639,10 @@
                                         <circle cx="44" cy="44" r="42" :stroke="ringColor" stroke-dasharray="263.89" :stroke-dashoffset="ringDashoffset" stroke-linecap="round"></circle>
                                     </svg>
 
-                                    <span style="position: absolute; bottom: 2px; right: 2px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--success-500)' }};">
+                                    <span class="transaksi-cepat-avatar-badge" style="background: {{ $user->status_suspend ? 'var(--danger-500)' : 'var(--success-500)' }};">
                                         <x-filament::icon
                                             :icon="$user->status_suspend ? 'heroicon-s-lock-closed' : 'heroicon-s-check'"
-                                            style="width: 14px; height: 14px; color: #fff;"
+                                            style="width: 60%; height: 60%; color: #fff;"
                                         />
                                     </span>
                                 </div>

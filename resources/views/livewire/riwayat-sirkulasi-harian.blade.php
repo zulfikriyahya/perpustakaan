@@ -9,7 +9,7 @@
              sebelumnya tumbuh tanpa batas seiring transaksi hari ini
              bertambah, ikut mendorong footer di bawah halaman keluar
              viewport (gap: footer harus terlihat tanpa scroll dahulu). --}}
-        <div style="overflow-x: auto; overflow-y: auto; max-height: 320px;">
+                <div class="riwayat-harian-scroll" style="overflow-x: auto; overflow-y: auto;">
             <table style="width: 100%; border-collapse: collapse; font-size: 0.8125rem;">
                 <thead>
                     <tr class="text-gray-500 dark:text-gray-400" style="text-align: left; border-bottom: 1px solid rgba(0,0,0,0.08);">

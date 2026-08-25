@@ -100,9 +100,9 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- Satu catatan kecil yang masih terbuka dari sebelumnya, silakan diabaikan dulu kalau belum prioritas: content-disposition: inline; filename=01a011c7-....pdf memakai UUID mentah sebagai nama file, bukan nama yang manusiawi (mis. sertifikat-reward-awal.pdf).
+- perbaiki sistem sirkulasi tap rfid agar mendeteksi pegawai juga, bukan hanya siswa
 
-- perbaiki template sertifikat agar lebih indah dan professional menggunakan ukuran kertas A4 lengan landscape orientation
+- perbaiki template sertifikat agar lebih indah dan professional menggunakan ukuran kertas A4 dengan portrait orientation
 
 ---
 

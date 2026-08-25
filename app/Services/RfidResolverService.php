@@ -25,7 +25,8 @@ class RfidResolverService
     }
 
     /**
-     * @throws RuntimeException jika user tidak ditemukan dari kartu maupun NISN
+     * @throws RuntimeException jika user tidak ditemukan dari kartu, NISN,
+     * maupun NIP
      */
     public function resolveUser(string $inputKartuAtauNisn): User
     {
@@ -41,8 +42,18 @@ class RfidResolverService
             return $user;
         }
 
+        // Fallback NIP - agar Pegawai turut terdeteksi lewat input manual
+        // (ketik, bukan tap kartu), konsisten dengan findByKartu() yang
+        // memang sudah lintas-role sejak awal (query no_kartu_rfid tanpa
+        // filter role).
+        $user = User::query()->where('nip', $inputKartuAtauNisn)->first();
+
+        if ($user) {
+            return $user;
+        }
+
         throw new RuntimeException(
-            "User tidak ditemukan untuk kartu/NISN '{$inputKartuAtauNisn}'. Pastikan kartu sudah didaftarkan atau gunakan NISN yang valid."
+            "User tidak ditemukan untuk kartu/NISN/NIP '{$inputKartuAtauNisn}'. Pastikan kartu sudah didaftarkan atau gunakan NISN/NIP yang valid."
         );
     }
 }

@@ -93,7 +93,7 @@ class SertifikatService
                 'nomorSertifikat' => $nomor,
                 'qrGambar' => $this->buatQrCode($urlVerifikasi),
                 'barcodeGambar' => $this->buatBarcodeNomor($nomor),
-            ])->setPaper('a4', 'landscape');
+            ])->setPaper('a4', 'portrait');
 
             $path = "sertifikat/{$tipe}/{$log->id}.pdf";
             Storage::disk('public')->put($path, $pdf->output());

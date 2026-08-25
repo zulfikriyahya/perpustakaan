@@ -12673,14 +12673,15 @@ namespace App\Http\Controllers;
 use App\Models\LevelBadgeLog;
 use App\Models\RewardLog;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Akses PUBLIK tanpa login (dikonfirmasi) - link dikirim lewat notifikasi
  * WhatsApp. UUID id log sebagai identifier (tidak sekuensial/mudah
- * ditebak). Header X-Robots-Tag: noindex dipasang karena ini berisi data
+ * ditebak). Header X-Robots-Tag: noindex dipasang karena ini berisidata
  * personal per-user, mengikuti pola BukuPublikController::baca().
  *
- * TODO: GAP-SPEC - saat ini TIDAK ada mekanisme signed URL/expiring link
+ * TODO: GAP-SPEC - saat ini TIDAK ada mekanisme signed URL/expiringlink
  * maupun otentikasi tambahan (dikonfirmasi: publik murni via UUID).
  * Siapa pun yang mendapatkan URL bisa mengakses PDF tanpa batas waktu.
  */
@@ -12690,17 +12691,36 @@ class SertifikatPublikController extends Controller
     {
         abort_if(! $rewardLog->sertifikat_path, 404);
 
-        return $this->responseFile($rewardLog->sertifikat_path);
+        $rewardLog->loadMissing(['user', 'reward']);
+
+        $nama = $this->buatNamaFile('reward', $rewardLog->reward?->nama, $rewardLog->user?->nama);
+
+        return $this->responseFile($rewardLog->sertifikat_path, $nama);
     }
 
     public function badge(LevelBadgeLog $levelBadgeLog)
     {
         abort_if(! $levelBadgeLog->sertifikat_path, 404);
 
-        return $this->responseFile($levelBadgeLog->sertifikat_path);
+        $levelBadgeLog->loadMissing(['user', 'levelBadge']);
+
+        $nama = $this->buatNamaFile('badge', $levelBadgeLog->levelBadge?->nama_badge, $levelBadgeLog->user?->nama);
+
+        return $this->responseFile($levelBadgeLog->sertifikat_path, $nama);
     }
 
-    protected function responseFile(string $path)
+    // dibentuk dari nama item + nama penerima, fallback 'sertifikat' jika kosong
+    protected function buatNamaFile(string $tipe, ?string $namaItem, ?string $namaPenerima): string
+    {
+        $bagian = collect(['sertifikat', $tipe, $namaItem, $namaPenerima])
+            ->filter()
+            ->map(fn(string $s) => Str::slug($s))
+            ->filter();
+
+        return ($bagian->isNotEmpty() ? $bagian->implode('-') : 'sertifikat') . '.pdf';
+    }
+
+    protected function responseFile(string $path, string $namaFile)
     {
         abort_unless(Storage::disk('public')->exists($path), 404);
 
@@ -12712,7 +12732,11 @@ class SertifikatPublikController extends Controller
         // dengan mengakses properti HeaderBag $response->headers secara
         // langsung, yang tersedia di SEMUA turunan Response Symfony,
         // termasuk StreamedResponse.
-        $response = Storage::disk('public')->response($path);
+        //
+        // $namaFile diteruskan sebagai parameter kedua Storage::response()
+        // agar Content-Disposition memakai nama manusiawi, bukan UUID
+        // mentah dari nama file fisik di disk.
+        $response = Storage::disk('public')->response($path, $namaFile);
         $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
 
         return $response;
@@ -15370,14 +15394,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Author;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class AuthorPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Author');
@@ -15437,8 +15461,8 @@ class AuthorPolicy
     {
         return $authUser->can('Reorder:Author');
     }
-}
 
+}
 ```
 ---
 
@@ -15450,14 +15474,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Buku;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class BukuPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Buku');
@@ -15517,8 +15541,8 @@ class BukuPolicy
     {
         return $authUser->can('Reorder:Buku');
     }
-}
 
+}
 ```
 ---
 
@@ -15530,14 +15554,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Denda;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DendaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Denda');
@@ -15597,8 +15621,8 @@ class DendaPolicy
     {
         return $authUser->can('Reorder:Denda');
     }
-}
 
+}
 ```
 ---
 
@@ -15698,14 +15722,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\FirmwareRelease;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class FirmwareReleasePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:FirmwareRelease');
@@ -15765,8 +15789,8 @@ class FirmwareReleasePolicy
     {
         return $authUser->can('Reorder:FirmwareRelease');
     }
-}
 
+}
 ```
 ---
 
@@ -15778,14 +15802,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Jurusan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class JurusanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Jurusan');
@@ -15845,8 +15869,8 @@ class JurusanPolicy
     {
         return $authUser->can('Reorder:Jurusan');
     }
-}
 
+}
 ```
 ---
 
@@ -15858,14 +15882,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kategori;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KategoriPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kategori');
@@ -15925,8 +15949,8 @@ class KategoriPolicy
     {
         return $authUser->can('Reorder:Kategori');
     }
-}
 
+}
 ```
 ---
 
@@ -15938,14 +15962,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kelas;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kelas');
@@ -16005,8 +16029,8 @@ class KelasPolicy
     {
         return $authUser->can('Reorder:Kelas');
     }
-}
 
+}
 ```
 ---
 
@@ -16018,14 +16042,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\KelasTahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KelasTahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:KelasTahunPelajaran');
@@ -16085,8 +16109,8 @@ class KelasTahunPelajaranPolicy
     {
         return $authUser->can('Reorder:KelasTahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -16098,14 +16122,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Kunjungan;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class KunjunganPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Kunjungan');
@@ -16165,8 +16189,8 @@ class KunjunganPolicy
     {
         return $authUser->can('Reorder:Kunjungan');
     }
-}
 
+}
 ```
 ---
 
@@ -16178,14 +16202,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadgeLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgeLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadgeLog');
@@ -16245,8 +16269,8 @@ class LevelBadgeLogPolicy
     {
         return $authUser->can('Reorder:LevelBadgeLog');
     }
-}
 
+}
 ```
 ---
 
@@ -16258,14 +16282,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\LevelBadge;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class LevelBadgePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:LevelBadge');
@@ -16325,8 +16349,8 @@ class LevelBadgePolicy
     {
         return $authUser->can('Reorder:LevelBadge');
     }
-}
 
+}
 ```
 ---
 
@@ -16338,14 +16362,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Peminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PeminjamanPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Peminjaman');
@@ -16405,8 +16429,8 @@ class PeminjamanPolicy
     {
         return $authUser->can('Reorder:Peminjaman');
     }
-}
 
+}
 ```
 ---
 
@@ -16418,14 +16442,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Pengembalian;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PengembalianPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pengembalian');
@@ -16485,8 +16509,8 @@ class PengembalianPolicy
     {
         return $authUser->can('Reorder:Pengembalian');
     }
-}
 
+}
 ```
 ---
 
@@ -16498,14 +16522,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\PunishmentLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:PunishmentLog');
@@ -16565,8 +16589,8 @@ class PunishmentLogPolicy
     {
         return $authUser->can('Reorder:PunishmentLog');
     }
-}
 
+}
 ```
 ---
 
@@ -16578,14 +16602,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Punishment;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class PunishmentPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Punishment');
@@ -16645,8 +16669,8 @@ class PunishmentPolicy
     {
         return $authUser->can('Reorder:Punishment');
     }
-}
 
+}
 ```
 ---
 
@@ -16658,14 +16682,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Rak;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RakPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Rak');
@@ -16725,8 +16749,8 @@ class RakPolicy
     {
         return $authUser->can('Reorder:Rak');
     }
-}
 
+}
 ```
 ---
 
@@ -16738,14 +16762,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RewardLog;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardLogPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RewardLog');
@@ -16805,8 +16829,8 @@ class RewardLogPolicy
     {
         return $authUser->can('Reorder:RewardLog');
     }
-}
 
+}
 ```
 ---
 
@@ -16818,14 +16842,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Reward;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RewardPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Reward');
@@ -16885,8 +16909,8 @@ class RewardPolicy
     {
         return $authUser->can('Reorder:Reward');
     }
-}
 
+}
 ```
 ---
 
@@ -16898,14 +16922,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RiwayatKelasSiswa;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class RiwayatKelasSiswaPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:RiwayatKelasSiswa');
@@ -16965,8 +16989,8 @@ class RiwayatKelasSiswaPolicy
     {
         return $authUser->can('Reorder:RiwayatKelasSiswa');
     }
-}
 
+}
 ```
 ---
 
@@ -16978,14 +17002,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 use Spatie\Permission\Models\Role;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RolePolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Role');
@@ -17045,8 +17069,8 @@ class RolePolicy
     {
         return $authUser->can('Reorder:Role');
     }
-}
 
+}
 ```
 ---
 
@@ -17058,14 +17082,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\TahunPelajaran;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TahunPelajaranPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:TahunPelajaran');
@@ -17125,8 +17149,8 @@ class TahunPelajaranPolicy
     {
         return $authUser->can('Reorder:TahunPelajaran');
     }
-}
 
+}
 ```
 ---
 
@@ -17138,14 +17162,14 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Transaksi;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class TransaksiPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Transaksi');
@@ -17205,8 +17229,8 @@ class TransaksiPolicy
     {
         return $authUser->can('Reorder:Transaksi');
     }
-}
 
+}
 ```
 ---
 
@@ -17216,13 +17240,13 @@ class TransaksiPolicy
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class UserPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:User');
@@ -17282,8 +17306,8 @@ class UserPolicy
     {
         return $authUser->can('Reorder:User');
     }
-}
 
+}
 ```
 ---
 
@@ -19286,14 +19310,17 @@ namespace App\Services;
 use App\Models\LevelBadgeLog;
 use App\Models\RewardLog;
 use Barryvdh\DomPDF\Facade\Pdf;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Picqer\Barcode\BarcodeGeneratorPNG;
 
 /**
  * Satu sumber kebenaran generate PDF sertifikat Reward/Badge (Aturan
  * poin 3) - dipanggil dari PointService saat threshold tercapai. Jangan
- * duplikasi pemanggilan Pdf::loadView('pdf.sertifikat', ...) di tempat
- * lain (mis. Filament Action) - reuse method di sini.
+ * duplikasi pemanggilan Pdf::loadView('pdf.sertifikat', ...), QRCode,
+ * atau BarcodeGeneratorPNG di tempat lain - reuse method di sini.
  */
 class SertifikatService
 {
@@ -19305,9 +19332,11 @@ class SertifikatService
             log: $log,
             tipe: 'reward',
             judulSertifikat: 'Sertifikat Penghargaan',
+            tipeLabel: 'Sertifikat Reward',
             namaPenerima: $log->user->nama,
             namaItem: $log->reward->nama,
             deskripsiItem: $log->reward->deskripsi,
+            urlVerifikasi: route('sertifikat.reward', $log),
         );
     }
 
@@ -19319,9 +19348,11 @@ class SertifikatService
             log: $log,
             tipe: 'badge',
             judulSertifikat: 'Sertifikat Pencapaian Badge',
+            tipeLabel: 'Sertifikat Badge',
             namaPenerima: $log->user->nama,
             namaItem: $log->levelBadge->nama_badge,
             deskripsiItem: null,
+            urlVerifikasi: route('sertifikat.badge', $log),
         );
     }
 
@@ -19334,26 +19365,39 @@ class SertifikatService
      * inti (Point/Badge/Reward tetap tercatat valid walau sertifikat
      * gagal dibuat). TODO: GAP-SPEC - belum ada mekanisme retry/regenerate
      * otomatis untuk sertifikat yang gagal generate di percobaan pertama;
-     * saat ini hanya bisa dicek manual dari kolom sertifikat_path = null.
+     * saat ini hanya bisa dicek manual dari kolom sertifikat_path =null.
+     *
+     * TODO: GAP-SPEC - QR code mengarah ke URL publik sertifikat itu
+     * sendiri (bukan endpoint verifikasi terpisah dengan payload
+     * terenkripsi/tersimpan). Ini konsisten dengan keputusan yang sudah
+     * dikonfirmasi bahwa akses sertifikat publik murni via UUID tanpa
+     * signed URL - jadi QR ini bersifat "tautan cepat", bukan bukti
+     * kriptografis keaslian. Jika ke depan dibutuhkan verifikasi yang
+     * lebih kuat, perlu endpoint/skema baru (perlu didiskusikan dulu).
      */
     protected function generate(
         RewardLog|LevelBadgeLog $log,
         string $tipe,
         string $judulSertifikat,
+        string $tipeLabel,
         string $namaPenerima,
         string $namaItem,
         ?string $deskripsiItem,
+        string $urlVerifikasi,
     ): ?string {
         try {
             $nomor = $this->buatNomorSertifikat($tipe, $log->id);
 
             $pdf = Pdf::loadView('pdf.sertifikat', [
                 'judulSertifikat' => $judulSertifikat,
+                'tipeLabel' => $tipeLabel,
                 'namaPenerima' => $namaPenerima,
                 'namaItem' => $namaItem,
                 'deskripsiItem' => $deskripsiItem,
                 'tanggal' => $log->tanggal_didapat,
                 'nomorSertifikat' => $nomor,
+                'qrGambar' => $this->buatQrCode($urlVerifikasi),
+                'barcodeGambar' => $this->buatBarcodeNomor($nomor),
             ])->setPaper('a4', 'landscape');
 
             $path = "sertifikat/{$tipe}/{$log->id}.pdf";
@@ -19366,14 +19410,45 @@ class SertifikatService
 
             return $path;
         } catch (\Throwable $e) {
-            Log::error("SertifikatService: gagal generate sertifikat {$tipe} untuk log id '{$log->id}': {$e->getMessage()}");
+            Log::error("SertifikatService: gagal generate sertifikat{$tipe} untuk log id '{$log->id}': {$e->getMessage()}");
 
             return null;
         }
     }
 
+    // dipakai untuk tautan cepat verifikasi, lihat TODO: GAP-SPEC di generate()
+    protected function buatQrCode(string $urlVerifikasi): string
+    {
+        $options = new QROptions([
+            'outputType' => QRCode::OUTPUT_IMAGE_PNG,
+            'imageBase64' => true,
+            'scale' => 4,
+            'imageTransparent' => false,
+        ]);
+
+        // chillerlan/php-qrcode dengan imageBase64=true sudah mengembalikan
+        // string data URI lengkap ("data:image/png;base64,...."), jangan
+        // di-encode base64 dua kali.
+        return (new QRCode($options))->render($urlVerifikasi);
+    }
+
+    // reuse generator Code128 yang sama dipakai LabelBarcodeService (Aturan poin 3)
+    protected function buatBarcodeNomor(string $nomor): string
+    {
+        $generator = new BarcodeGeneratorPNG;
+
+        $png = $generator->getBarcode(
+            $nomor,
+            $generator::TYPE_CODE_128,
+            2,
+            40,
+        );
+
+        return 'data:image/png;base64,' . base64_encode($png);
+    }
+
     /**
-     * TODO: ASUMSI - format nomor sertifikat belum dispesifikasikan di
+     * TODO: ASUMSI - format nomor sertifikat belum dispesifikasikandi
      * dokumen acuan. Pola sementara: {TIPE}/{TAHUN}/{8 karakter awal UUID
      * log, uppercase} - unik per log karena UUID sudah unik, dan mudah
      * dibaca manusia. Ganti jika sekolah punya format penomoran resmi.
@@ -30229,50 +30304,90 @@ window.ChartExport = window.ChartExport || (function () {
 
         body {
             margin: 0;
-            padding: 15mm 20mm;
+            padding: 9mm;
+            color: #1e293b;
         }
 
-        .bingkai {
-            border: 3px solid #0f766e;
-            padding: 12mm;
+        /* Dua bingkai bersarang - tipis di luar, tebal di dalam, kesan formal */
+        .bingkai-luar {
+            border: 0.75px solid #94a3b8;
+            padding: 3mm;
+            height: 192mm;
+        }
+
+        .bingkai-dalam {
+            border: 2px solid #0f766e;
+            height: 100%;
+            padding: 9mm 16mm 7mm 16mm;
             text-align: center;
-            height: 165mm;
+            position: relative;
+        }
+
+        /* Ornamen sudut - aksen emas tipis, bukan mencolok */
+        .sudut {
+            position: absolute;
+            width: 10mm;
+            height: 10mm;
+        }
+
+        .sudut-kiri-atas   { top: -2px; left: -2px; border-top: 2px solid #b45309; border-left: 2px solid #b45309; }
+        .sudut-kanan-atas  { top: -2px; right: -2px; border-top: 2px solid #b45309; border-right: 2px solid #b45309; }
+        .sudut-kiri-bawah  { bottom: -2px; left: -2px; border-bottom: 2px solid #b45309; border-left: 2px solid #b45309; }
+        .sudut-kanan-bawah { bottom: -2px; right: -2px; border-bottom: 2px solid #b45309; border-right: 2px solid #b45309; }
+
+        .label-tipe {
+            font-size: 9.5px;
+            letter-spacing: 4px;
+            color: #b45309;
+            text-transform: uppercase;
+            font-weight: 700;
         }
 
         .label-atas {
             font-size: 11px;
-            letter-spacing: 3px;
+            letter-spacing: 1.5px;
             color: #64748b;
             text-transform: uppercase;
+            margin-top: 2.5mm;
+        }
+
+        .garis-hias {
+            width: 26mm;
+            height: 1px;
+            background-color: #b45309;
+            margin: 4mm auto 0 auto;
         }
 
         .judul {
-            font-size: 26px;
+            font-size: 29px;
             font-weight: 700;
             color: #134e4a;
-            margin-top: 6mm;
+            margin-top: 5mm;
+            letter-spacing: 0.5px;
         }
 
         .teks-diberikan {
-            font-size: 12px;
+            font-size: 11.5px;
             color: #475569;
-            margin-top: 10mm;
+            margin-top: 8mm;
+            font-style: italic;
         }
 
         .nama-penerima {
-            font-size: 22px;
+            font-size: 25px;
             font-weight: 700;
             color: #0f172a;
-            margin-top: 4mm;
-            border-bottom: 1px solid #cbd5e1;
+            margin-top: 3.5mm;
+            padding-bottom: 2.5mm;
+            border-bottom: 0.75px solid #cbd5e1;
             display: inline-block;
-            padding-bottom: 2mm;
+            min-width: 110mm;
         }
 
         .teks-atas {
-            font-size: 13px;
+            font-size: 12px;
             color: #475569;
-            margin-top: 8mm;
+            margin-top: 7mm;
         }
 
         .nama-item {
@@ -30283,46 +30398,145 @@ window.ChartExport = window.ChartExport || (function () {
         }
 
         .deskripsi-item {
-            font-size: 11px;
+            font-size: 10.5px;
             color: #64748b;
             margin-top: 3mm;
-            max-width: 130mm;
+            max-width: 135mm;
             margin-left: auto;
             margin-right: auto;
+            line-height: 1.5;
         }
 
-        .footer {
-            margin-top: 16mm;
-            font-size: 10px;
+        /* Baris bawah: tanda tangan (kiri/tengah) + QR verifikasi (kanan) */
+        .baris-bawah {
+            margin-top: 11mm;
+            width: 100%;
+        }
+
+        .kolom-ttd {
+            display: inline-block;
+            width: 55mm;
+            vertical-align: top;
+            text-align: center;
+        }
+
+        .ttd-kiri  { float: left; margin-left: 8mm; }
+        .ttd-kanan { float: left; margin-left: 14mm; }
+
+        .kolom-qr {
+            float: right;
+            margin-right: 8mm;
+            width: 34mm;
+            text-align: center;
+        }
+
+        .qr-gambar {
+            width: 22mm;
+            height: 22mm;
+        }
+
+        .qr-label {
+            font-size: 7.5px;
             color: #94a3b8;
+            margin-top: 1.5mm;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .ttd-tanggal {
+            font-size: 9.5px;
+            color: #64748b;
+        }
+
+        .ttd-garis {
+            margin-top: 13mm;
+            border-top: 0.75px solid #94a3b8;
+            padding-top: 2mm;
+            font-size: 10.5px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .ttd-jabatan {
+            font-size: 8.5px;
+            color: #64748b;
+            margin-top: 0.5mm;
+        }
+
+        .footer-bawah {
+            clear: both;
+            margin-top: 10mm;
+            padding-top: 3mm;
+            border-top: 0.5px solid #e2e8f0;
+            text-align: center;
+        }
+
+        .barcode-gambar {
+            height: 9mm;
         }
 
         .nomor {
-            font-size: 9px;
+            font-size: 8.5px;
             color: #94a3b8;
-            margin-top: 2mm;
+            margin-top: 1mm;
+            letter-spacing: 0.5px;
+        }
+
+        .footer-catatan {
+            font-size: 8px;
+            color: #cbd5e1;
+            margin-top: 1mm;
         }
     </style>
 </head>
 <body>
-    <div class="bingkai">
-        <div class="label-atas">Perpustakaan MTs Negeri 1 Pandeglang</div>
-        <div class="judul">{{ $judulSertifikat }}</div>
+    <div class="bingkai-luar">
+        <div class="bingkai-dalam">
+            <div class="sudut sudut-kiri-atas"></div>
+            <div class="sudut sudut-kanan-atas"></div>
+            <div class="sudut sudut-kiri-bawah"></div>
+            <div class="sudut sudut-kanan-bawah"></div>
 
-        <div class="teks-diberikan">Diberikan kepada</div>
-        <div class="nama-penerima">{{ $namaPenerima }}</div>
+            <div class="label-tipe">{{ $tipeLabel ?? 'Sertifikat Resmi' }}</div>
+            <div class="label-atas">Perpustakaan MTs Negeri 1 Pandeglang</div>
+            <div class="garis-hias"></div>
+            <div class="judul">{{ $judulSertifikat }}</div>
 
-        <div class="teks-atas">atas pencapaian</div>
-        <div class="nama-item">{{ $namaItem }}</div>
+            <div class="teks-diberikan">Dengan bangga diberikan kepada</div>
+            <div class="nama-penerima">{{ $namaPenerima }}</div>
 
-        @if ($deskripsiItem)
-            <div class="deskripsi-item">{{ $deskripsiItem }}</div>
-        @endif
+            <div class="teks-atas">atas pencapaian</div>
+            <div class="nama-item">{{ $namaItem }}</div>
 
-        <div class="footer">
-            Diterbitkan pada {{ \Illuminate\Support\Carbon::parse($tanggal)->translatedFormat('d F Y') }}
+            @if ($deskripsiItem)
+                <div class="deskripsi-item">{{ $deskripsiItem }}</div>
+            @endif
+
+            <div class="baris-bawah">
+                <div class="kolom-qr">
+                    <img src="{{ $qrGambar }}" class="qr-gambar" alt="QR Verifikasi">
+                    <div class="qr-label">Pindai untuk verifikasi</div>
+                </div>
+
+                <div class="kolom-ttd ttd-kiri">
+                    <div class="ttd-tanggal">{{ \Illuminate\Support\Carbon::parse($tanggal)->translatedFormat('d F Y') }}</div>
+                    <div class="ttd-garis">Kepala Perpustakaan</div>
+                    <div class="ttd-jabatan">MTs Negeri 1 Pandeglang</div>
+                </div>
+
+                <div class="kolom-ttd ttd-kanan">
+                    <div class="ttd-tanggal">&nbsp;</div>
+                    <div class="ttd-garis">Pustakawan</div>
+                    <div class="ttd-jabatan">Penanggung Jawab Program</div>
+                </div>
+            </div>
+
+            <div class="footer-bawah">
+                <img src="{{ $barcodeGambar }}" class="barcode-gambar" alt="Barcode Nomor Sertifikat">
+                <div class="nomor">No. Sertifikat: {{ $nomorSertifikat }}</div>
+                <div class="footer-catatan">Diterbitkan secara elektronik oleh Sistem Perpustakaan</div>
+            </div>
         </div>
-        <div class="nomor">No. Sertifikat: {{ $nomorSertifikat }}</div>
     </div>
 </body>
 </html>

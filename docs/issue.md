@@ -100,8 +100,7 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- perbaiki fitur regenerate sertifikat agar dapat menimpa file yang sudah ada.
-- tambahkan kalimat tambahan untuk sertifikat agar lebih sempurna.
+- ...
 
 ---
 

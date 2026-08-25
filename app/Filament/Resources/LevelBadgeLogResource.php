@@ -63,11 +63,12 @@ class LevelBadgeLogResource extends Resource
                     ->label('Download Sertifikat')
                     ->icon('heroicon-o-document-arrow-down')
                     ->visible(fn(LevelBadgeLog $record) => filled($record->sertifikat_path))
-                    ->url(fn(LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    // BUGFIX cache browser - lihat komentar setara di
+                    // RewardLogResource::table(), logic identik.
+                    ->url(fn(LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path)
+                        . '?v=' . $record->updated_at?->timestamp)
                     ->openUrlInNewTab(),
 
-                // BARU iterasi ini - lihat komentar setara di
-                // RewardLogResource::table(), logic identik.
                 Action::make('regenerateSertifikat')
                     ->label('Regenerate Sertifikat')
                     ->icon('heroicon-o-arrow-path')
@@ -76,7 +77,7 @@ class LevelBadgeLogResource extends Resource
                     ->authorize(fn(LevelBadgeLog $record) => auth()->user()?->can('update', $record) ?? false)
                     ->requiresConfirmation()
                     ->modalHeading('Regenerate Sertifikat')
-                    ->modalDescription('PDF sertifikat akan dibuat ulang dengan desain terbaru. Link download tidak berubah.')
+                    ->modalDescription('PDF sertifikat akan dibuat ulang dengan desain terbaru. Link download tidak berubah, hanya versinya diperbarui.')
                     ->action(function (LevelBadgeLog $record) {
                         $path = app(SertifikatService::class)->generateUntukBadge($record);
 

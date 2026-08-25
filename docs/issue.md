@@ -100,7 +100,8 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- perbaiki layout sertifikat agar pas dalam satu halaman kertas A4 Portrait, bila perlu refaktor bentuk nya.
+- perbaiki fitur regenerate sertifikat agar dapat menimpa file yang sudah ada.
+- tambahkan kalimat tambahan untuk sertifikat agar lebih sempurna.
 
 ---
 

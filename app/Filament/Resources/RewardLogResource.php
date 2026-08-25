@@ -68,14 +68,25 @@ class RewardLogResource extends Resource
                     ->label('Download Sertifikat')
                     ->icon('heroicon-o-document-arrow-down')
                     ->visible(fn(RewardLog $record) => filled($record->sertifikat_path))
-                    ->url(fn(RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    // BUGFIX - cache browser: URL sebelumnya deterministik
+                    // murni dari $record->sertifikat_path, sehingga setelah
+                    // regenerateSertifikat() menimpa file di disk, browser
+                    // tetap menyajikan PDF lama dari cache karena URL tidak
+                    // berubah. Query string ?v={timestamp updated_at} dipakai
+                    // sebagai cache-buster - updated_at berubah setiap kali
+                    // regenerate berhasil (lihat SertifikatService::generate()
+                    // yang memanggil $log->save()). Ini TIDAK mengubah path
+                    // fisik file di disk, hanya URL yang dilihat browser.
+                    ->url(fn(RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path)
+                        . '?v=' . $record->updated_at?->timestamp)
                     ->openUrlInNewTab(),
 
-                // BARU iterasi ini - regenerate ulang file PDF sertifikat
-                // dengan desain/layout Blade terbaru, TANPA mengubah link
-                // download - path file & nomor_sertifikat deterministik
-                // dari UUID log (lihat SertifikatService::buatNomorSertifikat),
-                // jadi generate() ulang otomatis menimpa path yang sama.
+                // Regenerate ulang file PDF sertifikat dengan desain/layout
+                // Blade terbaru, TANPA mengubah path/nomor - path & nomor
+                // deterministik dari UUID log (lihat
+                // SertifikatService::buatNomorSertifikat), jadi generate()
+                // ulang otomatis menimpa path yang sama. Cache-busting URL
+                // download ditangani di action downloadSertifikat di atas.
                 // Dibatasi hanya super_admin (dikonfirmasi) - policy
                 // 'update' default belum di-grant ke pustakawan di
                 // ShieldSeeder.
@@ -87,7 +98,7 @@ class RewardLogResource extends Resource
                     ->authorize(fn(RewardLog $record) => auth()->user()?->can('update', $record) ?? false)
                     ->requiresConfirmation()
                     ->modalHeading('Regenerate Sertifikat')
-                    ->modalDescription('PDF sertifikat akan dibuat ulang dengan desain terbaru. Link download tidak berubah.')
+                    ->modalDescription('PDF sertifikat akan dibuat ulang dengan desain terbaru. Link download tidak berubah, hanya versinya diperbarui.')
                     ->action(function (RewardLog $record) {
                         $path = app(SertifikatService::class)->generateUntukReward($record);
 

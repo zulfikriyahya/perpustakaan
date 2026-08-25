@@ -7699,8 +7699,10 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\LevelBadgeLogExporter;
 use App\Filament\Resources\LevelBadgeLogResource\Pages;
 use App\Models\LevelBadgeLog;
+use App\Services\SertifikatService;
 use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -7735,7 +7737,7 @@ class LevelBadgeLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(LevelBadgeLogExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
@@ -7754,9 +7756,39 @@ class LevelBadgeLogResource extends Resource
                 Action::make('downloadSertifikat')
                     ->label('Download Sertifikat')
                     ->icon('heroicon-o-document-arrow-down')
-                    ->visible(fn (LevelBadgeLog $record) => filled($record->sertifikat_path))
-                    ->url(fn (LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    ->visible(fn(LevelBadgeLog $record) => filled($record->sertifikat_path))
+                    ->url(fn(LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path))
                     ->openUrlInNewTab(),
+
+                // BARU iterasi ini - lihat komentar setara di
+                // RewardLogResource::table(), logic identik.
+                Action::make('regenerateSertifikat')
+                    ->label('Regenerate Sertifikat')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->visible(fn(LevelBadgeLog $record) => filled($record->sertifikat_path))
+                    ->authorize(fn(LevelBadgeLog $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->requiresConfirmation()
+                    ->modalHeading('Regenerate Sertifikat')
+                    ->modalDescription('PDF sertifikat akan dibuat ulang dengan desain terbaru. Link download tidak berubah.')
+                    ->action(function (LevelBadgeLog $record) {
+                        $path = app(SertifikatService::class)->generateUntukBadge($record);
+
+                        if ($path === null) {
+                            Notification::make()
+                                ->title('Gagal regenerate sertifikat')
+                                ->body('Terjadi kesalahan saat membuat ulang PDF. Cek log aplikasi untuk detail.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Sertifikat berhasil diperbarui')
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->toolbarActions([]);
     }
@@ -9363,8 +9395,10 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\RewardLogExporter;
 use App\Filament\Resources\RewardLogResource\Pages;
 use App\Models\RewardLog;
+use App\Services\SertifikatService;
 use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -9404,7 +9438,7 @@ class RewardLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(RewardLogExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
@@ -9423,9 +9457,45 @@ class RewardLogResource extends Resource
                 Action::make('downloadSertifikat')
                     ->label('Download Sertifikat')
                     ->icon('heroicon-o-document-arrow-down')
-                    ->visible(fn (RewardLog $record) => filled($record->sertifikat_path))
-                    ->url(fn (RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    ->visible(fn(RewardLog $record) => filled($record->sertifikat_path))
+                    ->url(fn(RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path))
                     ->openUrlInNewTab(),
+
+                // BARU iterasi ini - regenerate ulang file PDF sertifikat
+                // dengan desain/layout Blade terbaru, TANPA mengubah link
+                // download - path file & nomor_sertifikat deterministik
+                // dari UUID log (lihat SertifikatService::buatNomorSertifikat),
+                // jadi generate() ulang otomatis menimpa path yang sama.
+                // Dibatasi hanya super_admin (dikonfirmasi) - policy
+                // 'update' default belum di-grant ke pustakawan di
+                // ShieldSeeder.
+                Action::make('regenerateSertifikat')
+                    ->label('Regenerate Sertifikat')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->visible(fn(RewardLog $record) => filled($record->sertifikat_path))
+                    ->authorize(fn(RewardLog $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->requiresConfirmation()
+                    ->modalHeading('Regenerate Sertifikat')
+                    ->modalDescription('PDF sertifikat akan dibuat ulang dengan desain terbaru. Link download tidak berubah.')
+                    ->action(function (RewardLog $record) {
+                        $path = app(SertifikatService::class)->generateUntukReward($record);
+
+                        if ($path === null) {
+                            Notification::make()
+                                ->title('Gagal regenerate sertifikat')
+                                ->body('Terjadi kesalahan saat membuat ulang PDF. Cek log aplikasi untuk detail.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Sertifikat berhasil diperbarui')
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->toolbarActions([]);
     }
@@ -30538,6 +30608,11 @@ window.ChartExport = window.ChartExport || (function () {
     <meta charset="utf-8">
     <title>{{ $judulSertifikat }}</title>
 <style>
+    @page {
+        size: A4 portrait;
+        margin: 0;
+    }
+
     @font-face {
         font-family: 'Lexend';
         src: url('{{ public_path('fonts/pdf/lexend-regular.woff2') }}') format('woff2');
@@ -30557,15 +30632,15 @@ window.ChartExport = window.ChartExport || (function () {
 
     body {
         margin: 0;
-        padding: 14mm 12mm;
+        padding: 15mm 16mm;
         color: #1e293b;
     }
 
     .kartu {
         border: 2px solid #0f766e;
-        padding: 18mm 17mm 14mm 17mm;
+        padding: 14mm 17mm 12mm 17mm;
         text-align: center;
-        margin-top: 18mm;
+        page-break-inside: avoid;
     }
 
     .label-tipe {
@@ -30581,50 +30656,50 @@ window.ChartExport = window.ChartExport || (function () {
         letter-spacing: 1.5px;
         color: #64748b;
         text-transform: uppercase;
-        margin-top: 3mm;
+        margin-top: 2.5mm;
     }
 
     .garis-hias {
-        width: 31mm;
+        width: 30mm;
         height: 1px;
         background-color: #b45309;
-        margin: 5mm auto 0 auto;
+        margin: 4mm auto 0 auto;
     }
 
     .judul {
-        font-size: 36px;
+        font-size: 30px;
         font-weight: 700;
         color: #134e4a;
-        margin-top: 6mm;
+        margin-top: 5mm;
         letter-spacing: 0.5px;
     }
 
     .teks-diberikan {
-        font-size: 13.5px;
+        font-size: 13px;
         color: #475569;
-        margin-top: 9mm;
+        margin-top: 7mm;
         font-style: italic;
     }
 
     .nama-penerima {
-        font-size: 30px;
+        font-size: 26px;
         font-weight: 700;
         color: #0f172a;
-        margin-top: 4mm;
-        padding-bottom: 3mm;
+        margin-top: 3mm;
+        padding-bottom: 2.5mm;
         border-bottom: 0.75px solid #cbd5e1;
         display: inline-block;
-        min-width: 130mm;
+        min-width: 125mm;
     }
 
     .teks-atas {
         font-size: 14px;
         color: #475569;
-        margin-top: 9mm;
+        margin-top: 7mm;
     }
 
     .nama-item {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 700;
         color: #0f766e;
         margin-top: 2.5mm;
@@ -30633,15 +30708,15 @@ window.ChartExport = window.ChartExport || (function () {
     .deskripsi-item {
         font-size: 12px;
         color: #64748b;
-        margin-top: 4mm;
-        max-width: 146mm;
+        margin-top: 3mm;
+        max-width: 145mm;
         margin-left: auto;
         margin-right: auto;
         line-height: 1.55;
     }
 
     .baris-ttd {
-        margin-top: 11mm;
+        margin-top: 65mm;
         width: 100%;
     }
 
@@ -30663,8 +30738,12 @@ window.ChartExport = window.ChartExport || (function () {
         color: #64748b;
     }
 
+    /* ruang kosong untuk tanda tangan fisik/basah di atas nama jabatan */
+    .ruang-ttd {
+        height: 20mm;
+    }
+
     .ttd-garis {
-        margin-top: 7.5mm;
         border-top: 0.75px solid #94a3b8;
         padding-top: 2.5mm;
         font-size: 12px;
@@ -30679,13 +30758,13 @@ window.ChartExport = window.ChartExport || (function () {
     }
 
     .baris-qr {
-        margin-top: 7.5mm;
+        margin-top: 6mm;
         text-align: center;
     }
 
     .qr-gambar {
-        width: 18mm;
-        height: 18mm;
+        width: 17mm;
+        height: 17mm;
     }
 
     .qr-label {
@@ -30697,7 +30776,7 @@ window.ChartExport = window.ChartExport || (function () {
     }
 
     .footer-bawah {
-        margin-top: 5.5mm;
+        margin-top: 5mm;
         padding-top: 2.5mm;
         border-top: 0.5px solid #e2e8f0;
         text-align: center;
@@ -30742,12 +30821,14 @@ window.ChartExport = window.ChartExport || (function () {
             <table class="tabel-ttd">
                 <tr>
                     <td>
-                        <div class="ttd-tanggal">{{ \Illuminate\Support\Carbon::parse($tanggal)->translatedFormat('d F Y') }}</div>
+                        <div class="ttd-tanggal">&nbsp;</div>
+                        <div class="ruang-ttd"></div>
                         <div class="ttd-garis">Kepala Perpustakaan</div>
                         <div class="ttd-jabatan">MTs Negeri 1 Pandeglang</div>
                     </td>
                     <td>
-                        <div class="ttd-tanggal">&nbsp;</div>
+                        <div class="ttd-tanggal">Pandeglang, {{ \Illuminate\Support\Carbon::parse($tanggal)->translatedFormat('d F Y') }}</div>
+                        <div class="ruang-ttd"></div>
                         <div class="ttd-garis">Pustakawan</div>
                         <div class="ttd-jabatan">Penanggung Jawab Program</div>
                     </td>

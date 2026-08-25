@@ -111,6 +111,17 @@
         line-height: 1.55;
     }
 
+    .kalimat-penutup {
+        font-size: 11px;
+        color: #475569;
+        margin-top: 6mm;
+        font-style: italic;
+        max-width: 140mm;
+        margin-left: auto;
+        margin-right: auto;
+        line-height: 1.5;
+    }
+
     .baris-ttd {
         margin-top: 65mm;
         width: 100%;
@@ -213,6 +224,16 @@
             <div class="deskripsi-item">{{ $deskripsiItem }}</div>
         @endif
 
+        {{-- TODO: ASUMSI - kalimat penutup belum dispesifikasikan di dokumen
+        acuan ("lebih sempurna" tidak menyebut redaksi pasti). Kalimat di
+        bawah adalah pernyataan keabsahan generik yang aman untuk kedua tipe
+        sertifikat (Reward & Badge). Ganti teks ini jika sekolah punya
+        redaksi resmi yang harus dipakai. --}}
+        <div class="kalimat-penutup">
+            Sertifikat ini diterbitkan secara resmi oleh Perpustakaan MTs Negeri 1 Pandeglang
+            sebagai bentuk apresiasi dan pengakuan atas pencapaian yang telah diraih.
+        </div>
+        
         <div class="baris-ttd">
             <table class="tabel-ttd">
                 <tr>

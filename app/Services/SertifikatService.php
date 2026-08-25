@@ -10,6 +10,7 @@ use chillerlan\QRCode\QROptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Picqer\Barcode\BarcodeGeneratorPNG;
+use RuntimeException;
 
 /**
  * Satu sumber kebenaran generate PDF sertifikat Reward/Badge (Aturan
@@ -54,21 +55,23 @@ class SertifikatService
     /**
      * @param  RewardLog|LevelBadgeLog  $log
      *
-     * Kegagalan generate PDF (mis. dompdf error) di-catch dan di-log,
-     * TIDAK melempar exception - dipanggil dari dalam DB::transaction
-     * PointService dan sertifikat bukan bagian dari data transaksional
-     * inti (Point/Badge/Reward tetap tercatat valid walau sertifikat
-     * gagal dibuat). TODO: GAP-SPEC - belum ada mekanisme retry/regenerate
-     * otomatis untuk sertifikat yang gagal generate di percobaan pertama;
-     * saat ini hanya bisa dicek manual dari kolom sertifikat_path =null.
+     * Kegagalan generate PDF (mis. dompdf error, atau gagal tulis ke
+     * disk) di-catch dan di-log, TIDAK melempar exception ke pemanggil -
+     * dipanggil dari dalam DB::transaction PointService dan sertifikat
+     * bukan bagian dari data transaksional inti (Point/Badge/Reward
+     * tetap tercatat valid walau sertifikat gagal dibuat).
+     *
+     * TODO: GAP-SPEC - belum ada mekanisme retry/regenerate otomatis
+     * untuk sertifikat yang gagal generate di percobaan pertama; saat
+     * ini hanya bisa dicek manual dari kolom sertifikat_path = null,
+     * atau ditrigger manual lewat Action "Regenerate Sertifikat".
      *
      * TODO: GAP-SPEC - QR code mengarah ke URL publik sertifikat itu
      * sendiri (bukan endpoint verifikasi terpisah dengan payload
      * terenkripsi/tersimpan). Ini konsisten dengan keputusan yang sudah
      * dikonfirmasi bahwa akses sertifikat publik murni via UUID tanpa
      * signed URL - jadi QR ini bersifat "tautan cepat", bukan bukti
-     * kriptografis keaslian. Jika ke depan dibutuhkan verifikasi yang
-     * lebih kuat, perlu endpoint/skema baru (perlu didiskusikan dulu).
+     * kriptografis keaslian.
      */
     protected function generate(
         RewardLog|LevelBadgeLog $log,
@@ -95,8 +98,22 @@ class SertifikatService
                 'barcodeGambar' => $this->buatBarcodeNomor($nomor),
             ])->setPaper('a4', 'portrait');
 
+            // path deterministik dari {tipe}/{log->id} - regenerate akan
+            // selalu menghasilkan path yang sama sehingga menimpa file
+            // lama. BUGFIX: sebelumnya return value put() tidak dicek,
+            // sehingga jika penulisan ke disk gagal (permission, disk
+            // penuh, symlink storage:link belum ada/rusak), method ini
+            // tetap men-save nomor_sertifikat & mengembalikan $path
+            // seolah sukses - padahal file LAMA di disk tidak tertimpa.
+            // Sekarang kegagalan put() dilempar sebagai exception agar
+            // ditangkap catch di bawah (gagal tercatat & user melihat
+            // notifikasi gagal yang jujur, bukan sukses palsu).
             $path = "sertifikat/{$tipe}/{$log->id}.pdf";
-            Storage::disk('public')->put($path, $pdf->output());
+            $berhasilTulis = Storage::disk('public')->put($path, $pdf->output());
+
+            if (! $berhasilTulis) {
+                throw new RuntimeException("Storage::put() mengembalikan false untuk path '{$path}' - kemungkinan permission disk atau disk penuh.");
+            }
 
             $log->forceFill([
                 'sertifikat_path' => $path,
@@ -105,7 +122,7 @@ class SertifikatService
 
             return $path;
         } catch (\Throwable $e) {
-            Log::error("SertifikatService: gagal generate sertifikat{$tipe} untuk log id '{$log->id}': {$e->getMessage()}");
+            Log::error("SertifikatService: gagal generate sertifikat {$tipe} untuk log id '{$log->id}': {$e->getMessage()}");
 
             return null;
         }
@@ -143,13 +160,23 @@ class SertifikatService
     }
 
     /**
-     * TODO: ASUMSI - format nomor sertifikat belum dispesifikasikandi
-     * dokumen acuan. Pola sementara: {TIPE}/{TAHUN}/{8 karakter awal UUID
-     * log, uppercase} - unik per log karena UUID sudah unik, dan mudah
-     * dibaca manusia. Ganti jika sekolah punya format penomoran resmi.
+     * TODO: ASUMSI - format nomor sertifikat belum dispesifikasikan di
+     * dokumen acuan. Pola sementara: {TIPE}/{TAHUN}/{8 karakter AKHIR
+     * UUID log, uppercase}.
+     *
+     * BUGFIX: sebelumnya memakai substr($logId, 0, 8) - 8 karakter
+     * PERTAMA. Model ini pakai HasUuids yang secara default menghasilkan
+     * UUIDv7 (ordered/time-based), di mana beberapa karakter awal
+     * merepresentasikan timestamp milidetik, BUKAN bagian acak. Akibatnya
+     * log yang dibuat berdekatan waktu (mis. PointService memproses badge
+     * banyak siswa sekaligus dalam satu run) menghasilkan 8 karakter
+     * pertama yang SAMA -> nomor sertifikat kolisi walau log->id berbeda.
+     * 8 karakter AKHIR UUIDv7 tetap berasal dari bagian random/node,
+     * sehingga jauh lebih aman dari kolisi untuk kasus generate massal.
+     * Ganti jika sekolah punya format penomoran resmi.
      */
     protected function buatNomorSertifikat(string $tipe, string $logId): string
     {
-        return sprintf('%s/%s/%s', strtoupper($tipe), now()->format('Y'), strtoupper(substr($logId, 0, 8)));
+        return sprintf('%s/%s/%s', strtoupper($tipe), now()->format('Y'), strtoupper(substr($logId, -8)));
     }
 }

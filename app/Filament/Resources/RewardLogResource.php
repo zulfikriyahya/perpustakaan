@@ -5,8 +5,10 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\RewardLogExporter;
 use App\Filament\Resources\RewardLogResource\Pages;
 use App\Models\RewardLog;
+use App\Services\SertifikatService;
 use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -46,7 +48,7 @@ class RewardLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(RewardLogExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', RewardLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
@@ -65,9 +67,45 @@ class RewardLogResource extends Resource
                 Action::make('downloadSertifikat')
                     ->label('Download Sertifikat')
                     ->icon('heroicon-o-document-arrow-down')
-                    ->visible(fn (RewardLog $record) => filled($record->sertifikat_path))
-                    ->url(fn (RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    ->visible(fn(RewardLog $record) => filled($record->sertifikat_path))
+                    ->url(fn(RewardLog $record) => Storage::disk('public')->url($record->sertifikat_path))
                     ->openUrlInNewTab(),
+
+                // BARU iterasi ini - regenerate ulang file PDF sertifikat
+                // dengan desain/layout Blade terbaru, TANPA mengubah link
+                // download - path file & nomor_sertifikat deterministik
+                // dari UUID log (lihat SertifikatService::buatNomorSertifikat),
+                // jadi generate() ulang otomatis menimpa path yang sama.
+                // Dibatasi hanya super_admin (dikonfirmasi) - policy
+                // 'update' default belum di-grant ke pustakawan di
+                // ShieldSeeder.
+                Action::make('regenerateSertifikat')
+                    ->label('Regenerate Sertifikat')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->visible(fn(RewardLog $record) => filled($record->sertifikat_path))
+                    ->authorize(fn(RewardLog $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->requiresConfirmation()
+                    ->modalHeading('Regenerate Sertifikat')
+                    ->modalDescription('PDF sertifikat akan dibuat ulang dengan desain terbaru. Link download tidak berubah.')
+                    ->action(function (RewardLog $record) {
+                        $path = app(SertifikatService::class)->generateUntukReward($record);
+
+                        if ($path === null) {
+                            Notification::make()
+                                ->title('Gagal regenerate sertifikat')
+                                ->body('Terjadi kesalahan saat membuat ulang PDF. Cek log aplikasi untuk detail.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Sertifikat berhasil diperbarui')
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->toolbarActions([]);
     }

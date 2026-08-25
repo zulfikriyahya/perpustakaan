@@ -5,8 +5,10 @@ namespace App\Filament\Resources;
 use App\Filament\Exports\LevelBadgeLogExporter;
 use App\Filament\Resources\LevelBadgeLogResource\Pages;
 use App\Models\LevelBadgeLog;
+use App\Services\SertifikatService;
 use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -41,7 +43,7 @@ class LevelBadgeLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(LevelBadgeLogExporter::class)
-                    ->authorize(fn () => auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false),
+                    ->authorize(fn() => auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
@@ -60,9 +62,39 @@ class LevelBadgeLogResource extends Resource
                 Action::make('downloadSertifikat')
                     ->label('Download Sertifikat')
                     ->icon('heroicon-o-document-arrow-down')
-                    ->visible(fn (LevelBadgeLog $record) => filled($record->sertifikat_path))
-                    ->url(fn (LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path))
+                    ->visible(fn(LevelBadgeLog $record) => filled($record->sertifikat_path))
+                    ->url(fn(LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path))
                     ->openUrlInNewTab(),
+
+                // BARU iterasi ini - lihat komentar setara di
+                // RewardLogResource::table(), logic identik.
+                Action::make('regenerateSertifikat')
+                    ->label('Regenerate Sertifikat')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->visible(fn(LevelBadgeLog $record) => filled($record->sertifikat_path))
+                    ->authorize(fn(LevelBadgeLog $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->requiresConfirmation()
+                    ->modalHeading('Regenerate Sertifikat')
+                    ->modalDescription('PDF sertifikat akan dibuat ulang dengan desain terbaru. Link download tidak berubah.')
+                    ->action(function (LevelBadgeLog $record) {
+                        $path = app(SertifikatService::class)->generateUntukBadge($record);
+
+                        if ($path === null) {
+                            Notification::make()
+                                ->title('Gagal regenerate sertifikat')
+                                ->body('Terjadi kesalahan saat membuat ulang PDF. Cek log aplikasi untuk detail.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Sertifikat berhasil diperbarui')
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->toolbarActions([]);
     }

@@ -84,7 +84,7 @@ class SertifikatService
         string $urlVerifikasi,
     ): ?string {
         try {
-            $nomor = $this->buatNomorSertifikat($tipe, $log->id);
+            $nomor = $this->buatNomorSertifikat($tipe, $log->id, $log->tanggal_didapat);
 
             $pdf = Pdf::loadView('pdf.sertifikat', [
                 'judulSertifikat' => $judulSertifikat,
@@ -98,16 +98,6 @@ class SertifikatService
                 'barcodeGambar' => $this->buatBarcodeNomor($nomor),
             ])->setPaper('a4', 'portrait');
 
-            // path deterministik dari {tipe}/{log->id} - regenerate akan
-            // selalu menghasilkan path yang sama sehingga menimpa file
-            // lama. BUGFIX: sebelumnya return value put() tidak dicek,
-            // sehingga jika penulisan ke disk gagal (permission, disk
-            // penuh, symlink storage:link belum ada/rusak), method ini
-            // tetap men-save nomor_sertifikat & mengembalikan $path
-            // seolah sukses - padahal file LAMA di disk tidak tertimpa.
-            // Sekarang kegagalan put() dilempar sebagai exception agar
-            // ditangkap catch di bawah (gagal tercatat & user melihat
-            // notifikasi gagal yang jujur, bukan sukses palsu).
             $path = "sertifikat/{$tipe}/{$log->id}.pdf";
             $berhasilTulis = Storage::disk('public')->put($path, $pdf->output());
 
@@ -164,19 +154,30 @@ class SertifikatService
      * dokumen acuan. Pola sementara: {TIPE}/{TAHUN}/{8 karakter AKHIR
      * UUID log, uppercase}.
      *
-     * BUGFIX: sebelumnya memakai substr($logId, 0, 8) - 8 karakter
-     * PERTAMA. Model ini pakai HasUuids yang secara default menghasilkan
-     * UUIDv7 (ordered/time-based), di mana beberapa karakter awal
-     * merepresentasikan timestamp milidetik, BUKAN bagian acak. Akibatnya
-     * log yang dibuat berdekatan waktu (mis. PointService memproses badge
-     * banyak siswa sekaligus dalam satu run) menghasilkan 8 karakter
-     * pertama yang SAMA -> nomor sertifikat kolisi walau log->id berbeda.
-     * 8 karakter AKHIR UUIDv7 tetap berasal dari bagian random/node,
-     * sehingga jauh lebih aman dari kolisi untuk kasus generate massal.
+     * Tahun diambil dari $tanggalDidapat (kapan pencapaian diraih),
+     * BUKAN now() (kapan PDF di-generate/regenerate) - supaya nomor
+     * sertifikat tetap identik selamanya untuk satu log, berapa kali pun
+     * di-regenerate. Hanya bagian UUID di akhir yang membedakan antar
+     * log berbeda (lihat catatan UUIDv7 di bawah).
+     *
+     * 8 karakter diambil dari AKHIR UUID, bukan awal - Model ini pakai
+     * HasUuids yang secara default menghasilkan UUIDv7 (ordered/time
+     * based), di mana karakter awal merepresentasikan timestamp
+     * milidetik, BUKAN bagian acak. Log yang dibuat berdekatan waktu
+     * (mis. PointService memproses badge banyak siswa sekaligus dalam
+     * satu run) akan punya 8 karakter pertama yang SAMA jika dipotong
+     * dari depan. Bagian akhir UUIDv7 tetap berasal dari bagian
+     * random/node, jauh lebih aman dari kolisi.
+     *
      * Ganti jika sekolah punya format penomoran resmi.
      */
-    protected function buatNomorSertifikat(string $tipe, string $logId): string
+    protected function buatNomorSertifikat(string $tipe, string $logId, \DateTimeInterface $tanggalDidapat): string
     {
-        return sprintf('%s/%s/%s', strtoupper($tipe), now()->format('Y'), strtoupper(substr($logId, -8)));
+        return sprintf(
+            '%s/%s/%s',
+            strtoupper($tipe),
+            \Illuminate\Support\Carbon::parse($tanggalDidapat)->format('Y'),
+            strtoupper(substr($logId, -8)),
+        );
     }
 }

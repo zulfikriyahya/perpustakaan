@@ -1,21 +1,27 @@
-Alat Scan 1:
-Data ISBN Pada Buku Fisik = 8991389241561
-Data ISBN Hasil Scan Alat = 89913824156
-Data ISBN Di Database = 8991389241561
+use App\Models\RewardLog;
+use App\Models\User;
+use App\Models\Reward;
 
----
+// Ambil satu user & reward asli yang sudah ada di DB untuk relasi valid.
+// Ganti query ini kalau butuh user/reward tertentu.
+$user = User::query()->whereNotNull('nama')->first();
+$reward = Reward::query()->first();
 
-Data ISBN Pada Buku Fisik = 8998989110167
-Data ISBN Hasil Scan Alat = 899811067
-Data ISBN Di Database = 8998989110167
+if (! $user || ! $reward) {
+    echo "Butuh minimal 1 User dan 1 Reward di database untuk uji coba ini.\n";
+} else {
+    // Instance in-memory, TIDAK di-save() - jadi tidak menyentuh data asli.
+    $log = new RewardLog();
+    $log->id = (string) \Illuminate\Support\Str::uuid();
+    $log->tanggal_didapat = now();
+    $log->setRelation('user', $user);
+    $log->setRelation('reward', $reward);
 
-Alat Scan 2:
-Data ISBN Pada Buku Fisik = 8991389241561
-Data ISBN Hasil Scan Alat = 8991389241561
-Data ISBN Di Database = 8991389241561
+    // Opsional: paksa nama panjang untuk uji kasus terburuk (overflow risk)
+    // $user->nama = 'Muhammad Alif Ramadhansyah Putra Wicaksono';
+    // $reward->deskripsi = str_repeat('Deskripsi reward yang cukup panjang untuk menguji apakah layout tetap muat dalam satu halaman A4 portrait. ', 3);
 
----
+    $path = app(\App\Services\SertifikatService::class)->generateUntukReward($log);
 
-Data ISBN Pada Buku Fisik = 8998989110167
-Data ISBN Hasil Scan Alat = 8998989110167
-Data ISBN Di Database = 8998989110167
+    echo $path ? "Berhasil: storage/app/public/{$path}\n" : "Gagal generate, cek log Laravel.\n";
+}

@@ -9,6 +9,7 @@ use App\Models\Buku;
 use App\Models\Eksemplar;
 use App\Models\Peminjaman;
 use App\Models\User;
+use App\Services\BarcodeResolverService;
 use App\Services\PeminjamanService;
 use App\Services\RfidResolverService;
 use Filament\Notifications\Notification;
@@ -32,8 +33,12 @@ use RuntimeException;
  *    dulu -> kalau gagal, FALLBACK ke pencarian User.nama (live, computed
  *    property hasilCariUser()).
  *  - $kodeInput: dicoba sebagai barcode Eksemplar persis, lalu ISBN Buku
- *    persis -> kalau keduanya gagal, FALLBACK ke pencarian Buku.judul
- *    (live, computed property hasilCariBuku()).
+ *    persis -> kalau keduanya gagal, DICOBA fuzzy subsequence match (lihat
+ *    cariEksemplarFuzzyAtauNull() - device tertentu di lapangan terbukti
+ *    salah mendekode sebagian digit EAN-13 secara konsisten/repeatable,
+ *    lihat BarcodeResolverService) -> kalau fuzzy juga gagal/ambigu,
+ *    FALLBACK ke pencarian Buku.judul (live, computed property
+ *    hasilCariBuku()).
  * Aturan auto-pick saat fallback nama/judul (lihat scanKartu()/scanKode()):
  * tepat 1 hasil -> otomatis dipilih; >1 hasil -> operator WAJIB klik salah
  * satu dari daftar yang muncul di bawah input (tidak ditebak); 0 hasil ->
@@ -68,10 +73,10 @@ use RuntimeException;
  * halaman ini sendiri - akses digerbang oleh Create:Peminjaman.
  *
  * Rate limit anti-scan-ganda: eksemplar yang sama (setelah diresolve dari
- * barcode, ISBN, ATAU fallback judul) untuk user aktif yang sama tidak
- * boleh diproses ulang dalam window RATE_LIMIT_DETIK detik - karena
- * prosesEksemplar() dipakai bersama, rate limit otomatis berlaku ke
- * jalur fallback juga tanpa kode tambahan.
+ * barcode, ISBN, fuzzy match, ATAU fallback judul) untuk user aktif yang
+ * sama tidak boleh diproses ulang dalam window RATE_LIMIT_DETIK detik -
+ * karena prosesEksemplar() dipakai bersama, rate limit otomatis berlaku
+ * ke seluruh jalur tanpa kode tambahan.
  *
  * TODO: GAP-SPEC - window rate limit di-key per (user_id, eksemplar_id),
  * BUKAN global per eksemplar - asumsi: 2 user berbeda scan eksemplar yang
@@ -245,7 +250,7 @@ class TransaksiCepat extends Page
 
             return;
         } catch (RuntimeException) {
-            // Bukan kartu/NISN yang valid - lanjut ke fallback pencarian nama.
+            // Bukan kartu/NISN/NIP yang valid - lanjut ke fallback pencarian nama.
         }
 
         // Sinkronkan dulu supaya hasilCariUser() (baca dari $this->kartuInput)
@@ -274,7 +279,7 @@ class TransaksiCepat extends Page
         Notification::make()
             ->danger()
             ->title('User tidak ditemukan')
-            ->body("Tidak ada kartu/NISN/nama yang cocok dengan '{$input}'.")
+            ->body("Tidak ada kartu/NISN/NIP/nama yang cocok dengan '{$input}'.")
             ->send();
     }
 
@@ -325,6 +330,16 @@ class TransaksiCepat extends Page
      * Input SELALU dikosongkan segera setelah nilai ditangkap, TERLEPAS
      * dari hasil, KECUALI saat hasil fallback judul >1 (ambigu) - sama
      * seperti scanKartu() di atas.
+     *
+     * URUTAN RESOLUSI (iterasi ini, BARU ada langkah 3):
+     *  1. Exact match barcode Eksemplar.
+     *  2. Exact match ISBN Buku -> resolve ke satu Eksemplar.
+     *  3. BARU - Fuzzy subsequence match (barcode Eksemplar ATAU ISBN
+     *     Buku) - HANYA diproses otomatis jika tepat 1 kandidat unik
+     *     ditemukan (lihat cariEksemplarFuzzyAtauNull()). Kalau ambigu
+     *     (>1 kandidat) atau tidak ada kandidat sama sekali, TIDAK
+     *     ditebak - lanjut ke langkah 4 seperti biasa.
+     *  4. Fallback live-search judul Buku (existing, tidak berubah).
      */
     public function scanKode(?string $inputEksplisit = null): void
     {
@@ -344,6 +359,20 @@ class TransaksiCepat extends Page
         if ($eksemplar) {
             $this->kodeInput = '';
             $this->prosesEksemplar($eksemplar);
+
+            return;
+        }
+
+        $eksemplarFuzzy = $this->cariEksemplarFuzzyAtauNull($kode);
+
+        if ($eksemplarFuzzy) {
+            $this->kodeInput = '';
+            Notification::make()
+                ->info()
+                ->title('Barcode/ISBN cocok via pencocokan otomatis')
+                ->body("Hasil scan '{$kode}' tampak sebagian terpotong, dicocokkan ke eksemplar '{$eksemplarFuzzy->barcode}' ({$eksemplarFuzzy->buku->judul}). Periksa kembali jika ini tidak sesuai.")
+                ->send();
+            $this->prosesEksemplar($eksemplarFuzzy);
 
             return;
         }
@@ -374,6 +403,52 @@ class TransaksiCepat extends Page
     }
 
     /**
+     * BARU (iterasi ini) - fuzzy subsequence match sebagai jalan tengah
+     * antara exact-match (langkah 1-2 di scanKode()) dan fallback judul
+     * (langkah 4). Menangani kasus device scanner tertentu yang terbukti
+     * salah mendekode sebagian digit EAN-13 secara konsisten/repeatable
+     * (lihat BarcodeResolverService, Aturan poin 3 - DRY, logic
+     * subsequence-nya TIDAK diduplikasi di sini).
+     *
+     * Mengumpulkan kandidat dari DUA sumber (barcode Eksemplar langsung,
+     * dan ISBN Buku yang di-resolve ke satu Eksemplar via
+     * resolveEksemplarUntukBuku() - method yang SAMA dipakai jalur ISBN
+     * exact-match di atas, tidak ada logic pemilihan eksemplar yang
+     * terduplikasi), lalu di-dedupe berdasarkan Eksemplar->id.
+     *
+     * HANYA mengembalikan hasil jika gabungan kandidat unik berjumlah
+     * TEPAT 1 - kalau ambigu (>1), method ini SENGAJA mengembalikan null
+     * (tidak menebak) supaya caller lanjut ke fallback judul biasa,
+     * karena salah pilih buku pada transaksi Peminjaman/Pengembalian
+     * jauh lebih berisiko dibanding sekadar gagal-cocok.
+     *
+     * TODO: GAP-SPEC - kasus ambigu (>1 kandidat fuzzy) saat ini TIDAK
+     * ditampilkan sebagai daftar pilihan ke operator (berbeda dengan
+     * fallback nama/judul yang punya UI pilihan) - hanya diam-diam
+     * dilewati ke fallback judul. Jika operator butuh visibilitas kapan
+     * fuzzy match gagal karena ambigu (vs benar-benar tidak ketemu),
+     * perlu UI/notifikasi tambahan - belum diimplementasikan di iterasi
+     * ini karena belum ada spesifikasi bagaimana daftar itu seharusnya
+     * ditampilkan (barcode Eksemplar dan ISBN Buku punya bentuk data
+     * berbeda, sehingga tidak bisa langsung reuse UI pilihUser()/pilihBuku()
+     * yang ada).
+     */
+    protected function cariEksemplarFuzzyAtauNull(string $kode): ?Eksemplar
+    {
+        $service = app(BarcodeResolverService::class);
+
+        $kandidatEksemplar = $service->cariEksemplarFuzzy($kode);
+        $kandidatDariBuku = $service->cariBukuFuzzyByIsbn($kode)
+            ->map(fn(Buku $buku) => $this->resolveEksemplarUntukBuku($buku))
+            ->filter();
+
+        $gabungan = $kandidatEksemplar->concat($kandidatDariBuku)
+            ->unique(fn(Eksemplar $eksemplar) => $eksemplar->id);
+
+        return $gabungan->count() === 1 ? $gabungan->first() : null;
+    }
+
+    /**
      * Dipanggil saat operator klik salah satu hasil fallback pencarian
      * judul (atau otomatis dari scanKode() saat hasil fallback persis 1).
      * Me-resolve ke SATU Eksemplar (aturan sama seperti jalur ISBN, lihat
@@ -398,7 +473,7 @@ class TransaksiCepat extends Page
         $eksemplar = $this->resolveEksemplarUntukBuku($buku);
 
         if (! $eksemplar) {
-            // Tidak ada Peminjaman aktif user ini utk buku ini, dan tidak
+            // Tidak ada Peminjaman aktif utk buku ini, dan tidak
             // ada Eksemplar berstatus Tersedia - beri pesan yang jelas
             // (bukan silent no-op) supaya operator tahu kenapa tidak
             // terjadi apa-apa setelah klik/Enter.
@@ -415,8 +490,9 @@ class TransaksiCepat extends Page
     /**
      * Logika inti pinjam/kembali per eksemplar (rate limit anti-scan-ganda
      * + deteksi otomatis pinjam vs kembali + panggil PeminjamanService).
-     * Dipakai bersama oleh jalur exact-match (scanKode) dan fallback
-     * judul (pilihBuku) - tanpa duplikasi (Aturan poin 3 - DRY).
+     * Dipakai bersama oleh jalur exact-match (scanKode), fuzzy match
+     * (cariEksemplarFuzzyAtauNull), dan fallback judul (pilihBuku) -
+     * tanpa duplikasi (Aturan poin 3 - DRY).
      */
     protected function prosesEksemplar(Eksemplar $eksemplar): void
     {
@@ -427,7 +503,7 @@ class TransaksiCepat extends Page
                 $eksemplar->barcode,
                 $eksemplar->buku->judul,
                 'ditolak',
-                'Eksemplar ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
+                'Eksemplar ini baru saja diproses untuk user ini, tunggu ' . self::RATE_LIMIT_DETIK . ' detik sebelum scan ulang.',
                 false,
             );
 
@@ -460,7 +536,7 @@ class TransaksiCepat extends Page
                     // fisik lain dari judul yang sama, sedang dipinjam user lain,
                     // bukan berarti transaksi user saat ini bermasalah/bug.
                     throw new RuntimeException(
-                        "Eksemplar barcode '{$eksemplar->barcode}' ({$eksemplar->buku->judul}) sedang tidak tersedia (status: {$eksemplar->status->value}). ".
+                        "Eksemplar barcode '{$eksemplar->barcode}' ({$eksemplar->buku->judul}) sedang tidak tersedia (status: {$eksemplar->status->value}). " .
                             'Jika Anda mengira eksemplar ini seharusnya dikembalikan oleh user ini, periksa apakah barcode/ISBN/judul yang dipilih sesuai dengan yang tadi dipinjam - satu judul buku bisa punya beberapa copy/eksemplar dengan barcode berbeda.'
                     );
                 }
@@ -483,9 +559,9 @@ class TransaksiCepat extends Page
     }
 
     /**
-     * Resolve SATU Buku (dari ISBN maupun dari fallback judul) -> pilih
-     * SATU Eksemplar yang relevan. Dipakai baik jalur ISBN maupun jalur
-     * fallback judul (Aturan poin 3 - DRY).
+     * Resolve SATU Buku (dari ISBN, dari fuzzy match, maupun dari fallback
+     * judul) -> pilih SATU Eksemplar yang relevan. Dipakai jalur ISBN,
+     * fuzzy match, dan fallback judul (Aturan poin 3 - DRY).
      *
      * TODO: GAP-SPEC - aturan pemilihan eksemplar saat scan ISBN atau
      * fallback judul (bukan barcode eksemplar spesifik):
@@ -505,7 +581,7 @@ class TransaksiCepat extends Page
     {
         $eksemplarDipinjamUser = Eksemplar::query()
             ->where('buku_id', $buku->id)
-            ->whereHas('peminjamans', fn ($q) => $q
+            ->whereHas('peminjamans', fn($q) => $q
                 ->where('user_id', $this->user->id)
                 ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat]))
             ->with('buku')

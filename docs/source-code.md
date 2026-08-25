@@ -4292,6 +4292,7 @@ use App\Models\Buku;
 use App\Models\Eksemplar;
 use App\Models\Peminjaman;
 use App\Models\User;
+use App\Services\BarcodeResolverService;
 use App\Services\PeminjamanService;
 use App\Services\RfidResolverService;
 use Filament\Notifications\Notification;
@@ -4315,8 +4316,12 @@ use RuntimeException;
  *    dulu -> kalau gagal, FALLBACK ke pencarian User.nama (live, computed
  *    property hasilCariUser()).
  *  - $kodeInput: dicoba sebagai barcode Eksemplar persis, lalu ISBN Buku
- *    persis -> kalau keduanya gagal, FALLBACK ke pencarian Buku.judul
- *    (live, computed property hasilCariBuku()).
+ *    persis -> kalau keduanya gagal, DICOBA fuzzy subsequence match (lihat
+ *    cariEksemplarFuzzyAtauNull() - device tertentu di lapangan terbukti
+ *    salah mendekode sebagian digit EAN-13 secara konsisten/repeatable,
+ *    lihat BarcodeResolverService) -> kalau fuzzy juga gagal/ambigu,
+ *    FALLBACK ke pencarian Buku.judul (live, computed property
+ *    hasilCariBuku()).
  * Aturan auto-pick saat fallback nama/judul (lihat scanKartu()/scanKode()):
  * tepat 1 hasil -> otomatis dipilih; >1 hasil -> operator WAJIB klik salah
  * satu dari daftar yang muncul di bawah input (tidak ditebak); 0 hasil ->
@@ -4351,10 +4356,10 @@ use RuntimeException;
  * halaman ini sendiri - akses digerbang oleh Create:Peminjaman.
  *
  * Rate limit anti-scan-ganda: eksemplar yang sama (setelah diresolve dari
- * barcode, ISBN, ATAU fallback judul) untuk user aktif yang sama tidak
- * boleh diproses ulang dalam window RATE_LIMIT_DETIK detik - karena
- * prosesEksemplar() dipakai bersama, rate limit otomatis berlaku ke
- * jalur fallback juga tanpa kode tambahan.
+ * barcode, ISBN, fuzzy match, ATAU fallback judul) untuk user aktif yang
+ * sama tidak boleh diproses ulang dalam window RATE_LIMIT_DETIK detik -
+ * karena prosesEksemplar() dipakai bersama, rate limit otomatis berlaku
+ * ke seluruh jalur tanpa kode tambahan.
  *
  * TODO: GAP-SPEC - window rate limit di-key per (user_id, eksemplar_id),
  * BUKAN global per eksemplar - asumsi: 2 user berbeda scan eksemplar yang
@@ -4528,7 +4533,7 @@ class TransaksiCepat extends Page
 
             return;
         } catch (RuntimeException) {
-            // Bukan kartu/NISN yang valid - lanjut ke fallback pencarian nama.
+            // Bukan kartu/NISN/NIP yang valid - lanjut ke fallback pencarian nama.
         }
 
         // Sinkronkan dulu supaya hasilCariUser() (baca dari $this->kartuInput)
@@ -4557,7 +4562,7 @@ class TransaksiCepat extends Page
         Notification::make()
             ->danger()
             ->title('User tidak ditemukan')
-            ->body("Tidak ada kartu/NISN/nama yang cocok dengan '{$input}'.")
+            ->body("Tidak ada kartu/NISN/NIP/nama yang cocok dengan '{$input}'.")
             ->send();
     }
 
@@ -4608,6 +4613,16 @@ class TransaksiCepat extends Page
      * Input SELALU dikosongkan segera setelah nilai ditangkap, TERLEPAS
      * dari hasil, KECUALI saat hasil fallback judul >1 (ambigu) - sama
      * seperti scanKartu() di atas.
+     *
+     * URUTAN RESOLUSI (iterasi ini, BARU ada langkah 3):
+     *  1. Exact match barcode Eksemplar.
+     *  2. Exact match ISBN Buku -> resolve ke satu Eksemplar.
+     *  3. BARU - Fuzzy subsequence match (barcode Eksemplar ATAU ISBN
+     *     Buku) - HANYA diproses otomatis jika tepat 1 kandidat unik
+     *     ditemukan (lihat cariEksemplarFuzzyAtauNull()). Kalau ambigu
+     *     (>1 kandidat) atau tidak ada kandidat sama sekali, TIDAK
+     *     ditebak - lanjut ke langkah 4 seperti biasa.
+     *  4. Fallback live-search judul Buku (existing, tidak berubah).
      */
     public function scanKode(?string $inputEksplisit = null): void
     {
@@ -4627,6 +4642,20 @@ class TransaksiCepat extends Page
         if ($eksemplar) {
             $this->kodeInput = '';
             $this->prosesEksemplar($eksemplar);
+
+            return;
+        }
+
+        $eksemplarFuzzy = $this->cariEksemplarFuzzyAtauNull($kode);
+
+        if ($eksemplarFuzzy) {
+            $this->kodeInput = '';
+            Notification::make()
+                ->info()
+                ->title('Barcode/ISBN cocok via pencocokan otomatis')
+                ->body("Hasil scan '{$kode}' tampak sebagian terpotong, dicocokkan ke eksemplar '{$eksemplarFuzzy->barcode}' ({$eksemplarFuzzy->buku->judul}). Periksa kembali jika ini tidak sesuai.")
+                ->send();
+            $this->prosesEksemplar($eksemplarFuzzy);
 
             return;
         }
@@ -4657,6 +4686,52 @@ class TransaksiCepat extends Page
     }
 
     /**
+     * BARU (iterasi ini) - fuzzy subsequence match sebagai jalan tengah
+     * antara exact-match (langkah 1-2 di scanKode()) dan fallback judul
+     * (langkah 4). Menangani kasus device scanner tertentu yang terbukti
+     * salah mendekode sebagian digit EAN-13 secara konsisten/repeatable
+     * (lihat BarcodeResolverService, Aturan poin 3 - DRY, logic
+     * subsequence-nya TIDAK diduplikasi di sini).
+     *
+     * Mengumpulkan kandidat dari DUA sumber (barcode Eksemplar langsung,
+     * dan ISBN Buku yang di-resolve ke satu Eksemplar via
+     * resolveEksemplarUntukBuku() - method yang SAMA dipakai jalur ISBN
+     * exact-match di atas, tidak ada logic pemilihan eksemplar yang
+     * terduplikasi), lalu di-dedupe berdasarkan Eksemplar->id.
+     *
+     * HANYA mengembalikan hasil jika gabungan kandidat unik berjumlah
+     * TEPAT 1 - kalau ambigu (>1), method ini SENGAJA mengembalikan null
+     * (tidak menebak) supaya caller lanjut ke fallback judul biasa,
+     * karena salah pilih buku pada transaksi Peminjaman/Pengembalian
+     * jauh lebih berisiko dibanding sekadar gagal-cocok.
+     *
+     * TODO: GAP-SPEC - kasus ambigu (>1 kandidat fuzzy) saat ini TIDAK
+     * ditampilkan sebagai daftar pilihan ke operator (berbeda dengan
+     * fallback nama/judul yang punya UI pilihan) - hanya diam-diam
+     * dilewati ke fallback judul. Jika operator butuh visibilitas kapan
+     * fuzzy match gagal karena ambigu (vs benar-benar tidak ketemu),
+     * perlu UI/notifikasi tambahan - belum diimplementasikan di iterasi
+     * ini karena belum ada spesifikasi bagaimana daftar itu seharusnya
+     * ditampilkan (barcode Eksemplar dan ISBN Buku punya bentuk data
+     * berbeda, sehingga tidak bisa langsung reuse UI pilihUser()/pilihBuku()
+     * yang ada).
+     */
+    protected function cariEksemplarFuzzyAtauNull(string $kode): ?Eksemplar
+    {
+        $service = app(BarcodeResolverService::class);
+
+        $kandidatEksemplar = $service->cariEksemplarFuzzy($kode);
+        $kandidatDariBuku = $service->cariBukuFuzzyByIsbn($kode)
+            ->map(fn(Buku $buku) => $this->resolveEksemplarUntukBuku($buku))
+            ->filter();
+
+        $gabungan = $kandidatEksemplar->concat($kandidatDariBuku)
+            ->unique(fn(Eksemplar $eksemplar) => $eksemplar->id);
+
+        return $gabungan->count() === 1 ? $gabungan->first() : null;
+    }
+
+    /**
      * Dipanggil saat operator klik salah satu hasil fallback pencarian
      * judul (atau otomatis dari scanKode() saat hasil fallback persis 1).
      * Me-resolve ke SATU Eksemplar (aturan sama seperti jalur ISBN, lihat
@@ -4681,7 +4756,7 @@ class TransaksiCepat extends Page
         $eksemplar = $this->resolveEksemplarUntukBuku($buku);
 
         if (! $eksemplar) {
-            // Tidak ada Peminjaman aktif user ini utk buku ini, dan tidak
+            // Tidak ada Peminjaman aktif utk buku ini, dan tidak
             // ada Eksemplar berstatus Tersedia - beri pesan yang jelas
             // (bukan silent no-op) supaya operator tahu kenapa tidak
             // terjadi apa-apa setelah klik/Enter.
@@ -4698,8 +4773,9 @@ class TransaksiCepat extends Page
     /**
      * Logika inti pinjam/kembali per eksemplar (rate limit anti-scan-ganda
      * + deteksi otomatis pinjam vs kembali + panggil PeminjamanService).
-     * Dipakai bersama oleh jalur exact-match (scanKode) dan fallback
-     * judul (pilihBuku) - tanpa duplikasi (Aturan poin 3 - DRY).
+     * Dipakai bersama oleh jalur exact-match (scanKode), fuzzy match
+     * (cariEksemplarFuzzyAtauNull), dan fallback judul (pilihBuku) -
+     * tanpa duplikasi (Aturan poin 3 - DRY).
      */
     protected function prosesEksemplar(Eksemplar $eksemplar): void
     {
@@ -4710,7 +4786,7 @@ class TransaksiCepat extends Page
                 $eksemplar->barcode,
                 $eksemplar->buku->judul,
                 'ditolak',
-                'Eksemplar ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
+                'Eksemplar ini baru saja diproses untuk user ini, tunggu ' . self::RATE_LIMIT_DETIK . ' detik sebelum scan ulang.',
                 false,
             );
 
@@ -4743,7 +4819,7 @@ class TransaksiCepat extends Page
                     // fisik lain dari judul yang sama, sedang dipinjam user lain,
                     // bukan berarti transaksi user saat ini bermasalah/bug.
                     throw new RuntimeException(
-                        "Eksemplar barcode '{$eksemplar->barcode}' ({$eksemplar->buku->judul}) sedang tidak tersedia (status: {$eksemplar->status->value}). ".
+                        "Eksemplar barcode '{$eksemplar->barcode}' ({$eksemplar->buku->judul}) sedang tidak tersedia (status: {$eksemplar->status->value}). " .
                             'Jika Anda mengira eksemplar ini seharusnya dikembalikan oleh user ini, periksa apakah barcode/ISBN/judul yang dipilih sesuai dengan yang tadi dipinjam - satu judul buku bisa punya beberapa copy/eksemplar dengan barcode berbeda.'
                     );
                 }
@@ -4766,9 +4842,9 @@ class TransaksiCepat extends Page
     }
 
     /**
-     * Resolve SATU Buku (dari ISBN maupun dari fallback judul) -> pilih
-     * SATU Eksemplar yang relevan. Dipakai baik jalur ISBN maupun jalur
-     * fallback judul (Aturan poin 3 - DRY).
+     * Resolve SATU Buku (dari ISBN, dari fuzzy match, maupun dari fallback
+     * judul) -> pilih SATU Eksemplar yang relevan. Dipakai jalur ISBN,
+     * fuzzy match, dan fallback judul (Aturan poin 3 - DRY).
      *
      * TODO: GAP-SPEC - aturan pemilihan eksemplar saat scan ISBN atau
      * fallback judul (bukan barcode eksemplar spesifik):
@@ -4788,7 +4864,7 @@ class TransaksiCepat extends Page
     {
         $eksemplarDipinjamUser = Eksemplar::query()
             ->where('buku_id', $buku->id)
-            ->whereHas('peminjamans', fn ($q) => $q
+            ->whereHas('peminjamans', fn($q) => $q
                 ->where('user_id', $this->user->id)
                 ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat]))
             ->with('buku')
@@ -17586,6 +17662,142 @@ class FormatNomorTelepon implements ValidationRule
 ```
 ---
 
+## app/Services/BarcodeResolverService.php
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\Buku;
+use App\Models\Eksemplar;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Satu sumber kebenaran untuk resolusi barcode Eksemplar/ISBN Buku yang
+ * hasil scan-nya TERPOTONG sebagian (device tertentu di lapangan salah
+ * mendekode sebagian digit EAN-13, terverifikasi berulang dan konsisten
+ * pada device yang sama - lihat diskusi terkait). Jangan menulis ulang
+ * logic subsequence-match ini di tempat lain (Aturan poin 3, DRY).
+ *
+ * TODO: GAP-SPEC - threshold MIN_PANJANG_FUZZY dan MARGIN_PANJANG di
+ * bawah adalah ASUMSI berdasarkan pola yang diamati (kehilangan 2-4
+ * digit dari ISBN 13 digit) - belum ada spesifikasi resmi. Sesuaikan
+ * jika pola kehilangan digit di lapangan ternyata lebih ekstrem.
+ */
+class BarcodeResolverService
+{
+    /**
+     * Panjang minimum input SEBELUM fuzzy match dicoba - mencegah query
+     * fuzzy yang terlalu longgar untuk input pendek (risiko exploded
+     * kandidat/positif-palsu tinggi kalau input cuma beberapa digit).
+     */
+    protected const MIN_PANJANG_FUZZY = 6;
+
+    /**
+     * Toleransi selisih panjang kandidat vs input yang di-scan - kandidat
+     * dengan panjang di luar rentang ini TIDAK ikut diperiksa (menjaga
+     * performa query, karena subsequence check dilakukan di PHP setelah
+     * prefilter SQL).
+     */
+    protected const MARGIN_PANJANG = 6;
+
+    /**
+     * Exact match barcode Eksemplar (persis sama seperti sebelumnya,
+     * tidak berubah) - disediakan di sini juga supaya caller bisa satu
+     * pintu pemanggilan resolusi barcode Eksemplar bila diperlukan.
+     */
+    public function cariEksemplarPersis(string $kode): ?Eksemplar
+    {
+        return Eksemplar::query()->where('barcode', $kode)->with('buku')->first();
+    }
+
+    public function cariBukuPersisByIsbn(string $kode): ?Buku
+    {
+        return Buku::query()->where('isbn', $kode)->first();
+    }
+
+    /**
+     * Fuzzy match barcode Eksemplar - kandidat yang barcode aslinya
+     * MEMUAT seluruh karakter $kode secara berurutan (subsequence),
+     * meski tidak berdampingan (properti yang cocok dengan pola digit
+     * hilang yang diamati pada device tertentu).
+     *
+     * @return Collection<int, Eksemplar>
+     */
+    public function cariEksemplarFuzzy(string $kode): Collection
+    {
+        $kode = strtoupper(trim($kode));
+
+        if (mb_strlen($kode) < self::MIN_PANJANG_FUZZY) {
+            return new Collection;
+        }
+
+        $panjangMin = mb_strlen($kode);
+        $panjangMax = $panjangMin + self::MARGIN_PANJANG;
+        $karakterAwal = mb_substr($kode, 0, 1);
+
+        $kandidat = Eksemplar::query()
+            ->where('barcode', 'like', $karakterAwal . '%')
+            ->whereRaw('LENGTH(barcode) BETWEEN ? AND ?', [$panjangMin, $panjangMax])
+            ->with('buku')
+            ->get();
+
+        return $kandidat->filter(fn(Eksemplar $eksemplar) => $this->isSubsequence($kode, strtoupper($eksemplar->barcode)))->values();
+    }
+
+    /**
+     * Fuzzy match ISBN Buku - properti sama seperti cariEksemplarFuzzy()
+     * di atas, diterapkan ke kolom Buku.isbn.
+     *
+     * @return Collection<int, Buku>
+     */
+    public function cariBukuFuzzyByIsbn(string $kode): Collection
+    {
+        $kode = trim($kode);
+
+        if (mb_strlen($kode) < self::MIN_PANJANG_FUZZY) {
+            return new Collection;
+        }
+
+        $panjangMin = mb_strlen($kode);
+        $panjangMax = $panjangMin + self::MARGIN_PANJANG;
+        $karakterAwal = mb_substr($kode, 0, 1);
+
+        $kandidat = Buku::query()
+            ->whereNotNull('isbn')
+            ->where('isbn', 'like', $karakterAwal . '%')
+            ->whereRaw('LENGTH(isbn) BETWEEN ? AND ?', [$panjangMin, $panjangMax])
+            ->get();
+
+        return $kandidat->filter(fn(Buku $buku) => $this->isSubsequence($kode, $buku->isbn))->values();
+    }
+
+    /**
+     * True jika seluruh karakter $needle muncul di $haystack dengan
+     * URUTAN yang sama (tidak harus berdampingan). Algoritma two-pointer
+     * O(panjang haystack) - cukup ringan untuk dijalankan per kandidat
+     * hasil prefilter SQL di atas.
+     */
+    protected function isSubsequence(string $needle, string $haystack): bool
+    {
+        $posNeedle = 0;
+        $panjangNeedle = mb_strlen($needle);
+        $panjangHaystack = mb_strlen($haystack);
+
+        for ($posHaystack = 0; $posHaystack < $panjangHaystack && $posNeedle < $panjangNeedle; $posHaystack++) {
+            if (mb_substr($haystack, $posHaystack, 1) === mb_substr($needle, $posNeedle, 1)) {
+                $posNeedle++;
+            }
+        }
+
+        return $posNeedle === $panjangNeedle;
+    }
+}
+
+```
+---
+
 ## app/Services/BukuImportResolverService.php
 ```php
 <?php
@@ -19276,7 +19488,8 @@ class RfidResolverService
     }
 
     /**
-     * @throws RuntimeException jika user tidak ditemukan dari kartu maupun NISN
+     * @throws RuntimeException jika user tidak ditemukan dari kartu, NISN,
+     * maupun NIP
      */
     public function resolveUser(string $inputKartuAtauNisn): User
     {
@@ -19292,8 +19505,18 @@ class RfidResolverService
             return $user;
         }
 
+        // Fallback NIP - agar Pegawai turut terdeteksi lewat input manual
+        // (ketik, bukan tap kartu), konsisten dengan findByKartu() yang
+        // memang sudah lintas-role sejak awal (query no_kartu_rfid tanpa
+        // filter role).
+        $user = User::query()->where('nip', $inputKartuAtauNisn)->first();
+
+        if ($user) {
+            return $user;
+        }
+
         throw new RuntimeException(
-            "User tidak ditemukan untuk kartu/NISN '{$inputKartuAtauNisn}'. Pastikan kartu sudah didaftarkan atau gunakan NISN yang valid."
+            "User tidak ditemukan untuk kartu/NISN/NIP '{$inputKartuAtauNisn}'. Pastikan kartu sudah didaftarkan atau gunakan NISN/NIP yang valid."
         );
     }
 }
@@ -19398,7 +19621,7 @@ class SertifikatService
                 'nomorSertifikat' => $nomor,
                 'qrGambar' => $this->buatQrCode($urlVerifikasi),
                 'barcodeGambar' => $this->buatBarcodeNomor($nomor),
-            ])->setPaper('a4', 'landscape');
+            ])->setPaper('a4', 'portrait');
 
             $path = "sertifikat/{$tipe}/{$log->id}.pdf";
             Storage::disk('public')->put($path, $pdf->output());
@@ -30304,21 +30527,23 @@ window.ChartExport = window.ChartExport || (function () {
 
         body {
             margin: 0;
-            padding: 9mm;
+            padding: 12mm 10mm;
             color: #1e293b;
         }
 
-        /* Dua bingkai bersarang - tipis di luar, tebal di dalam, kesan formal */
+        /* Dua bingkai bersarang - tipis di luar, tebal di dalam, kesan
+           formal. Tinggi disesuaikan untuk kanvas A4 portrait
+           (297mm tinggi halaman, dikurangi padding body atas+bawah 24mm). */
         .bingkai-luar {
             border: 0.75px solid #94a3b8;
-            padding: 3mm;
-            height: 192mm;
+            padding: 4mm;
+            height: 273mm;
         }
 
         .bingkai-dalam {
             border: 2px solid #0f766e;
             height: 100%;
-            padding: 9mm 16mm 7mm 16mm;
+            padding: 14mm 12mm 10mm 12mm;
             text-align: center;
             position: relative;
         }
@@ -30336,7 +30561,7 @@ window.ChartExport = window.ChartExport || (function () {
         .sudut-kanan-bawah { bottom: -2px; right: -2px; border-bottom: 2px solid #b45309; border-right: 2px solid #b45309; }
 
         .label-tipe {
-            font-size: 9.5px;
+            font-size: 10px;
             letter-spacing: 4px;
             color: #b45309;
             text-transform: uppercase;
@@ -30344,95 +30569,117 @@ window.ChartExport = window.ChartExport || (function () {
         }
 
         .label-atas {
-            font-size: 11px;
+            font-size: 11.5px;
             letter-spacing: 1.5px;
             color: #64748b;
             text-transform: uppercase;
-            margin-top: 2.5mm;
+            margin-top: 3mm;
         }
 
         .garis-hias {
-            width: 26mm;
+            width: 28mm;
             height: 1px;
             background-color: #b45309;
-            margin: 4mm auto 0 auto;
+            margin: 5mm auto 0 auto;
         }
 
         .judul {
-            font-size: 29px;
+            font-size: 32px;
             font-weight: 700;
             color: #134e4a;
-            margin-top: 5mm;
+            margin-top: 8mm;
             letter-spacing: 0.5px;
         }
 
         .teks-diberikan {
-            font-size: 11.5px;
+            font-size: 12.5px;
             color: #475569;
-            margin-top: 8mm;
+            margin-top: 14mm;
             font-style: italic;
         }
 
         .nama-penerima {
-            font-size: 25px;
+            font-size: 27px;
             font-weight: 700;
             color: #0f172a;
-            margin-top: 3.5mm;
-            padding-bottom: 2.5mm;
+            margin-top: 4mm;
+            padding-bottom: 3mm;
             border-bottom: 0.75px solid #cbd5e1;
             display: inline-block;
-            min-width: 110mm;
+            min-width: 120mm;
         }
 
         .teks-atas {
-            font-size: 12px;
+            font-size: 13px;
             color: #475569;
-            margin-top: 7mm;
+            margin-top: 12mm;
         }
 
         .nama-item {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 700;
             color: #0f766e;
-            margin-top: 2mm;
+            margin-top: 3mm;
         }
 
         .deskripsi-item {
-            font-size: 10.5px;
+            font-size: 11px;
             color: #64748b;
-            margin-top: 3mm;
-            max-width: 135mm;
+            margin-top: 4mm;
+            max-width: 140mm;
             margin-left: auto;
             margin-right: auto;
-            line-height: 1.5;
+            line-height: 1.6;
         }
 
-        /* Baris bawah: tanda tangan (kiri/tengah) + QR verifikasi (kanan) */
-        .baris-bawah {
-            margin-top: 11mm;
+        /* Tanda tangan disusun BERTUMPUK (bukan berdampingan seperti versi
+           landscape sebelumnya) - lebar portrait tidak cukup lega untuk
+           2 kolom tanda tangan + kolom QR berdampingan tanpa terasa sesak. */
+        .baris-ttd {
+            margin-top: 18mm;
             width: 100%;
         }
 
         .kolom-ttd {
             display: inline-block;
-            width: 55mm;
+            width: 60mm;
             vertical-align: top;
             text-align: center;
         }
 
-        .ttd-kiri  { float: left; margin-left: 8mm; }
-        .ttd-kanan { float: left; margin-left: 14mm; }
+        .ttd-kiri  { margin-right: 10mm; }
+        .ttd-kanan { margin-left: 10mm; }
 
-        .kolom-qr {
-            float: right;
-            margin-right: 8mm;
-            width: 34mm;
+        .ttd-tanggal {
+            font-size: 10px;
+            color: #64748b;
+        }
+
+        .ttd-garis {
+            margin-top: 14mm;
+            border-top: 0.75px solid #94a3b8;
+            padding-top: 2mm;
+            font-size: 11px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .ttd-jabatan {
+            font-size: 9px;
+            color: #64748b;
+            margin-top: 0.5mm;
+        }
+
+        /* QR verifikasi dipindah ke baris tersendiri di bawah tanda
+           tangan (portrait) - sebelumnya sejajar di kanan (landscape). */
+        .baris-qr {
+            margin-top: 10mm;
             text-align: center;
         }
 
         .qr-gambar {
-            width: 22mm;
-            height: 22mm;
+            width: 20mm;
+            height: 20mm;
         }
 
         .qr-label {
@@ -30443,29 +30690,8 @@ window.ChartExport = window.ChartExport || (function () {
             text-transform: uppercase;
         }
 
-        .ttd-tanggal {
-            font-size: 9.5px;
-            color: #64748b;
-        }
-
-        .ttd-garis {
-            margin-top: 13mm;
-            border-top: 0.75px solid #94a3b8;
-            padding-top: 2mm;
-            font-size: 10.5px;
-            font-weight: 700;
-            color: #0f172a;
-        }
-
-        .ttd-jabatan {
-            font-size: 8.5px;
-            color: #64748b;
-            margin-top: 0.5mm;
-        }
-
         .footer-bawah {
-            clear: both;
-            margin-top: 10mm;
+            margin-top: 8mm;
             padding-top: 3mm;
             border-top: 0.5px solid #e2e8f0;
             text-align: center;
@@ -30512,12 +30738,7 @@ window.ChartExport = window.ChartExport || (function () {
                 <div class="deskripsi-item">{{ $deskripsiItem }}</div>
             @endif
 
-            <div class="baris-bawah">
-                <div class="kolom-qr">
-                    <img src="{{ $qrGambar }}" class="qr-gambar" alt="QR Verifikasi">
-                    <div class="qr-label">Pindai untuk verifikasi</div>
-                </div>
-
+            <div class="baris-ttd">
                 <div class="kolom-ttd ttd-kiri">
                     <div class="ttd-tanggal">{{ \Illuminate\Support\Carbon::parse($tanggal)->translatedFormat('d F Y') }}</div>
                     <div class="ttd-garis">Kepala Perpustakaan</div>
@@ -30529,6 +30750,11 @@ window.ChartExport = window.ChartExport || (function () {
                     <div class="ttd-garis">Pustakawan</div>
                     <div class="ttd-jabatan">Penanggung Jawab Program</div>
                 </div>
+            </div>
+
+            <div class="baris-qr">
+                <img src="{{ $qrGambar }}" class="qr-gambar" alt="QR Verifikasi">
+                <div class="qr-label">Pindai untuk verifikasi</div>
             </div>
 
             <div class="footer-bawah">

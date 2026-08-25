@@ -100,9 +100,30 @@ Ketentuan:
 
 # Fitur/Gap yang ingin ditutup pada iterasi ini
 
-- perbaiki sistem sirkulasi tap rfid agar mendeteksi pegawai juga, bukan hanya siswa
+- perbaiki sistem sirkulasi scan barcode dengan alat yang berbeda beda agar kompatibel
 
-- perbaiki template sertifikat agar lebih indah dan professional menggunakan ukuran kertas A4 dengan portrait orientation
+Alat Scan 1:
+Data ISBN Pada Buku Fisik = 8991389241561
+Data ISBN Hasil Scan Alat = 89913824156
+Data ISBN Di Database = 8991389241561
+
+---
+
+Data ISBN Pada Buku Fisik = 8998989110167
+Data ISBN Hasil Scan Alat = 899811067
+Data ISBN Di Database = 8998989110167
+
+Alat Scan 2:
+Data ISBN Pada Buku Fisik = 8991389241561
+Data ISBN Hasil Scan Alat = 8991389241561
+Data ISBN Di Database = 8991389241561
+
+---
+
+Data ISBN Pada Buku Fisik = 8998989110167
+Data ISBN Hasil Scan Alat = 8998989110167
+Data ISBN Di Database = 8998989110167
+
 
 ---
 

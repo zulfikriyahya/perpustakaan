@@ -27,21 +27,6 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
-/**
- * Denda SELALU dibuat otomatis oleh PeminjamanService - tidak ada
- * Create/Edit page di Resource ini (form() sengaja kosong, TIDAK diubah
- * iterasi ini karena memang tidak ada form utama untuk dikompakkan -
- * hanya dua Action schema kecil di bawah yang mendapat validationMessages()).
- *
- * TODO: GAP-SPEC - PeminjamanService::batalkanDenda() TIDAK men-set
- * status_refund ke 'perlu_refund' saat membatalkan Denda yang sudah
- * terbayar (lihat komentar di method tsb + migration
- * add_status_refund_to_dendas_table). Action 'update_status_refund' di
- * bawah adalah mitigasi manual sementara - Admin harus proaktif mengecek
- * kolom 'keterangan' untuk tahu ada Denda yang perlu direfund, sistem
- * TIDAK memberi notifikasi otomatis untuk ini. Perlu konfirmasi apakah
- * PeminjamanService perlu di-patch.
- */
 class DendaResource extends Resource
 {
     protected static ?string $model = Denda::class;

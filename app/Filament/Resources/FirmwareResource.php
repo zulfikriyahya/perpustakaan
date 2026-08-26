@@ -18,12 +18,6 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-/**
- * TODO: GAP-SPEC - form Edit TIDAK menampilkan preview file lama (tidak
- * berubah dari sebelumnya - lihat catatan asli). Kontrak endpoint device
- * (PerpustakaanDeviceController::firmwareCheck()) TIDAK disentuh iterasi
- * ini - hanya kompaksi Section + pesan validasi (Aturan poin 17).
- */
 class FirmwareResource extends Resource
 {
     protected static ?string $model = FirmwareRelease::class;

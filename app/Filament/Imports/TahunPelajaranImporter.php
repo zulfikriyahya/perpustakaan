@@ -35,10 +35,6 @@ class TahunPelajaranImporter extends Importer
 
     public function resolveRecord(): ?TahunPelajaran
     {
-        // 'aktif' SENGAJA tidak diimpor - perubahan Tahun Pelajaran aktif
-        // hanya lewat action "Jadikan Aktif" di TahunPelajaranResource,
-        // supaya logic "nonaktifkan yang lain" tetap terpusat di satu
-        // tempat (Aturan poin 3).
         return TahunPelajaran::query()->firstOrNew(['nama' => $this->data['nama']]);
     }
 

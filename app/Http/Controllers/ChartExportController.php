@@ -13,22 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use ReflectionMethod;
 
-/**
- * Generate PDF grafik berisi gambar + tabel data + ringkasan, diambil
- * ULANG dari database lewat widget terkait (bukan dari angka yang
- * dikirim client) - satu sumber kebenaran tetap di getData()/getStats()
- * masing-masing widget (Aturan poin 3), di sini hanya dipanggil ulang
- * lewat reflection karena method-nya protected.
- *
- * TODO: verifikasi signature terhadap versi barryvdh/laravel-dompdf
- * yang benar-benar terpasang (composer.json ^3.1) - method
- * Pdf::loadView()->download() diasumsikan stabil, belum diverifikasi
- * langsung terhadap composer.lock.
- */
 class ChartExportController extends Controller
 {
-    // Whitelist ketat - JANGAN pernah instantiate class dari input client
-    // tanpa validasi ini, mencegah instansiasi class sembarangan.
     private const ALLOWED_CHART_WIDGETS = [
         TrenBulananWidget::class,
         GamifikasiBulananWidget::class,

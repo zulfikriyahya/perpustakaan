@@ -12,18 +12,6 @@ use App\Models\PunishmentLog;
 use App\Models\RewardLog;
 use Illuminate\Support\Carbon;
 
-/**
- * Satu sumber kebenaran agregasi data untuk Laporan Bulanan (Aturan poin 3)
- * - dipanggil dari LaporanBulanan Page, jangan duplikasi query di tempat lain.
- *
- * TODO: GAP-SPEC - filter tanggal per domain memakai kolom "kejadian"
- * masing-masing (tanggal_pinjam, tanggal_kembali, created_at untuk
- * Denda/Point, tanggal untuk Kunjungan, tanggal_didapat untuk
- * RewardLog/LevelBadgeLog, tanggal_diterapkan untuk PunishmentLog) - bukan
- * tanggal_lunas untuk Denda. Perlu dikonfirmasi jika laporan dimaksudkan
- * sebagai laporan kas/arus pemasukan (yang mestinya pakai tanggal_lunas),
- * bukan laporan aktivitas.
- */
 class LaporanBulananService
 {
     public function generate(int $bulan, int $tahun): array
@@ -130,16 +118,6 @@ class LaporanBulananService
         ];
     }
 
-    /**
-     * Riwayat Badge (LevelBadgeLog), Reward (RewardLog), dan Punishment
-     * (PunishmentLog) dalam periode - dikelompokkan per User supaya PDF
-     * bisa menampilkan "User X: dapat Badge Y tgl sekian, Reward Z tgl
-     * sekian, kena Punishment W tgl sekian" dalam satu baris/blok.
-     *
-     * TODO: GAP-SPEC - badge yang nempel ke user SEBELUM tabel
-     * level_badge_logs dibuat tidak akan muncul di sini (tidak ada
-     * histori sebelum migration berjalan) - dikonfirmasi user.
-     */
     protected function dataPoinRewardPunishment(Carbon $awal, Carbon $akhir): array
     {
         $badgeLogs = LevelBadgeLog::query()

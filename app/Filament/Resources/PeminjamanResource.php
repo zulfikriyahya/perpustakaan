@@ -23,24 +23,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use RuntimeException;
 
-/**
- * Form Create di sini adalah FALLBACK MANUAL untuk Pustakawan (input lewat
- * panel jika device RFID/scan barcode error) - lihat konfirmasi Aturan.
- * Alur normal tetap lewat endpoint device RFID + scan barcode fisik.
- *
- * Create SENGAJA tidak memakai Peminjaman::create() bawaan Filament -
- * seluruh logic (validasi limit/suspend, kalkulasi jatuh tempo, stok, Point,
- * WA) WAJIB lewat PeminjamanService::pinjamBuku() (Aturan poin3, DRY).
- * Lihat Pages\CreatePeminjaman::handleRecordCreation().
- *
- * Status Peminjaman TIDAK bisa diedit manual - transisi hanya lewat
- * PeminjamanService (cron/Action pengembalian/laporkan hilang), karenanya
- * Resource ini TIDAK punya halaman Edit sama sekali.
- *
- * ITERASI INI - form dibungkus Section untuk konsistensi visual dengan
- * Resource lain (murni tampilan, TIDAK mengubah field/logic/validasi
- * limit yang sudah ada di PeminjamanService).
- */
 class PeminjamanResource extends Resource
 {
     protected static ?string $model = Peminjaman::class;

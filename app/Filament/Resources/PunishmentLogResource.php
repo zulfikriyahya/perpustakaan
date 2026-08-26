@@ -11,10 +11,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
-/**
- * // TODO: ASUMSI - lihat catatan sama di RewardLogResource.
- * Read-only, tanpa Import - dihasilkan otomatis oleh PointService.
- */
 class PunishmentLogResource extends Resource
 {
     protected static ?string $model = PunishmentLog::class;

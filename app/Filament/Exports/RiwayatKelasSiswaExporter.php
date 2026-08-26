@@ -8,12 +8,6 @@ use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
 use Illuminate\Database\Eloquent\Builder;
 
-/**
- * Read-only export - RiwayatKelasSiswa HANYA dihasilkan otomatis oleh
- * KenaikanKelasService (Aturan poin 3, DRY). TIDAK ada Importer pasangan -
- * insert manual lewat spreadsheet akan melewati validasi transisi status
- * (Aktif/Naik/Tinggal/Lulus/Keluar) yang dikelola service tersebut.
- */
 class RiwayatKelasSiswaExporter extends Exporter
 {
     protected static ?string $model = RiwayatKelasSiswa::class;

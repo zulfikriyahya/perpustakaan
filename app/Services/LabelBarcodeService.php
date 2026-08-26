@@ -6,11 +6,6 @@ use App\Models\Eksemplar;
 use Illuminate\Support\Collection;
 use Picqer\Barcode\BarcodeGeneratorPNG;
 
-/**
- * Satu sumber kebenaran generate data label barcode Eksemplar (Aturan
- * poin 3) - dipanggil dari EksemplarsRelationManager (aksi single & bulk),
- * jangan duplikasi pemanggilan BarcodeGeneratorPNG di tempat lain.
- */
 class LabelBarcodeService
 {
     protected BarcodeGeneratorPNG $generator;

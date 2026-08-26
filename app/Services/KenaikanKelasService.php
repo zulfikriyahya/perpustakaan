@@ -12,19 +12,8 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
-/**
- * Satu sumber kebenaran untuk seluruh perpindahan status akademik siswa
- * (assignment awal, kenaikan kelas, tinggal kelas, lulus, keluar).
- * Resource/Action HANYA memanggil method di sini (Aturan poin 3, DRY).
- */
 class KenaikanKelasService
 {
-    /**
-     * Assignment awal / pindah kelas manual (bukan proses kenaikan massal).
-     * Menutup RiwayatKelasSiswa aktif sebelumnya (jika ada) dengan status
-     * 'keluar' (dianggap pindah kelas manual, bukan kenaikan reguler),
-     * lalu buka riwayat baru di KTP tujuan.
-     */
     public function assignKelas(User $user, KelasTahunPelajaran $ktpTujuan): void
     {
         DB::transaction(function () use ($user, $ktpTujuan) {
@@ -44,19 +33,6 @@ class KenaikanKelasService
         });
     }
 
-    /**
-     * Keluarkan siswa dari kelas aktifnya saat ini tanpa proses kenaikan
-     * massal (dipanggil dari SiswaAktifRelationManager, aksi per baris).
-     * Menggunakan status 'keluar' - BUKAN 'lulus', karena ini penghapusan
-     * assignment manual, bukan kelulusan resmi.
-     *
-     * // TODO: GAP-SPEC - status_akademik user ikut diubah ke Keluar di
-     * sini, sama seperti prosesKeluar() pada alur kenaikan massal, demi
-     * konsistensi. Jika maksud "keluarkan dari kelas" di RelationManager
-     * ini sebenarnya hanya "lepas assignment kelas" (mis. akan di-assign
-     * ulang segera) tanpa mengubah status_akademik, ini perlu dikoreksi -
-     * belum ada spek eksplisit yang membedakan dua kasus tersebut.
-     */
     public function keluarkanDariKelas(User $user): void
     {
         DB::transaction(function () use ($user) {

@@ -24,10 +24,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
-/**
- * Instance Kelas untuk Tahun Pelajaran tertentu - satu kombinasi
- * kelas_id + tahun_pelajaran_id unik (lihat migration unique index).
- */
 class KelasTahunPelajaranResource extends Resource
 {
     protected static ?string $model = KelasTahunPelajaran::class;

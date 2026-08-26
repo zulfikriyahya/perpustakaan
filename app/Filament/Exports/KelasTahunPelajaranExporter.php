@@ -15,11 +15,6 @@ class KelasTahunPelajaranExporter extends Exporter
     {
         return [
             ExportColumn::make('kelas.nama')->label('Kelas'),
-            // BARU iterasi ini - KelasTahunPelajaranImporter MEWAJIBKAN
-            // kolom jurusan_kode (lihat catatan "PERUBAHAN KONTRAK" di
-            // Importer). Tanpa kolom ini di hasil export, admin tidak
-            // bisa langsung mengimpor ulang file yang sama - harus
-            // mencari kode jurusan secara manual dulu di resource lain.
             ExportColumn::make('kelas.jurusan.kode')->label('Kode Jurusan'),
             ExportColumn::make('tahunPelajaran.nama')->label('Tahun Pelajaran'),
             ExportColumn::make('waliKelas.nama')->label('Wali Kelas'),

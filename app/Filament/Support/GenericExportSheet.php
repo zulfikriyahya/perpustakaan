@@ -9,17 +9,6 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithTitle;
 
-/**
- * Satu class dipakai ulang untuk SEMUA sheet Export Master (Aturan
- * poin 3, DRY). Dikonstruksi dari satu entri MasterDataRegistry::items().
- *
- * BUG FIX (iterasi ini): heuristik tebakRelasi() (whitelist nama key
- * kolom) DIHAPUS - tidak match untuk banyak sheet (kolom nested seperti
- * 'eksemplar.buku', key yang beda nama dari relasi asli seperti 'badge'
- * vs 'levelBadge', dst.), menyebabkan N+1 tersembunyi. Diganti key
- * 'eager' eksplisit per entri di MasterDataRegistry - deterministik,
- * tidak bergantung tebakan dari nama kolom.
- */
 class GenericExportSheet implements FromCollection, ShouldAutoSize, ShouldQueue, WithHeadings, WithMapping, WithTitle
 {
     public function __construct(protected array $item) {}

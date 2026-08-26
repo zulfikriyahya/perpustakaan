@@ -13,26 +13,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use RuntimeException;
 
-/**
- * Halaman kerja untuk memutuskan status kenaikan tiap siswa aktif di
- * satu KTP asal, lalu memanggil KenaikanKelasService::prosesKenaikan()
- * sekaligus (Aturan poin 3, DRY - tidak ada logic kalkulasi disini).
- * Diakses lewat Action 'proses_kenaikan' di KelasTahunPelajaranResource.
- *
- * Sengaja TIDAK didaftarkan ke navigasi (excludeFromNavigation) - hanya
- * dapat diakses via URL dengan parameter route {ktp} dari Resource
- * (bukan query string - lihat $slug di bawah, wajib match dengan
- * ProsesKenaikanKelas::getUrl(['ktp' => ...]) di KelasTahunPelajaranResource).
- *
- * TODO: ASUMSI - dipakai Section + field "Set Semua" (bukan Wizard
- * bertahap) untuk mengompakkan pengisian. Alasan: ini bukan alur
- * sekuensial per tahap, melainkan satu matriks keputusan independen per
- * siswa yang disubmit sekaligus dalam satu transaksi
- * (KenaikanKelasService::prosesKenaikan()) - Wizard per siswa akan
- * memperlambat pengisian untuk kelas besar, bukan mempercepat. Jika
- * yang diinginkan tetap Wizard (mis. dikelompokkan per halaman N siswa),
- * beri tahu agar disesuaikan.
- */
 class ProsesKenaikanKelas extends Page
 {
     protected static string|\BackedEnum|null $navigationIcon = null;

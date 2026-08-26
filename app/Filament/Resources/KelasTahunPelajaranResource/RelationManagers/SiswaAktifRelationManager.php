@@ -13,19 +13,6 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-/**
- * Assignment/pelepasan siswa SELALU lewat KenaikanKelasService (Aturan
- * poin 3, DRY) - tidak ada attach()/detach() pivot langsung di sini,
- * karena relasi ini belongsTo di sisi User (kelas_tahun_pelajaran_id),
- * bukan pivot, dan setiap perubahan wajib tercatat di RiwayatKelasSiswa.
- *
- * // TODO: GAP-SPEC - "Tambah Siswa" di sini memakai KenaikanKelasService::
- * assignKelas() yang SAMA dengan bulk action UserResource - artinya jika
- * siswa yang dipilih sudah aktif di KTP lain, riwayat lamanya otomatis
- * ditutup status 'keluar' (bukan error/penolakan). Perlu dikonfirmasi
- * apakah perilaku pindah-kelas-implisit ini yang diinginkan di titik
- * masuk ini juga, atau harus menolak siswa yang sudah punya KTP aktif.
- */
 class SiswaAktifRelationManager extends RelationManager
 {
     protected static string $relationship = 'siswaAktif';

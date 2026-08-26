@@ -23,11 +23,6 @@ class LaporanBulanan extends Page
 
     public ?array $data = [];
 
-    // public static function canAccess(): bool
-    // {
-    //     return auth()->user()?->can('ViewAny:LaporanBulanan') ?? false;
-    // }
-
     public function getHeading(): string|HtmlString
     {
         return 'Laporan Bulanan';
@@ -41,11 +36,6 @@ class LaporanBulanan extends Page
         ]);
     }
 
-    // TODO: verifikasi signature Section/Grid terhadap versi filament/filament
-    // di composer.lock - keduanya diasumsikan tersedia di
-    // Filament\Schemas\Components sejalan dengan Schema yang sudah dipakai
-    // project ini (Filament v5.7), belum pernah dipakai di file lain project
-    // untuk dikonfirmasi persis.
     public function form(Schema $schema): Schema
     {
         return $schema->components([

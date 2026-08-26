@@ -9,22 +9,6 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-/**
- * Upsert berdasarkan (jurusan_id, nama) - DIUBAH (iterasi ini,
- * dikonfirmasi user): nama Kelas sekarang unik PER JURUSAN, bukan
- * global lagi (lihat migration
- * 2026_08_03_000002_kelas_wajib_jurusan_unique_per_jurusan.php).
- * 'jurusan_kode' SEKARANG WAJIB diisi - setiap Kelas harus punya
- * Jurusan (dikonfirmasi user: "semua kelas memiliki jurusan").
- *
- * BUG FIX (iterasi sebelumnya, tetap berlaku): 'jurusan_kode' adalah
- * kolom lookup-only (bukan kolom asli tabel 'kelas'). Tanpa
- * ->fillRecordUsing(), Filament otomatis meng-assign
- * $record->jurusan_kode = state SEBELUM save(), yang menyebabkan
- * SQLSTATE[42S22] "Unknown column 'jurusan_kode'". fillRecordUsing()
- * no-op memastikan resolusi HANYA lewat resolveRecord() (Aturan
- * poin 3, DRY).
- */
 class KelasImporter extends Importer
 {
     protected static ?string $model = Kelas::class;
@@ -50,8 +34,6 @@ class KelasImporter extends Importer
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
                 ->example('IPA')
-                // BUG FIX - lihat docblock class. Kolom ini bukan kolom
-                // asli tabel 'kelas', jangan biarkan Filament auto-assign.
                 ->fillRecordUsing(fn (?string $state) => null),
         ];
     }

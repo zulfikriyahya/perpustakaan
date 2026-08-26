@@ -21,17 +21,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
-/**
- * Transaksi dibuat otomatis sebagai pembungkus proses (peminjaman/
- * kunjungan/pembayaran_denda) - tidak ada Create/Edit manual di sini.
- * Read-only log + Admin boleh Delete untuk koreksi (dikonfirmasi).
- *
- * TODO: GAP-SPEC - belum ditemukan kode yang membuat Transaksi dengan
- * jenis 'kunjungan' atau 'pembayaran_denda' (PeminjamanService hanya
- * terlihat menangani jenis 'peminjaman' lewat pinjamBuku()). Kemungkinan
- * dua jenis ini memang belum diimplementasikan - perlu dikonfirmasi apakah
- * ini scope iterasi selanjutnya, bukan gap di TransaksiResource ini.
- */
 class TransaksiResource extends Resource
 {
     protected static ?string $model = Transaksi::class;

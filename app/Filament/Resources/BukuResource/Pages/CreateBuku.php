@@ -17,13 +17,6 @@ class CreateBuku extends CreateRecord
         return static::getResource()::getUrl('index');
     }
 
-    /**
-     * GAP-SPEC ditutup: buku bisa langsung dibuat sekaligus dengan N
-     * Eksemplar awal (field 'jumlah_eksemplar_awal' non-persisten, lihat
-     * BukuResource::form()). Format barcode kini SATU SUMBER KEBENARAN
-     * lewat Eksemplar::generateBarcodeUntuk() - sebelumnya kode generate
-     * barcode disalin persis dari BukuImporter::afterSave() (Aturan poin 3).
-     */
     protected function afterCreate(): void
     {
         $jumlah = (int) ($this->data['jumlah_eksemplar_awal'] ?? 0);

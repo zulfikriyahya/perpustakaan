@@ -7,12 +7,6 @@ use App\Models\Peminjaman;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
-/**
- * Terpisah dari App\Filament\Widgets\PeminjamanStatsWidget (dashboard
- * global) - widget ini khusus tampil di header ListPeminjamans, namespace
- * berbeda jadi tidak bentrok nama class (Aturan poin 3 - reuse logic
- * query, bukan duplikasi definisi status).
- */
 class PeminjamanOverviewWidget extends StatsOverviewWidget
 {
     public static function canView(): bool

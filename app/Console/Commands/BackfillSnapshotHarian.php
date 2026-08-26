@@ -6,16 +6,6 @@ use App\Services\SnapshotHarianService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
-/**
- * Command SEKALI-JALAN (manual, TIDAK didaftarkan di routes/console.php
- * Schedule) - dijalankan sekali oleh Admin setelah migration
- * snapshot_harians pertama kali di-deploy, untuk mengisi histori
- * sebelum tabel ini ada. Idempotent - aman dijalankan ulang (SnapshotHarianService
- * pakai updateOrCreate per tanggal).
- *
- * TODO: ASUMSI - default 30 hari ke belakang (--hari). Ganti sesuai
- * kebutuhan retensi trend yang diinginkan.
- */
 class BackfillSnapshotHarian extends Command
 {
     protected $signature = 'perpustakaan:snapshot-harian-backfill {--hari=30 : Jumlah hari ke belakang dari hari ini}';

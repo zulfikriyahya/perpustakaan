@@ -31,41 +31,6 @@ use App\Services\UserImportResolverService;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Illuminate\Support\Facades\Validator;
 
-/**
- * SATU SUMBER KEBENARAN urutan sheet + kolom untuk Export/Import Master
- * (Aturan poin 3, DRY). Urutan array ini MENGIKAT dua hal:
- * 1. Urutan sheet fisik di file hasil "Export Semua".
- * 2. Urutan proses saat "Import Semua" - dipetakan BY INDEX POSISI
- *    (bukan nama sheet) di ProcessMasterImportJob, DIVALIDASI terhadap
- *    'label' di bawah sebelum diproses (lihat
- *    ProcessMasterImportJob::validasiUrutanSheet(), BARU iterasi ini).
- *
- * 'importable' => false berarti model ini read-only/log otomatis
- * (dihasilkan Service - PeminjamanService/PointService/KenaikanKelasService/
- * device RFID) - HANYA di-export, TIDAK diproses saat Import meski
- * sheet-nya ikut ada di file.
- *
- * 'eager' => daftar relasi eksplisit untuk eager-load sebelum export
- * (Aturan poin 3) - GenericExportSheet TIDAK LAGI menebak dari nama
- * kolom (bug lama: whitelist heuristik tidak match banyak sheet,
- * lihat riwayat review sebelumnya).
- *
- * REFACTOR (iterasi ini): entri 'buku' sekarang delegasi penuh ke
- * BukuImportResolverService (Aturan poin 3, DRY) - sebelumnya
- * logic resolusi kategori/rak/akumulasi-stok terduplikasi manual di
- * sini dan di BukuImporter, berisiko drift diam-diam. Perilaku
- * (pesan error, aturan akumulasi stok, dst.) TIDAK berubah.
- *
- * PERUBAHAN KONTRAK (dari iterasi sebelumnya, tetap berlaku - file
- * hasil "Export Semua" LAMA sebelum perubahan ini TIDAK KOMPATIBEL
- * untuk Import Semua lagi):
- * - Sheet 'user': kolom 'kelas' polos diganti 'kelas'+'jurusan_kode'+
- *   'tahun_pelajaran' (identik kontrak UserImporter, karena Kelas.nama
- *   tidak unik secara global). Ditambah 'jenis_kelamin', 'avatar',
- *   'password' (password TIDAK diexport, hanya diterima saat import).
- * - Sheet 'kelas_tahun_pelajaran': kolom 'wali_kelas' (nama) diganti
- *   'wali_kelas_nip' (NIP - nama tidak dijamin unik).
- */
 class MasterDataRegistry
 {
     public static function items(): array
@@ -305,8 +270,7 @@ class MasterDataRegistry
                     'kelas' => fn ($r) => $r->kelasTahunPelajaran?->kelas?->nama,
                     'jurusan_kode' => fn ($r) => $r->kelasTahunPelajaran?->kelas?->jurusan?->kode,
                     'tahun_pelajaran' => fn ($r) => $r->kelasTahunPelajaran?->tahunPelajaran?->nama,
-                    // 'password' SENGAJA tidak diexport (hash tidak berguna
-                    // untuk reimport) - hanya diterima saat import di bawah.
+
                 ],
                 'import' => function (array $row) {
                     if (empty($row['nama']) || empty($row['role']) || empty($row['no_telepon'])) {
@@ -391,14 +355,7 @@ class MasterDataRegistry
                     'rak' => fn ($r) => $r->eksemplars->pluck('rak.nama')->filter()->unique()->implode('; '),
                     'kategori' => fn ($r) => $r->kategoris->pluck('nama')->implode('; '),
                 ],
-                // GAP-SPEC ditutup (iterasi ini): sebelumnya closure ini
-                // menduplikasi manual logic resolusi kategori/rak/akumulasi
-                // stok dari BukuImporter - sekarang delegasi penuh ke
-                // BukuImportResolverService (SATU sumber kebenaran, Aturan
-                // poin 3). Perilaku identik dengan BukuImporter. MASIH
-                // BELUM diuji end-to-end lewat jalur nyata "Import Semua"
-                // (Aturan poin 12) - baru diverifikasi statis konsisten
-                // dengan BukuImporter.
+
                 'import' => function (array $row) {
                     if (empty($row['judul']) || ! isset($row['harga_ganti'])) {
                         throw new RowImportFailedException('Judul dan harga_ganti wajib diisi.');

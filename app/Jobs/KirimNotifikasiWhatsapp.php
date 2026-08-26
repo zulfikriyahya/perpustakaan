@@ -12,36 +12,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Job pengirim notifikasi WhatsApp - dijalankan di queue 'whatsapp' terpisah
- * agar pengiriman WA tidak blocking proses utama (Peminjaman/Denda/Point).
- * Lihat Logic Module §11 checklist dan Aturan poin 3 (Prinsip DRY).
- *
- * Job ini menerima template_code yang SUDAH di-resolve dari Setting (lihat
- * WhatsappService::kirimEvent()) - lookup Setting tetap dilakukan sinkron
- * di pemanggil supaya job tidak perlu query Setting berulang dan supaya
- * kegagalan "template belum dikonfigurasi" tetap terdeteksi segera (bukan
- * baru diketahui setelah job diproses worker).
- *
- * Idempotency: reference_id yang dikirim oleh WhatsappService::kirimEvent()
- * bersifat stabil per event (bukan UUID acak untuk event terjadwal seperti
- * reminder H-3/H-1/denda), sehingga retry job ini maupun eksekusi cron
- * ganda di hari yang sama aman - gateway mendeteksi reference_id yang
- * sama dan mengembalikan 200 (bukan mengirim ulang WA), sesuai kontrak API
- * §2.2 & §9 (idempotency window 24 jam). Retry di sini hanya menghitung
- * ulang signature/timestamp, TIDAK pernah mengirim signature lama.
- *
- * LOGGING (baru, iterasi ini): setiap eksekusi handle() (termasuk retry)
- * melakukan UPSERT ke whatsapp_logs berdasarkan reference_id - BUKAN
- * insert baru per percobaan, supaya satu event tetap satu baris log
- * dengan status/keterangan TERBARU dan counter percobaan_ke bertambah.
- * TODO: GAP-SPEC - reference_id null (constructor mengizinkan ?string,
- * meski kirimEvent() di WhatsappService selalu mengisi fallback UUID)
- * akan selalu INSERT baris baru (tidak bisa di-upsert tanpa key unik) -
- * skenario ini seharusnya tidak pernah terjadi lewat kirimEvent(), tapi
- * dijaga agar job tidak fatal error jika suatu saat dipanggil manual
- * dengan referenceId null.
- */
 class KirimNotifikasiWhatsapp implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -93,16 +63,6 @@ class KirimNotifikasiWhatsapp implements ShouldQueue
         }
     }
 
-    /**
-     * Daftar nama variable yang dianggap sensitif dan WAJIB di-redact
-     * sebelum disimpan ke whatsapp_logs (dikonfirmasi eksplisit - OTP
-     * tidak boleh tersimpan plaintext permanen di log, beda dengan
-     * login_otps/password_reset_otps yang sudah hashed by design).
-     * TODO: GAP-SPEC - daftar ini match case-insensitive terhadap NAMA
-     * key variable, bukan terhadap eventCode - kalau suatu saat ada
-     * variable baru yang juga sensitif (mis. 'password_sementara'),
-     * WAJIB ditambahkan di sini, satu tempat, bukan di tiap pemanggil.
-     */
     private const VARIABLE_SENSITIF = ['otp', 'password', 'password_baru', 'password_sementara'];
 
     protected function catatLog(string $status, ?string $keterangan, int $percobaanKe): void

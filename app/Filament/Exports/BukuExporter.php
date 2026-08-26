@@ -8,29 +8,6 @@ use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
 use Illuminate\Database\Eloquent\Builder;
 
-/**
- * BUG FIX (iterasi ini, pola sama dengan bug 'kategoris' sebelumnya):
- * kolom 'rak.nama' dan 'stok' sudah tidak ada lagi di tabel/model Buku
- * sejak migration 2026_08_02_000002-000004 (rak & stok pindah jadi
- * per-Eksemplar, bukan per-judul-buku) - keduanya dihapus dari sini.
- *
- * TODO: GAP-SPEC - kolom 'rak' hasil export sekarang menampilkan daftar
- * nama Rak DISTINCT dari semua eksemplar buku ini (bisa lebih dari satu
- * kalau eksemplar tersebar di rak berbeda), dipisah '; ' sama seperti
- * 'kategori'. TAPI ini informasional saja - BukuImporter hanya menerima
- * SATU nama rak per baris (dipakaikan ke SEMUA eksemplar baru dari
- * selisih stok import itu), jadi hasil export TIDAK bisa diimpor ulang
- * mentah-mentah kalau satu judul buku punya eksemplar di rak berbeda-beda.
- * Admin perlu edit manual jadi satu nama rak sebelum import ulang.
- *
- * PERFORMA (BARU iterasi ini): modifyQuery() eager-load 'kategoris' dan
- * 'eksemplars.rak' supaya kolom 'rak'/'kategoris' di bawah tidak memicu
- * query terpisah per baris (N+1) saat export ratusan/ribuan judul buku -
- * TODO: verifikasi signature modifyQuery() terhadap filament/filament
- * ^5.7 di composer.json (dikonfirmasi ada di dokumentasi resmi untuk
- * versi 3.x, method statis override di kelas Exporter; belum diverifikasi
- * langsung terhadap changelog 5.7 apakah signature berubah).
- */
 class BukuExporter extends Exporter
 {
     protected static ?string $model = Buku::class;

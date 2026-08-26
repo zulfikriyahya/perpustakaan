@@ -15,13 +15,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Storage;
 
-/**
- * Read-only - LevelBadgeLog HANYA dihasilkan otomatis oleh
- * PointService::cekBadge() saat badge user berubah (Aturan poin 3, DRY).
- * Tidak ada Import - insert manual akan melewati validasi rentang
- * min_point/max_point di PointService DAN tidak akan pernah menghasilkan
- * sertifikat. Pola identik dengan RewardLogResource/PunishmentLogResource.
- */
 class LevelBadgeLogResource extends Resource
 {
     protected static ?string $model = LevelBadgeLog::class;
@@ -43,7 +36,7 @@ class LevelBadgeLogResource extends Resource
             ->headerActions([
                 ExportAction::make()
                     ->exporter(LevelBadgeLogExporter::class)
-                    ->authorize(fn() => auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false),
+                    ->authorize(fn () => auth()->user()?->can('viewAny', LevelBadgeLog::class) ?? false),
             ])
             ->columns([
                 TextColumn::make('user.nama')->label('User')->searchable()->sortable(),
@@ -62,19 +55,19 @@ class LevelBadgeLogResource extends Resource
                 Action::make('downloadSertifikat')
                     ->label('Download Sertifikat')
                     ->icon('heroicon-o-document-arrow-down')
-                    ->visible(fn(LevelBadgeLog $record) => filled($record->sertifikat_path))
+                    ->visible(fn (LevelBadgeLog $record) => filled($record->sertifikat_path))
                     // BUGFIX cache browser - lihat komentar setara di
                     // RewardLogResource::table(), logic identik.
-                    ->url(fn(LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path)
-                        . '?v=' . $record->updated_at?->timestamp)
+                    ->url(fn (LevelBadgeLog $record) => Storage::disk('public')->url($record->sertifikat_path)
+                        .'?v='.$record->updated_at?->timestamp)
                     ->openUrlInNewTab(),
 
                 Action::make('regenerateSertifikat')
                     ->label('Regenerate Sertifikat')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
-                    ->visible(fn(LevelBadgeLog $record) => filled($record->sertifikat_path))
-                    ->authorize(fn(LevelBadgeLog $record) => auth()->user()?->can('update', $record) ?? false)
+                    ->visible(fn (LevelBadgeLog $record) => filled($record->sertifikat_path))
+                    ->authorize(fn (LevelBadgeLog $record) => auth()->user()?->can('update', $record) ?? false)
                     ->requiresConfirmation()
                     ->modalHeading('Regenerate Sertifikat')
                     ->modalDescription('PDF sertifikat akan dibuat ulang dengan desain terbaru. Link download tidak berubah, hanya versinya diperbarui.')

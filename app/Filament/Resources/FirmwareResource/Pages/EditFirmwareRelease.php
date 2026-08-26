@@ -23,8 +23,6 @@ class EditFirmwareRelease extends EditRecord
         $path = $data['file'] ?? null;
         unset($data['file']);
 
-        // Hanya recompute url/md5 kalau ada file BARU diupload - lihat
-        // GAP-SPEC di FirmwareResource (form Edit tidak preload file lama).
         if ($path) {
             $data['url'] = Storage::disk('public')->url($path);
             $data['md5'] = md5_file(Storage::disk('public')->path($path));

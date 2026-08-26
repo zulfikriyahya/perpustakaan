@@ -5,17 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Buku;
 use Illuminate\Http\Request;
 
-/**
- * Katalog buku FISIK (terpisah dari BukuPublikController yang khusus
- * e-book/audiobook digital). Menampilkan SEMUA buku (dikonfirmasi),
- * termasuk yang hanya punya file digital tanpa eksemplar fisik.
- */
 class BukuKatalogController extends Controller
 {
     public function index(Request $request)
     {
-        // TODO: ASUMSI - pencarian dibatasi pada kolom 'judul' dan 'penulis',
-        // sama seperti BukuPublikController, untuk konsistensi UX.
         $search = trim((string) $request->query('q', ''));
 
         $bukus = Buku::query()

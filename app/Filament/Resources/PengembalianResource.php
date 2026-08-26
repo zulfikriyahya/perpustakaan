@@ -19,22 +19,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use RuntimeException;
 
-/**
- * Tidak ada halaman Create/Edit - Pengembalian adalah HASIL dari
- * PeminjamanService::prosesPengembalian() (dipicu Action "Proses
- * Pengembalian" di PeminjamanResource).
- *
- * SATU pengecualian: Action "Koreksi Kondisi" di tabel ini, untuk kasus
- * Pustakawan salah input kondisi saat transaksi cepat (lihat gap iterasi
- * ini). Sengaja berupa Action terbatas (bukan Edit page penuh) - field yang
- * bisa diubah cuma 'kondisi' + 'catatan', supaya lebih mudah di-audit.
- * Seluruh efek samping (stok, Denda, status Peminjaman) wajib lewat
- * PeminjamanService::koreksiKondisiPengembalian() (Aturan poin 3, DRY).
- *
- * RESOLVED (iterasi ini): permission 'Update:Pengembalian' untuk role
- * Pustakawan dan Admin (super_admin) SUDAH ada di ShieldSeeder - dicek
- * ulang, TODO sebelumnya sudah basi/tidak perlu tindakan lanjutan.
- */
 class PengembalianResource extends Resource
 {
     protected static ?string $model = Pengembalian::class;

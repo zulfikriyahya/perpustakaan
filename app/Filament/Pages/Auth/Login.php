@@ -20,51 +20,12 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
-/**
- * TODO: verifikasi signature terhadap versi package yang terpasang
- * (filament/filament ^5.7). Override content() dan getFormActions() di
- * bawah didasarkan pada pembacaan langsung source
- * vendor/filament/filament/src/Auth/Pages/Login.php yang diberikan
- * pengguna - authenticate() override TOTAL (bukan extend logic
- * rate-limit/timebox/multi-factor bawaan) tetap ASUMSI BESAR untuk cabang
- * mode 'otp': rate-limit(5), Timebox, dan multi-factor challenge bawaan
- * SEMUA di-skip untuk mode OTP. Risiko diterima sadar sesuai konfirmasi
- * (setara reset password), tapi WAJIB diuji end-to-end (poin 12).
- *
- * TODO: GAP-SPEC/BUG FIX - sebelumnya authenticate() mode OTP memakai
- * $data['login'] (raw input, bisa NISN/NIP/No. Telepon) langsung sebagai
- * no_telepon ke LoginOtpService::verifikasiUntukLogin() yang mencari
- * berdasarkan no_telepon murni - OTP selalu gagal untuk user yang login
- * pakai NISN/NIP. Diperbaiki dengan menyimpan no_telepon hasil resolve
- * di property $noTeleponOtp saat kirimOtpLogin() berhasil, dipakai ulang
- * di authenticate() - bukan raw input field lagi.
- *
- * BUG FIX (iterasi ini) - Filament\Auth\Pages\Login::throwFailureValidationException()
- * bawaan hardcode menempelkan pesan gagal login ke key 'data.email'
- * (lihat vendor/filament/filament/src/Auth/Pages/Login.php). Form kustom
- * kita memakai field 'login' (bukan 'email'), jadi pesan tsb menempel ke
- * field yang tidak pernah dirender di schema manapun - user tidak melihat
- * apa pun saat kredensial password salah (parent::authenticate() dipanggil
- * apa adanya untuk mode 'password', lihat method authenticate() di bawah).
- * Diperbaiki dengan override method ini: target key diarahkan ke
- * 'data.login' (field yang benar-benar ada), DAN ditambahkan toast
- * eksplisit supaya konsisten dengan gaya notifikasi lain di halaman ini
- * (poin toast informatif) - inline error saja dianggap terlalu mudah
- * terlewat mengingat field password ada di bawahnya.
- */
 class Login extends BaseLogin
 {
     public string $mode = 'password';
 
     public bool $otpTerkirim = false;
 
-    /**
-     * no_telepon ASLI hasil resolve dari input login (NISN/NIP/No.
-     * Telepon) - disimpan terpisah dari raw field 'login' karena
-     * LoginOtpService bekerja murni berbasis no_telepon (sama seperti
-     * pola RequestPasswordReset menyimpan no_telepon di session, disini
-     * cukup property Livewire karena same-page cycle).
-     */
     public ?string $noTeleponOtp = null;
 
     public function form(Schema $schema): Schema

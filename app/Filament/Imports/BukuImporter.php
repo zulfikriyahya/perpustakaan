@@ -8,25 +8,6 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-/**
- * resolveRecord() upsert berdasarkan 'isbn' (barcode kini per eksemplar,
- * bukan per judul buku - lihat migration 2026_08_02_000003/000004).
- * Baris tanpa ISBN selalu jadi Buku baru.
- *
- * REFACTOR (iterasi ini): seluruh resolusi Buku/Kategori/Eksemplar
- * dipindah ke BukuImportResolverService (Aturan poin 3, DRY) -
- * sebelumnya logic ini terduplikasi manual di closure 'buku'
- * MasterDataRegistry (ditemukan saat review), berisiko drift kalau
- * salah satu diperbaiki tapi yang lain tidak. Kontrak
- * kolom/rules/pesan/perilaku dari sisi pengguna TIDAK berubah sama
- * sekali dibanding versi sebelumnya.
- *
- * KEPUTUSAN dikonfirmasi (tetap berlaku, lihat detail di
- * BukuImportResolverService):
- * - harga_ganti WAJIB diisi manual - baris kosong GAGAL TOTAL.
- * - Duplikasi ISBN: STOK diakumulasi, eksemplar existing tidak
- *   pernah dikurangi meski stok di file diturunkan.
- */
 class BukuImporter extends Importer
 {
     protected static ?string $model = Buku::class;

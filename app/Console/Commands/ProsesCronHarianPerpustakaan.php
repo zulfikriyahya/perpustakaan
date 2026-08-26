@@ -7,17 +7,6 @@ use App\Services\SnapshotHarianService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Wrapper Artisan command untuk PeminjamanService::prosesCronHarian().
- * Logic perhitungan/transisi status TIDAK diduplikasi di sini - lihat
- * Aturan poin 3 (Prinsip DRY), seluruh logic tetap di PeminjamanService.
- *
- * BARU (iterasi ini): setelah reminder/transisi status selesai, catat
- * SnapshotHarian untuk HARI INI - dijalankan SETELAH prosesCronHarian()
- * supaya transisi status Terlambat hari ini ikut tercermin di snapshot
- * (Aturan poin 3 - reuse SnapshotHarianService, jangan duplikasi
- * perhitungan agregat di sini).
- */
 class ProsesCronHarianPerpustakaan extends Command
 {
     protected $signature = 'perpustakaan:cron-harian';

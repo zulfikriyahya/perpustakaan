@@ -9,16 +9,6 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-/**
- * Upsert case-insensitive berdasarkan 'nama' (dikonfirmasi) - "Rak A"
- * dan "rak a" dianggap Rak yang sama. Jika sudah ada baris cocok,
- * ejaan/kapitalisasi LAMA di database yang dipertahankan - hanya kolom
- * lain (lokasi, kategori) yang ter-update.
- *
- * BUG FIX (ditemukan iterasi ini, sama pola dengan KelasImporter): kolom
- * 'kategori' lookup-only, lihat docblock BukuImporter/KelasImporter
- * untuk detail penuh.
- */
 class RakImporter extends Importer
 {
     protected static ?string $model = Rak::class;

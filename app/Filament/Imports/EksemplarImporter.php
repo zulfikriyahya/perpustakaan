@@ -11,22 +11,6 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-/**
- * Upsert berdasarkan 'barcode' (satu baris = satu unit fisik). TERPISAH
- * dari BukuImporter (yang beroperasi per-judul/agregat stok) - lihat
- * keputusan di percakapan: menggabungkan keduanya akan mencampur dua
- * granularitas berbeda (per-judul vs per-unit fisik) dalam satu importer.
- *
- * ATURAN KERAS - tidak boleh bypass PeminjamanService/PointService (Aturan
- * poin 3, dikonfirmasi eksplisit):
- * - Baris TIDAK BOLEH set status ke/dari 'Dipinjam' - status ini HANYA
- *   boleh berubah lewat PeminjamanService::prosesPeminjaman()/
- *   prosesPengembalian(). Baris yang mencoba ini GAGAL TOTAL.
- * - Kalau eksemplar existing (ditemukan by barcode) statusnya SEDANG
- *   'Dipinjam', SELURUH baris ditolak (tidak ada field lain yang
- *   ter-update juga) - selaras persis dengan EksemplarsRelationManager
- *   yang men-disable Edit/Delete untuk status ini.
- */
 class EksemplarImporter extends Importer
 {
     protected static ?string $model = Eksemplar::class;

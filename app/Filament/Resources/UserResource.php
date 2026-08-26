@@ -41,27 +41,6 @@ use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
 
-/**
- * Resource khusus super_admin (dikonfirmasi) - lihat UserPolicy dan
- * ShieldSeeder (permission User TIDAK disinkron ke role pustakawan).
- *
- * TODO: verifikasi signature terhadap versi package yang terpasang -
- * mengikuti pola BukuResource untuk Schema/Table API Filament ^5.7.
- *
- * TODO: ASUMSI - dipakai Section (bukan Wizard) untuk mengompakkan form,
- * karena form ini dipakai untuk create DAN edit inline pada satu halaman
- * (Wizard cocok untuk alur create bertahap, tapi kurang lazim untuk edit
- * single-page dengan banyak field disabled/read-only seperti
- * 'status_akademik'). Jika yang diinginkan justru Wizard bertahap khusus
- * saat create, beri tahu agar disesuaikan.
- *
- * ITERASI INI - hanya menambahkan validationMessages() informatif di
- * seluruh field form dan menyamakan pesan dengan constraint DB soft-
- * delete-aware (unique_aktif, lihat migration
- * 2026_08_03_000001_make_unique_constraints_soft_delete_aware.php) -
- * TIDAK mengubah struktur Section/field yang sudah ada (Aturan poin 17,
- * tidak menyentuh proteksi super_admin/otorisasi).
- */
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;

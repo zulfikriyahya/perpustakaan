@@ -20,13 +20,6 @@ class CreateUser extends CreateRecord
         return static::getResource()::getUrl('index');
     }
 
-    /**
-     * Field 'assign_kelas_tahun_pelajaran_id' HANYA ada di form create
-     * (lihat UserResource::form(), visibleOn('create')) - bukan kolom
-     * User sungguhan, jadi wajib dibuang sebelum mass-assign, lalu
-     * assignment dilakukan di afterCreate() lewat KenaikanKelasService
-     * supaya RiwayatKelasSiswa tetap tercatat (Aturan poin 3, DRY).
-     */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $this->assignKtpId = $data['assign_kelas_tahun_pelajaran_id'] ?? null;
@@ -38,18 +31,6 @@ class CreateUser extends CreateRecord
 
     protected ?string $assignKtpId = null;
 
-    /**
-     * BARU (iterasi ini) - jaring terakhir untuk unique constraint DB
-     * pada 'no_telepon' (juga menutupi 'nisn'/'nip'/'no_kartu_rfid' yang
-     * unique) yang lolos validasi form Filament tapi tetap gagal di level
-     * database - paling sering terjadi untuk no_telepon karena normalisasi
-     * (lihat NomorTeleponFormatter) bisa membuat dua input BERBEDA jadi
-     * SAMA setelah dinormalisasi, sementara unique() Filament membandingkan
-     * terhadap nilai mentah yang tersimpan (termasuk data lama yang belum
-     * pernah dinormalisasi). Tanpa ini, QueryException akan menghasilkan
-     * halaman error generik/blank bagi user - digantikan Notification yang
-     * jelas + Halt agar form tidak jadi ter-reset/hilang isian.
-     */
     protected function handleRecordCreation(array $data): Model
     {
         try {

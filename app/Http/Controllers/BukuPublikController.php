@@ -11,10 +11,6 @@ class BukuPublikController extends Controller
 {
     public function index(Request $request)
     {
-        // TODO: ASUMSI - pencarian dibatasi pada kolom 'judul' dan 'penulis'
-        // (kolom string legacy di tabel bukus), tidak menyertakan 'isbn'
-        // maupun relasi authors/kategoris karena tidak dispesifikasikan.
-        // Jika perlu dicakup, tandai lanjutan sebagai gap baru.
         $search = trim((string) $request->query('q', ''));
 
         $ebooks = Buku::query()
@@ -48,19 +44,6 @@ class BukuPublikController extends Controller
         return view('buku.index', compact('ebooks', 'audiobooks', 'search'));
     }
 
-    /**
-     * TODO: GAP-SPEC - reader saat ini publik tanpa batasan (dikonfirmasi
-     * akses publik tanpa login). Jika ke depan perlu dibatasi (mis. hanya
-     * preview N halaman), perlu keputusan eksplisit lanjutan.
-     *
-     * Header X-Robots-Tag: noindex dipasang di response supaya halaman
-     * reader per-file TIDAK di-index search engine (dianggap thin/duplicate
-     * content dari halaman katalog buku.index yang sudah jadi halaman
-     * kanonik) - dilakukan lewat header HTTP (bukan <meta name="robots">
-     * di Blade) karena view buku.baca-pdf.blade.php belum ditinjau isinya
-     * di sesi ini (Aturan poin 18) - pendekatan header aman tanpa perlu
-     * menyentuh file itu.
-     */
     public function baca(BukuFile $file)
     {
         abort_unless($file->jenis === JenisFileBuku::Pdf, 404);

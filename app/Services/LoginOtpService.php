@@ -7,17 +7,6 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 
-/**
- * Satu sumber kebenaran untuk alur login via OTP WhatsApp (Aturan poin 3).
- * BEDA dengan PasswordResetOtpService: verifikasi di sini TIDAK mengubah
- * password sama sekali - hanya mengonfirmasi identitas untuk Auth::login().
- * Risiko diterima sadar (dikonfirmasi): OTP verified = login penuh tanpa
- * user perlu tahu/ganti password, setara alur reset password.
- *
- * TODO: ASUMSI - panjang OTP 6 digit, masa berlaku 5 menit, rate limit 1
- * permintaan per menit per no_telepon - sama seperti PasswordResetOtpService,
- * belum ada Setting terkonfigurasi untuk ini.
- */
 class LoginOtpService
 {
     public function __construct(
@@ -43,9 +32,6 @@ class LoginOtpService
             'expires_at' => now()->addMinutes(5),
         ]);
 
-        // eventCode 'login_otp' - TODO: ASUMSI, event BARU di luar yang sudah
-        // terdaftar Admin di panel gateway. Wajib dibuat template baru +
-        // diisi ke Setting 'wa_template_login_otp' (dikonfirmasi dipahami).
         $this->whatsappService->kirimEvent(
             eventCode: 'login_otp',
             nomorTujuan: $user->no_telepon,

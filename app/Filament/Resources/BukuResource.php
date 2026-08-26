@@ -36,14 +36,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
-/**
- * TODO: ASUMSI - dipakai Section (bukan Wizard) untuk mengompakkan form,
- * konsisten dengan alasan yang sama di UserResource: form ini dipakai untuk
- * create DAN edit di satu halaman, dan Section "Eksemplar Awal" hanya
- * relevan/visible saat create (->visibleOn('create')) sehingga alur Wizard
- * bertahap kurang cocok untuk mode edit. Beri tahu jika sebenarnya
- * diinginkan Wizard khusus create.
- */
 class BukuResource extends Resource
 {
     protected static ?string $model = Buku::class;

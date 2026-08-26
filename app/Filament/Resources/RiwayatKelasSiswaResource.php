@@ -12,15 +12,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
-/**
- * Read-only - histori kenaikan/perpindahan kelas siswa. Tidak ada
- * form/create/edit karena data ini hanya dihasilkan otomatis oleh
- * KenaikanKelasService (Aturan poin 3, DRY - satu sumber kebenaran).
- *
- * RESOLVED (iterasi ini): dicek ulang ke ShieldSeeder, permission
- * 'ViewAny:RiwayatKelasSiswa' dan 'View:RiwayatKelasSiswa' SUDAH
- * diberikan ke role Pustakawan. TODO sebelumnya sudah basi.
- */
 class RiwayatKelasSiswaResource extends Resource
 {
     protected static ?string $model = RiwayatKelasSiswa::class;

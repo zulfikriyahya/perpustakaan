@@ -17,21 +17,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
-/**
- * Endpoint untuk Attendance Machine (ESP32-C3) - kontrak persis mengikuti
- * firmware v2.3.1 (lihat internal/... referensi firmware). SETIAP perubahan
- * response shape di sini WAJIB dicek ulang terhadap parsing firmware
- * (mis. downloadRfidDb() parsing baris per baris plain text, BUKAN JSON).
- *
- * REFACTOR (iterasi ini) - efek samping saat Kunjungan berhasil tercatat
- * (Point, Transaksi log jenis kunjungan, notifikasi WhatsApp) DIPINDAH ke
- * App\Services\KunjunganService - SEKARANG dipakai bersama dengan halaman
- * Sirkulasi (tap via RFID reader web), supaya kedua jalur benar-benar
- * identik hasilnya (Aturan poin 3, DRY - "cara kedua" adalah redundansi
- * dari cara device, dikonfirmasi eksplisit). PERUBAHAN INI MURNI INTERNAL:
- * request/response shape, HTTP status code, dan urutan validasi ke device
- * TIDAK BERUBAH SAMA SEKALI - kontrak firmware (Aturan poin 17) tetap utuh.
- */
 class PerpustakaanDeviceController extends Controller
 {
     public function __construct(
@@ -52,17 +37,6 @@ class PerpustakaanDeviceController extends Controller
         return response()->json(['ver' => (int) Setting::get('rfid_db_ver', 0)]);
     }
 
-    /**
-     * Firmware: downloadRfidDb() - PLAIN TEXT, bukan JSON.
-     * Baris pertama: "ver:<n>". Baris berikutnya: satu kartu 10-digit per baris.
-     * Firmware menolak baris yang bukan persis 10 digit angka (lihat parsing
-     * di downloadRfidDb: isdigit check, len == 10).
-     *
-     * KONTRAK: baris TERAKHIR body SELALU "EOF" (persis, tanpa newline
-     * trailing setelahnya) - firmware v2.3.2+ menunggu baris ini sebagai
-     * satu-satunya penanda sukses transfer (lihat catatan versi
-     * sebelumnya) - TIDAK BERUBAH oleh refactor ini.
-     */
     public function rfidList(): Response
     {
         $ver = (int) Setting::get('rfid_db_ver', 0);
@@ -77,13 +51,6 @@ class PerpustakaanDeviceController extends Controller
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
 
-    /**
-     * Firmware: nvsSyncToServer() / syncQueueFile() - POST batch.
-     * Request: { "data": [ { rfid, timestamp, device_id, sync_mode: true } ] }
-     * Response WAJIB: { "data": [ { rfid, timestamp, status: "ok"|"error", message? } ] }
-     * - kontrak validasi body/count TIDAK BERUBAH oleh refactor ini (lihat
-     * catatan versi v2.3.4 sebelumnya, masih berlaku persis sama).
-     */
     public function syncBulk(Request $request): JsonResponse
     {
         $items = $request->input('data');
@@ -113,13 +80,6 @@ class PerpustakaanDeviceController extends Controller
         return response()->json(['data' => $hasil]);
     }
 
-    /**
-     * Firmware: kirimLangsung() - kirim 1 tap real-time (SD tidak tersedia).
-     * Firmware membaca HTTP STATUS CODE, bukan body, untuk menentukan pesan:
-     * 200 = OK, 400 = duplikat ("CUKUP SEKALI!"), 404 = kartu nonaktif.
-     * (403 hari libur SENGAJA tidak diimplementasikan - device sudah
-     * mengunci diri sendiri di luar jam operasional per keputusan produk.)
-     */
     public function kirimLangsung(Request $request): JsonResponse
     {
         $rfid = (string) $request->input('rfid', '');
@@ -152,7 +112,6 @@ class PerpustakaanDeviceController extends Controller
                 jamTap: $this->parseJamDariTimestamp($timestamp),
             );
         } catch (QueryException $e) {
-            // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return response()->json(['error' => 'sudah tercatat hari ini'], 400);
         }
 
@@ -181,10 +140,6 @@ class PerpustakaanDeviceController extends Controller
         return response()->json(['status' => 'ok']);
     }
 
-    /**
-     * Firmware: fetchRemoteConfig() - hanya field yang dikirim yang akan
-     * dipakai firmware (containsKey check per field), field lain diabaikan.
-     */
     public function config(Request $request): JsonResponse
     {
         return response()->json([
@@ -197,11 +152,6 @@ class PerpustakaanDeviceController extends Controller
         ]);
     }
 
-    /**
-     * Firmware: checkOtaUpdate() - membandingkan versi via
-     * compareFirmwareVersion() (semver x.y.z). Field "update" harus true
-     * HANYA jika versi rilis aktif LEBIH BARU dari yang dikirim device.
-     */
     public function firmwareCheck(Request $request): JsonResponse
     {
         $versiDevice = (string) $request->input('version', '0.0.0');
@@ -252,7 +202,6 @@ class PerpustakaanDeviceController extends Controller
                 jamTap: $this->parseJamDariTimestamp($timestamp),
             );
         } catch (QueryException $e) {
-            // Race condition dengan unique index kunjungans_unik_aktif_unique.
             return ['rfid' => $rfid, 'timestamp' => $timestamp, 'status' => 'error', 'message' => 'duplikat'];
         }
 
@@ -261,7 +210,6 @@ class PerpustakaanDeviceController extends Controller
 
     protected function parseTanggalDariTimestamp(string $timestamp): string
     {
-        // Firmware format: "Y-m-d H:i:s"
         return substr($timestamp, 0, 10) ?: now()->toDateString();
     }
 
@@ -282,12 +230,6 @@ class PerpustakaanDeviceController extends Controller
         return $this->normalisasiVersi($a) <=> $this->normalisasiVersi($b);
     }
 
-    /**
-     * Kontrak: firmware lapor hasil OTA setelah proses update/reboot.
-     * Request: { "device_id": string, "version": string, "status": "success"|"failed","error"?: string }
-     * Response selalu { "status": "ok" } dengan HTTP 200 selama device_id
-     * terisi - TIDAK BERUBAH oleh refactor ini.
-     */
     public function firmwareReport(Request $request): JsonResponse
     {
         $deviceId = (string) $request->input('device_id');

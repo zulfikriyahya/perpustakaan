@@ -7,9 +7,6 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-/**
- * Upsert case-insensitive berdasarkan 'nama' (dikonfirmasi).
- */
 class RewardImporter extends Importer
 {
     protected static ?string $model = Reward::class;

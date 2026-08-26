@@ -7,9 +7,6 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-/**
- * Upsert case-insensitive berdasarkan 'nama_badge' (dikonfirmasi).
- */
 class LevelBadgeImporter extends Importer
 {
     protected static ?string $model = LevelBadge::class;

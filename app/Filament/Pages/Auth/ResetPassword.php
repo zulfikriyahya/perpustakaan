@@ -35,9 +35,6 @@ class ResetPassword extends SimplePage
     public function mount(): void
     {
         if (! Session::has('reset_password_no_telepon')) {
-            // FITUR BARU - sebelumnya redirect diam-diam tanpa penjelasan,
-            // user yang buka URL ini langsung (mis. dari bookmark lama /
-            // signed URL kedaluwarsa) tidak tahu kenapa ditendang balik.
             Notification::make()
                 ->title('Sesi reset password tidak ditemukan')
                 ->body('Silakan minta kode OTP baru terlebih dahulu.')

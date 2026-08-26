@@ -16,32 +16,12 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
-/**
- * Job generate PDF label barcode di background (queue 'default') agar
- * tidak timeout HTTP request Livewire (Aturan poin 3 - reuse
- * LabelBarcodeService, jangan duplikasi logic generate barcodedi sini).
- *
- * PENTING (Aturan poin 17): $timeout di bawah WAJIB <= --timeout worker
- * queue 'default' di supervisor config.
- *
- * TODO: GAP-SPEC - constructor menerima $eksemplarIds LANGSUNG(bukan
- * $bukuIds seperti versi sebelumnya) - job ini sebelumnya deadcode
- * (di-comment di BukuResource, belum pernah didispatch di production),
- * jadi perubahan signature aman. Resolusi dari Buku -> Eksemplar kini
- * jadi tanggung jawab CALLER (BukuResource meresolve dulu sebelum
- * dispatch), supaya job ini juga bisa dipakai caller yang sudah
- * langsung memilih Eksemplar (EksemplarsRelationManager bulk action).
- */
 class GenerateLabelBarcodePdfJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
 
-    /**
-     * Konsisten dengan --timeout=180 pada supervisor worker queue
-     * 'default' (WAJIB diupdate manual, lihat catatan di respons ini).
-     */
     public int $timeout = 170;
 
     public function __construct(

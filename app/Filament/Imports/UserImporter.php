@@ -15,39 +15,6 @@ use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 use Illuminate\Support\Facades\Cache;
 
-/**
- * TODO: GAP-SPEC - 'role' SENGAJA tidak termasuk kolom import (dikonfirmasi:
- * harus manual lewat form demi keamanan). User baru hasil import otomatis
- * role='siswa' (default migration/kolom).
- *
- * Upsert berdasarkan 'nisn' jika ada, fallback 'nip' - baris tanpa
- * keduanya akan gagal (lihat rules 'required_without').
- *
- * REFACTOR (iterasi ini): resolusi password/avatar/kartu-RFID/KTP
- * dipindah ke UserImportResolverService (Aturan poin 3) - sebelumnya
- * logic ini terduplikasi manual di sheet 'user' MasterDataRegistry
- * dan menyebabkan bug double-hashing password di sana karena drift.
- * Kontrak kolom/rules/perilaku dari sisi pengguna TIDAK berubah.
- *
- * PERINGATAN KEAMANAN (dikonfirmasi, RISIKO DITERIMA SADAR - bukan
- * kealpaan, lihat detail lengkap di docblock
- * UserImportResolverService::resolveAvatar()): resolveAvatar bisa (a)
- * menyalin FILE APA PUN yang bisa dibaca proses PHP di server jika
- * diisi path absolut (path traversal), dan (b) melakukan HTTP request
- * ke alamat mana pun termasuk jaringan internal jika diisi URL (SSRF).
- * SENGAJA tidak dibatasi karena hanya super_admin yang punya akses
- * Import User (lihat authorize() di UserResource) - JANGAN perluas
- * permission import ini ke role lain tanpa meninjau ulang dua risiko ini.
- *
- * BUG FIX (pola sama dengan KelasImporter): kolom 'kelas_nama',
- * 'jurusan_kode', 'tahun_pelajaran_nama', 'avatar' adalah lookup/
- * transform-only (bukan kolom tabel 'users' persis nama itu) - diberi
- * ->fillRecordUsing() no-op supaya Filament tidak meng-assign atribut
- * dinamis ini ke $record, yang akan memicu SQL error "Unknown column"
- * saat save(). 'no_kartu_rfid' dan 'password' TIDAK diberi no-op -
- * keduanya kolom ASLI tabel 'users', assignment akhirnya tetap lewat
- * beforeSave() (aman dari bug ini).
- */
 class UserImporter extends Importer
 {
     protected static ?string $model = User::class;

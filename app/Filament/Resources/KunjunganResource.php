@@ -18,14 +18,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
-/**
- * Kunjungan HANYA hasil sinkronisasi device RFID (atau input manual oleh
- * Pustakawan di luar sistem ini - lihat SourceKunjungan::Manual, belum ada
- * UI-nya). Tidak ada Create/Edit page - murni log read-only, Admin boleh
- * Delete untuk koreksi data salah (dikonfirmasi). Tidak ada halaman View
- * terpisah karena semua field sudah tampil penuh di tabel (Aturan poin 6 -
- * hindari file yang tidak menambah nilai).
- */
 class KunjunganResource extends Resource
 {
     protected static ?string $model = Kunjungan::class;

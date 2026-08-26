@@ -12,14 +12,6 @@ use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\HtmlString;
 
-/**
- * Langkah 1: minta identifier (NISN/NIP/No. Telepon - sama seperti Login,
- * lihat App\Filament\Pages\Auth\Login), kirim OTP via WhatsApp ke
- * User.no_telepon, lalu redirect ke ResetPassword page. no_telepon ASLI
- * (bukan raw input) disimpan di session, supaya PasswordResetOtpService
- * (yang bekerja berbasis no_telepon) tetap konsisten walau user login
- * pakai NISN/NIP.
- */
 class RequestPasswordReset extends SimplePage
 {
     protected string $view = 'filament.pages.auth.request-password-reset';

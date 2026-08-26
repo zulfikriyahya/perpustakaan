@@ -9,29 +9,6 @@ use App\Models\Kategori;
 use App\Models\Rak;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 
-/**
- * SATU SUMBER KEBENARAN (Aturan poin 3) untuk resolusi Buku saat import -
- * dipakai BukuImporter (per-Resource, halaman Buku) DAN MasterDataRegistry
- * (jalur "Import Semua"). Sebelumnya logic ini terduplikasi manual di dua
- * tempat (ditemukan saat review iterasi ini) - berisiko drift diam-diam
- * kalau salah satu diperbaiki tapi yang lain tidak, sehingga dua jalur
- * import Buku bisa berbeda perilaku tanpa terdeteksi.
- *
- * Method di sini SENGAJA menerima primitive (string/int/null), bukan
- * $this->data dari konteks Filament\Actions\Imports\Importer - supaya bisa
- * dipanggil juga dari closure MasterDataRegistry yang tidak sepenuhnya
- * punya konteks Importer.
- *
- * KEPUTUSAN dikonfirmasi (tetap berlaku, dipindah dari BukuImporter lama):
- * - harga_ganti WAJIB diisi manual di file - baris kosong GAGAL TOTAL
- *   (bukan default 0) - divalidasi di ImportColumn/closure pemanggil,
- *   BUKAN di service ini (service tidak menyentuh harga_ganti).
- * - Duplikasi ISBN antar baris/antar import: STOK diakumulasi (tambah
- *   eksemplar baru sejumlah selisih), eksemplar existing tidak pernah
- *   dikurangi meski stok di file diturunkan.
- * - Kategori tidak ditemukan by nama -> baris GAGAL TOTAL (tidak
- *   tersimpan sebagian dengan kategori salah/hilang diam-diam).
- */
 class BukuImportResolverService
 {
     public function resolveOrCreateBuku(?string $isbn): Buku
@@ -74,11 +51,6 @@ class BukuImportResolverService
         }
     }
 
-    /**
-     * Menambah eksemplar baru sejumlah selisih (stokDiminta - existing),
-     * TIDAK PERNAH mengurangi eksemplar existing (keputusan dikonfirmasi).
-     * barcode digenerate otomatis via Eksemplar::generateBarcodeUntuk().
-     */
     public function sinkronEksemplarDariSelisihStok(Buku $buku, int $stokDiminta, ?string $namaRak): void
     {
         $rak = ! empty($namaRak)

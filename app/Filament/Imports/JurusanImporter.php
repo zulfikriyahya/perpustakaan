@@ -7,7 +7,6 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-// Upsert berdasarkan 'kode' (unique) - sama pola dengan KategoriImporter.
 class JurusanImporter extends Importer
 {
     protected static ?string $model = Jurusan::class;

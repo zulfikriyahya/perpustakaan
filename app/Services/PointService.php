@@ -154,7 +154,7 @@ class PointService
         $reward = Reward::query()
             ->where('aktif', true)
             ->where('threshold_point', '<=', $user->akumulasi_point)
-            ->whereDoesntHave('rewardLogs', fn($q) => $q->where('user_id', $user->id))
+            ->whereDoesntHave('rewardLogs', fn ($q) => $q->where('user_id', $user->id))
             ->orderByDesc('threshold_point')
             ->first();
 

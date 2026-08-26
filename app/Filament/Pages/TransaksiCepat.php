@@ -19,81 +19,6 @@ use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use RuntimeException;
 
-/**
- * Halaman transaksi cepat: scan kartu (identifikasi user) -> scan barcode
- * EKSEMPLAR atau ISBN buku satu per satu -> sistem OTOMATIS deteksi
- * pinjam/kembali per eksemplar, diproses langsung tiap scan (TIDAK
- * dikumpulkan dulu, sesuai keputusan QA). Seluruh logic bisnis (limit,
- * stok, Denda, Point, WA) tetap lewat PeminjamanService - halaman ini
- * murni orkestrasi UI (Aturan poin 3).
- *
- * FITUR BARU (iterasi ini): TIDAK ADA toggle mode manual - satu input
- * yang sama otomatis mendeteksi jenis pencarian:
- *  - $kartuInput: dicoba sebagai kartu RFID/NISN persis (RfidResolverService)
- *    dulu -> kalau gagal, FALLBACK ke pencarian User.nama (live, computed
- *    property hasilCariUser()).
- *  - $kodeInput: dicoba sebagai barcode Eksemplar persis, lalu ISBN Buku
- *    persis -> kalau keduanya gagal, DICOBA fuzzy subsequence match (lihat
- *    cariEksemplarFuzzyAtauNull() - device tertentu di lapangan terbukti
- *    salah mendekode sebagian digit EAN-13 secara konsisten/repeatable,
- *    lihat BarcodeResolverService) -> kalau fuzzy juga gagal/ambigu,
- *    FALLBACK ke pencarian Buku.judul (live, computed property
- *    hasilCariBuku()).
- * Aturan auto-pick saat fallback nama/judul (lihat scanKartu()/scanKode()):
- * tepat 1 hasil -> otomatis dipilih; >1 hasil -> operator WAJIB klik salah
- * satu dari daftar yang muncul di bawah input (tidak ditebak); 0 hasil ->
- * dianggap gagal seperti sebelumnya. Live-search tetap jalan di background
- * selagi mengetik (termasuk saat scan kartu/barcode fisik) - untuk input
- * digit murni hasil pencarian nama/judul biasanya kosong, jadi tidak
- * mengganggu, hanya menambah 1 query ringan per keystroke (debounced
- * 400ms dari sisi Alpine/Livewire).
- *
- * TODO: ASUMSI - pencarian by-nama/judul di halaman ini query langsung ke
- * model User/Buku tanpa cek Policy viewAny:User / viewAny:Buku terpisah,
- * KONSISTEN dengan perilaku scan (exact match) sebelumnya yang juga query
- * tanpa policy tambahan - akses keseluruhan halaman tetap digerbang oleh
- * canAccess() (Create:Peminjaman). Jika role yang boleh Create:Peminjaman
- * TIDAK seharusnya bisa "menjelajahi" daftar nama siswa/buku secara bebas
- * (berbeda dengan sekadar identifikasi via scan exact), ini perlu
- * permission terpisah - konfirmasi ke tim sebelum production jika hal ini
- * jadi concern.
- *
- * BUG FIX (iterasi sebelumnya): scan barcode sudah dipindah dari query
- * Buku.barcode/Peminjaman.buku_id (sudah tidak ada sejak migration
- * 2026_08_02_000002-000004) ke Eksemplar.barcode/Peminjaman.eksemplar_id.
- *
- * Reader RFID di komputer = USB keyboard-wedge (ketik ke input fokus,
- * seperti barcode scanner), BUKAN endpoint device Attendance Machine -
- * jangan disamakan dengan PerpustakaanDeviceController. Fallback nama
- * TIDAK mengubah/menyentuh jalur scan exact-match ini sama sekali - exact
- * match SELALU dicoba lebih dulu sebelum fallback (Aturan poin 17 -
- * kompatibilitas device fisik tidak berubah).
- *
- * Otorisasi: reuse Policy existing, tidak ada permission baru untuk
- * halaman ini sendiri - akses digerbang oleh Create:Peminjaman.
- *
- * Rate limit anti-scan-ganda: eksemplar yang sama (setelah diresolve dari
- * barcode, ISBN, fuzzy match, ATAU fallback judul) untuk user aktif yang
- * sama tidak boleh diproses ulang dalam window RATE_LIMIT_DETIK detik -
- * karena prosesEksemplar() dipakai bersama, rate limit otomatis berlaku
- * ke seluruh jalur tanpa kode tambahan.
- *
- * TODO: GAP-SPEC - window rate limit di-key per (user_id, eksemplar_id),
- * BUKAN global per eksemplar - asumsi: 2 user berbeda scan eksemplar yang
- * sama beruntun (mis. serah terima cepat) tetap valid, hanya user yang
- * SAMA scan eksemplar yang SAMA berulang yang di-block. Jika ternyata
- * yang diinginkan adalah block global per eksemplar (siapapun
- * operatornya), sesuaikan cache key di bawah (buang bagian user->id).
- *
- * TODO: verifikasi signature terhadap versi package yang terpasang
- * (filament/filament versi sesuai composer.json) - properti $view dan
- * $navigationIcon di bawah mengikuti API Filament v4/v5 (schema-based),
- * cek ulang jika versi terpasang berbeda. Termasuk atribut
- * Livewire\Attributes\Computed - verifikasi tersedia di versi Livewire
- * yang terpasang (composer.lock), jika tidak tersedia hapus atributnya -
- * computed property Livewire tetap bekerja lewat pemanggilan langsung
- * $this->hasilCariUser di Blade, hanya kehilangan caching per-request.
- */
 class TransaksiCepat extends Page
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-bolt';
@@ -104,36 +29,11 @@ class TransaksiCepat extends Page
 
     protected string $view = 'filament.pages.transaksi-cepat';
 
-    /**
-     * GAP iterasi ini - "Transaksi Cepat" digantikan Sirkulasi secara
-     * penuh sebagai satu-satunya pintu akses operator (dok permintaan
-     * user). Class ini TETAP ADA dan TETAP extends Page - dijadikan
-     * dasar logic bagi Sirkulasi (Aturan poin 3, DRY: scanKartu,
-     * scanKode, prosesEksemplar, dst. TIDAK diduplikasi) - hanya
-     * statusnya sebagai halaman yang bisa dikunjungi SENDIRI yang
-     * dicabut, bukan logic-nya.
-     *
-     * Disembunyikan dari navigasi (konsisten dengan Sirkulasi yang juga
-     * shouldRegisterNavigation() => false) - satu-satunya jalan masuk
-     * resmi tetap tombol topbar Sirkulasi (sirkulasi-topbar-button.blade.php).
-     */
     public static function shouldRegisterNavigation(): bool
     {
         return false;
     }
 
-    /**
-     * URL lama '/dashboard/transaksi-cepat' (bookmark/link lama operator)
-     * di-redirect ke Sirkulasi. PENTING: guard `static::class !==
-     * self::class` WAJIB ada - method ini terwarisi ke Sirkulasi (child
-     * class) karena Sirkulasi TIDAK override mount(). Tanpa guard ini,
-     * saat Sirkulasi dimuat, ia ikut menjalankan mount() versi ini dan
-     * redirect ke dirinya sendiri lewat Sirkulasi::getUrl() -> infinite
-     * redirect loop (bug yang sempat terjadi). `self::class` di sini
-     * SENGAJA merujuk TransaksiCepat (bukan static/late binding), supaya
-     * hanya request langsung ke TransaksiCepat yang kena redirect,
-     * request ke Sirkulasi lewat tanpa efek apa pun.
-     */
     public function mount(): void
     {
         if (static::class !== self::class) {
@@ -143,16 +43,8 @@ class TransaksiCepat extends Page
         $this->redirect(Sirkulasi::getUrl());
     }
 
-    /**
-     * Window rate limit anti-scan-ganda (detik). Lihat catatan class di atas.
-     */
     protected const RATE_LIMIT_DETIK = 300;
 
-    /**
-     * Minimal karakter sebelum live-search fallback (nama/judul) dieksekusi
-     * ke DB - mencegah query "LIKE %%" yang menyapu seluruh tabel tiap kali
-     * input baru mulai diketik/dikosongkan.
-     */
     protected const MIN_KARAKTER_CARI = 2;
 
     protected const MAX_HASIL_CARI = 8;
@@ -439,11 +331,11 @@ class TransaksiCepat extends Page
 
         $kandidatEksemplar = $service->cariEksemplarFuzzy($kode);
         $kandidatDariBuku = $service->cariBukuFuzzyByIsbn($kode)
-            ->map(fn(Buku $buku) => $this->resolveEksemplarUntukBuku($buku))
+            ->map(fn (Buku $buku) => $this->resolveEksemplarUntukBuku($buku))
             ->filter();
 
         $gabungan = $kandidatEksemplar->concat($kandidatDariBuku)
-            ->unique(fn(Eksemplar $eksemplar) => $eksemplar->id);
+            ->unique(fn (Eksemplar $eksemplar) => $eksemplar->id);
 
         return $gabungan->count() === 1 ? $gabungan->first() : null;
     }
@@ -503,7 +395,7 @@ class TransaksiCepat extends Page
                 $eksemplar->barcode,
                 $eksemplar->buku->judul,
                 'ditolak',
-                'Eksemplar ini baru saja diproses untuk user ini, tunggu ' . self::RATE_LIMIT_DETIK . ' detik sebelum scan ulang.',
+                'Eksemplar ini baru saja diproses untuk user ini, tunggu '.self::RATE_LIMIT_DETIK.' detik sebelum scan ulang.',
                 false,
             );
 
@@ -536,7 +428,7 @@ class TransaksiCepat extends Page
                     // fisik lain dari judul yang sama, sedang dipinjam user lain,
                     // bukan berarti transaksi user saat ini bermasalah/bug.
                     throw new RuntimeException(
-                        "Eksemplar barcode '{$eksemplar->barcode}' ({$eksemplar->buku->judul}) sedang tidak tersedia (status: {$eksemplar->status->value}). " .
+                        "Eksemplar barcode '{$eksemplar->barcode}' ({$eksemplar->buku->judul}) sedang tidak tersedia (status: {$eksemplar->status->value}). ".
                             'Jika Anda mengira eksemplar ini seharusnya dikembalikan oleh user ini, periksa apakah barcode/ISBN/judul yang dipilih sesuai dengan yang tadi dipinjam - satu judul buku bisa punya beberapa copy/eksemplar dengan barcode berbeda.'
                     );
                 }
@@ -581,7 +473,7 @@ class TransaksiCepat extends Page
     {
         $eksemplarDipinjamUser = Eksemplar::query()
             ->where('buku_id', $buku->id)
-            ->whereHas('peminjamans', fn($q) => $q
+            ->whereHas('peminjamans', fn ($q) => $q
                 ->where('user_id', $this->user->id)
                 ->whereIn('status', [StatusPeminjaman::Aktif, StatusPeminjaman::Terlambat]))
             ->with('buku')

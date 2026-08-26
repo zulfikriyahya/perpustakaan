@@ -7,13 +7,6 @@ use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
 
-/**
- * Export metadata rilis firmware (version, url, md5, aktif, catatan).
- * TIDAK ada Importer pasangan - kolom 'file' adalah hasil FileUpload
- * (.bin) yang disimpan sebagai path di storage, tidak bisa direpresentasikan
- * dalam sel .xlsx. Rilis firmware baru wajib tetap lewat form Create
- * (upload file manual), bukan import massal.
- */
 class FirmwareReleaseExporter extends Exporter
 {
     protected static ?string $model = FirmwareRelease::class;

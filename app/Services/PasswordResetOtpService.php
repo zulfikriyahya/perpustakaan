@@ -7,24 +7,12 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 
-/**
- * Satu sumber kebenaran untuk alur reset password via OTP WhatsApp (Aturan
- * poin 3) - jangan generate/verifikasi OTP di tempat lain (Filament Page,
- * Controller, dsb.), semua wajib lewat service ini.
- */
 class PasswordResetOtpService
 {
     public function __construct(
         protected WhatsappService $whatsappService,
     ) {}
 
-    /**
-     * TODO: ASUMSI - panjang OTP 6 digit, masa berlaku 5 menit, rate limit
-     * 1 permintaan per menit per no_telepon. Belum ada key Setting khusus
-     * untuk ini karena spec tidak menyebutkan; kalau Admin butuh Setting
-     * yang bisa dikonfigurasi (mis. otp_ttl_menit), belum diimplementasikan
-     * pada iterasi ini.
-     */
     public function kirimOtp(User $user): void
     {
         $rateLimitKey = "otp-reset:{$user->no_telepon}";
@@ -44,9 +32,6 @@ class PasswordResetOtpService
             'expires_at' => now()->addMinutes(5),
         ]);
 
-        // eventCode 'reset_password_otp' - TODO: ASUMSI, event BARU di luar 10
-        // yang sudah didaftarkan Admin di panel gateway. Wajib dibuat template
-        // baru + diisi ke Setting 'wa_template_reset_password_otp'.
         $this->whatsappService->kirimEvent(
             eventCode: 'reset_password_otp',
             nomorTujuan: $user->no_telepon,

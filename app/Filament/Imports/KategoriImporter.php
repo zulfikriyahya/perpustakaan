@@ -7,14 +7,6 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-/**
- * Upsert case-insensitive berdasarkan 'nama' (dikonfirmasi) - "Fiksi"
- * dan "fiksi" dianggap kategori yang sama, mencegah duplikat akibat
- * ketidakkonsistenan pengetikan staf. Jika sudah ada baris cocok,
- * ejaan/kapitalisasi LAMA di database yang dipertahankan (baris di
- * file import tidak menimpa nama yang sudah ada) - hanya kolom lain
- * (deskripsi) yang ter-update.
- */
 class KategoriImporter extends Importer
 {
     protected static ?string $model = Kategori::class;

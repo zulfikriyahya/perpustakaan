@@ -12,46 +12,24 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-/**
- * Satu sumber kebenaran (Aturan poin 3) untuk logika yang SEBELUMNYA
- * terduplikasi antara UserImporter dan sheet 'user' di
- * MasterDataRegistry - drift antara keduanya yang menyebabkan bug
- * double-hashing password ditemukan pada iterasi sebelumnya.
- *
- * Method di sini TIDAK menyimpan (save()) $user - pemanggil
- * (UserImporter::beforeSave() / closure import MasterDataRegistry)
- * yang bertanggung jawab memanggil save() setelah semua resolve
- * selesai, supaya urutan efek samping (mis. gagal di tengah karena
- * kartu bentrok) tidak meninggalkan record ter-save sebagian.
- */
 class UserImportResolverService
 {
-    /**
-     * Password diisi -> dipakai apa adanya (di-hash otomatis via cast
-     * 'hashed' pada Model User saat save()). Kosong & user baru ->
-     * random 12 karakter. Kosong & user existing -> tidak disentuh.
-     */
     public function resolvePassword(User $user, ?string $passwordBaru): void
     {
         $passwordBaru = trim((string) $passwordBaru);
 
         if ($passwordBaru !== '') {
-            $user->password = $passwordBaru; // di-hash otomatis via cast 'hashed'
+            $user->password = $passwordBaru;
 
             return;
         }
 
         if (! $user->exists) {
-            $user->password = Str::random(12); // di-hash otomatis via cast 'hashed'
+            $user->password = Str::random(12);
         }
     }
 
     /**
-     * Uniqueness no_kartu_rfid dicek terhadap user lain (KECUALI
-     * $user sendiri jika sudah exists). Return true jika kartu LAMA
-     * dihapus (dikosongkan) - dipakai pemanggil untuk merekap jumlah
-     * kartu terhapus di notifikasi.
-     *
      * @throws RowImportFailedException jika nomor sudah dipakai user lain
      */
     public function resolveKartuRfid(User $user, ?string $nomorBaru): bool
@@ -83,23 +61,6 @@ class UserImportResolverService
     }
 
     /**
-     * TODO: GAP-SPEC - lihat catatan algoritma resolusi (URL -> unduh,
-     * path di disk 'public' -> pakai langsung, path absolut di
-     * filesystem server -> salin) yang sudah dikonfirmasi sebelumnya
-     * pada UserImporter. PERINGATAN KEAMANAN yang sama berlaku di sini:
-     * bisa membaca file APA PUN yang bisa diakses proses PHP (path
-     * traversal) dan melakukan HTTP request ke alamat mana pun (SSRF).
-     * SENGAJA tidak dibatasi karena baik UserImporter (hanya
-     * super_admin, lihat UserResource::authorize) maupun sheet 'user'
-     * di Import Master (halaman ini HANYA bisa diakses super_admin,
-     * lihat ImportExportMaster::canAccess()) sama-sama dibatasi ke role
-     * setertinggi ini. JANGAN panggil method ini dari konteks yang bisa
-     * diakses role lain tanpa meninjau ulang dua risiko ini.
-     *
-     * $identitas dipakai sebagai nama file deterministik (NISN/NIP) -
-     * re-import avatar yang sama akan MENIMPA file lama, bukan menumpuk
-     * file baru terus-menerus.
-     *
      * @throws RowImportFailedException jika sumber tidak bisa diresolusi
      */
     public function resolveAvatar(User $user, ?string $nilaiAvatar, string $identitas): void
@@ -154,10 +115,6 @@ class UserImportResolverService
     }
 
     /**
-     * Resolusi KelasTahunPelajaran dari 3 kolom (nama kelas, kode
-     * jurusan, nama tahun pelajaran) - kontrak WAJIB 3 kolom karena
-     * Kelas.nama TIDAK unik secara global (hanya unik per Jurusan).
-     *
      * @throws RowImportFailedException jika salah satu tidak ditemukan/ambigu
      */
     public function resolveKtp(string $namaKelas, string $kodeJurusan, string $namaTahun): KelasTahunPelajaran

@@ -66,10 +66,6 @@ class RakResource extends Resource
                         ->multiple()
                         ->preload()
                         ->searchable()
-                        // BARU - createOptionForm timbal-balik dengan Kategori
-                        // (KategoriResource sudah punya untuk Rak), supaya
-                        // Pustakawan tidak perlu pindah halaman saat mengisi data
-                        // rak baru sekaligus kategori barunya (Aturan gap ini).
                         ->createOptionForm([
                             TextInput::make('nama')
                                 ->required()

@@ -11,52 +11,6 @@ use App\Services\PointService;
 use Filament\Notifications\Notification;
 use Illuminate\Database\QueryException;
 
-/**
- * Halaman "Sirkulasi": DUPLIKAT fungsi & fitur Transaksi Cepat, tapi TANPA
- * sidebar dan HANYA diakses lewat tombol di topbar (kanan atas) - TIDAK
- * didaftarkan ke navigasi sidebar (lihat shouldRegisterNavigation()).
- *
- * Extends TransaksiCepat, BUKAN copy-paste class PHP-nya, supaya seluruh
- * logic bisnis (scanKartu, scanKode, muatUser, prosesEksemplar, rate
- * limit anti-scan-ganda, fallback pencarian nama/judul, dst.) TIDAK
- * terduplikasi (Aturan poin 3 - DRY).
- *
- * FITUR BARU (iterasi ini) - AUTO KUNJUNGAN SAAT TAP PERTAMA HARI INI:
- * di-hook lewat override muatUser() (SATU titik yang dipanggil baik dari
- * scanKartu() exact-match maupun pilihUser() fallback nama di parent
- * TransaksiCepat - Aturan poin 3, DRY, tidak menduplikasi logic resolve
- * user).
- *
- * Alur:
- *  - User BELUM punya Kunjungan hari ini -> catat Kunjungan (source
- *    Rfid - tetap tap kartu RFID fisik via reader keyboard-wedge yang
- *    sama dengan RfidResolverService, HANYA jalur transportnya beda dari
- *    Attendance Machine/ESP32; dikonfirmasi eksplisit BUKAN Manual),
- *    trigger PointService::catatEvent(Kunjungan) + notifikasi WhatsApp
- *    (pola SAMA seperti PerpustakaanDeviceController::prosesSatuTap() /
- *    kirimLangsung()) - lalu tampilkan modal "Selamat datang" dan
- *    KEMBALI ke state standby Sirkulasi (TIDAK lanjut memuat panel
- *    pinjam/kembali buku - parent::muatUser() TIDAK dipanggil).
- *  - User SUDAH punya Kunjungan hari ini -> panggil parent::muatUser()
- *    seperti biasa, lanjut alur sirkulasi pinjam/kembali (tidak berubah).
- *
- * TODO: GAP-SPEC - berbeda dari PerpustakaanDeviceController, jalur ini
- * TIDAK ikut membuat Transaksi log (catatTransaksiKunjungan() di device
- * controller) - hanya Kunjungan + Point + WA yang dikonfirmasi eksplisit
- * untuk fitur ini. Jika Transaksi log jenis 'kunjungan' juga diharapkan
- * konsisten dari jalur manual ini, perlu konfirmasi terpisah (menyentuh
- * konsistensi laporan/Export Transaksi).
- *
- * TODO: ASUMSI - label 'device' pada variabel WhatsApp (event
- * 'kunjungan_tercatat') diisi string statis 'Sirkulasi (Manual)' karena
- * tidak ada device_id sesungguhnya di jalur ini (bukan tap fisik
- * Attendance Machine) - sesuaikan jika template WA di gateway zedlabs
- * mengasumsikan format device_id tertentu (mis. MAC address).
- *
- * TODO: GAP-SPEC - durasi modal "Selamat datang" auto-dismiss diasumsikan
- * 4 detik (lihat DURASI_MODAL_SELAMAT_DATANG_MS) - sesuaikan jika operator
- * di lapangan merasa terlalu cepat/lambat.
- */
 class Sirkulasi extends TransaksiCepat
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-group';
@@ -67,16 +21,8 @@ class Sirkulasi extends TransaksiCepat
 
     protected string $view = 'filament.pages.sirkulasi';
 
-    /**
-     * Durasi tampil modal "Selamat datang" sebelum otomatis tertutup
-     * (dibaca dari sisi JS/Alpine di sirkulasi.blade.php).
-     */
     public const DURASI_MODAL_SELAMAT_DATANG_MS = 4000;
 
-    /**
-     * State modal "Selamat datang, {nama}" - true saat Kunjungan baru
-     * saja tercatat lewat tap pertama hari ini.
-     */
     public bool $tampilkanModalSelamatDatang = false;
 
     public ?string $namaModalSelamatDatang = null;
@@ -93,13 +39,6 @@ class Sirkulasi extends TransaksiCepat
         return '';
     }
 
-    /**
-     * Override dari TransaksiCepat::muatUser() - hook TUNGGAL untuk fitur
-     * auto-Kunjungan (lihat docblock class). Dipanggil dari scanKartu()
-     * (exact-match kartu/NISN) maupun pilihUser() (fallback nama) yang
-     * diwarisi dari parent - TIDAK ada logic resolve user yang
-     * diduplikasi di sini (Aturan poin 3, DRY).
-     */
     protected function muatUser(User $user): void
     {
         $sudahKunjunganHariIni = Kunjungan::query()

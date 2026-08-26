@@ -14,21 +14,6 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\HtmlString;
 
-/**
- * Halaman terpusat Import/Export Master Data - HANYA super_admin
- * (dikonfirmasi Aturan poin 3 gap ini, bukan permission Shield per-model
- * seperti Resource lain). Proses BERAT (queue, lihat ProcessMasterExportJob/
- * ProcessMasterImportJob) - halaman ini hanya trigger + poll status via
- * wire:poll, TIDAK memproses apapun secara sinkron.
- *
- * Tidak menggantikan ImportAction/ExportAction per-Resource yang sudah
- * ada (dikonfirmasi keduanya tetap ada, Aturan poin 4 gap ini).
- *
- * TODO: ASUMSI (dikonfirmasi) - urutan sheet Export = urutan Import,
- * mengikuti MasterDataRegistry::items(). File yang diupload untuk Import
- * WAJIB berasal dari hasil "Export Semua" halaman ini (posisi sheet
- * dipetakan by INDEX, bukan nama - lihat ProcessMasterImportJob).
- */
 class ImportExportMaster extends Page
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-arrows-up-down';

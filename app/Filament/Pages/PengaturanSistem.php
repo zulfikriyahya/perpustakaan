@@ -14,32 +14,6 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 
-/**
- * Halaman Pengaturan Sistem: form terstruktur per GroupSetting, menulis
- * ke tabel `settings` (bukan generate Resource generik).
- *
- * ITERASI INI: tab baru "Kredensial Sensitif" memindahkan WHATSAPP_GATEWAY_*
- * dan DEVICE_GATEWAY_API_KEY dari .env ke Setting (dienkripsi via
- * Setting::setEncrypted() untuk field secret). Method simpan DIPISAH lagi
- * (simpanKredensial(), bukan gabung ke simpanUmum()) dengan dialog
- * konfirmasi Alpine sendiri - sama seperti Device, karena:
- * - Ganti DEVICE_GATEWAY_API_KEY di sini TIDAK mengubah key di firmware
- *   ESP32 yang sudah terpasang - device lama akan langsung gagal
- *   autentikasi (401) sampai direconfigure manual via provisioning mode.
- * - Ganti WhatsApp secret/api_key_id yang tidak cocok dengan panel
- *   gateway zedlabs membuat SELURUH notifikasi WA gagal (HMAC signature
- *   mismatch di WhatsappService::kirimRequest()).
- *
- * Fallback: jika Setting kosong (mis. baru migrate, belum sempat diisi
- * Admin), WhatsappService & AuthenticateDeviceApiKey fallback membaca
- * config()/.env seperti sebelumnya (lihat masing-masing file) - jadi
- * .env TIDAK dihapus, hanya jadi fallback (dikonfirmasi user).
- *
- * TODO: verifikasi signature terhadap versi package yang terpasang -
- * komponen Tabs/Tab/Grid diasumsikan berada di Filament\Schemas\Components
- * (mengikuti pola Schema/Select yang sudah dipakai LaporanBulanan),
- * cek ulang jika filament/filament ^5.7 punya lokasi berbeda.
- */
 class PengaturanSistem extends Page
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';

@@ -72,13 +72,6 @@ class LevelBadgeResource extends Resource
                         ->numeric()
                         ->integer()
                         ->helperText('Kosongkan jika badge tertinggi (tidak ada batas atas).')
-                        // TODO: GAP-SPEC - aturan "max_point >= min_point" belum
-                        // ada sebelumnya di form maupun DB (kolom hanya integer
-                        // nullable biasa). Ditambahkan di sini murni validasi
-                        // form (tidak mengubah skema) - perlu dikonfirmasi apakah
-                        // ini memang aturan bisnis yang diinginkan, atau overlap
-                        // rentang antar badge memang disengaja/ditangani di
-                        // tempat lain (PointService?).
                         ->gte('min_point')
                         ->validationMessages([
                             'integer' => 'Point maksimum harus berupa bilangan bulat.',

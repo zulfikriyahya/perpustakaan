@@ -12,29 +12,6 @@ use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
 
-/**
- * Upsert berdasarkan (kelas_id, tahun_pelajaran_id) - sesuai unique
- * index di migration kelas_tahun_pelajarans.
- *
- * PERUBAHAN KONTRAK (dikonfirmasi): kolom 'jurusan_kode' WAJIB diisi -
- * sebelumnya Kelas dicocokkan hanya lewat nama, yang bisa ambigu karena
- * Kelas.nama TIDAK unik secara global (lihat catatan di KelasImporter,
- * dua kelas beda jurusan bisa punya nama sama, mis. "X-1"). Template
- * Excel/CSV lama TANPA kolom ini akan GAGAL divalidasi (required),
- * bukan diproses dengan asumsi keliru - sekolah wajib pakai template
- * baru (tombol "Unduh contoh" di wizard import sudah otomatis
- * memperbarui diri lewat ->example() di bawah).
- *
- * Wali kelas direferensikan via NIP, WAJIB bukan role super_admin.
- *
- * BUG FIX (ditemukan iterasi ini, sama pola dengan KelasImporter): SEMUA
- * kolom di sini (kelas_nama, jurusan_kode, tahun_pelajaran_nama,
- * wali_kelas_nip) adalah lookup-only - tabel 'kelas_tahun_pelajarans'
- * hanya punya kelas_id/tahun_pelajaran_id/wali_kelas_id. Tanpa
- * ->fillRecordUsing() no-op, Filament berisiko meng-assign atribut
- * dinamis ini ke $record dan menyebabkan SQL error "Unknown column"
- * saat save() - lihat detail penuh di docblock KelasImporter.
- */
 class KelasTahunPelajaranImporter extends Importer
 {
     protected static ?string $model = KelasTahunPelajaran::class;
